@@ -4,6 +4,7 @@
 
 ## 목록
 
-- [ ] I1 원격 저장소 주소 등록
+- [x] I1 원격 저장소 주소 등록
   - 경량: `projinit.toml`의 `template.repository`에 `git@github-qazcdesnu:qazcdesnu/Jjabtero.git`을 적고 공통 문서를 다시 만들었다.
+  - 완료일: 2026-10-31
 - [x] I2 ProjInit 0.1.1 업그레이드

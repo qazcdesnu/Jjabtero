@@ -14,4 +14,4 @@ code_roots = ["src", "tests"]
 commands = []
 
 [template]
-repository = "아직 없음"
+repository = "git@github-qazcdesnu:qazcdesnu/Jjabtero.git"
