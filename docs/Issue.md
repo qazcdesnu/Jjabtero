@@ -8,3 +8,4 @@
   - 경량: `projinit.toml`의 `template.repository`에 `git@github-qazcdesnu:qazcdesnu/Jjabtero.git`을 적고 공통 문서를 다시 만들었다.
   - 완료일: 2026-10-31
 - [x] I2 ProjInit 0.1.1 업그레이드
+- [x] I3 ProjInit 0.1.2 업그레이드
