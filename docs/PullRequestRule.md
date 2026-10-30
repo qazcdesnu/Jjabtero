@@ -2,7 +2,7 @@
 
 이 문서는 작업 브랜치, push, PR(pull request), 병합, CI 검증 규칙을 정한다. 모든 변경은 작업 ID별 브랜치에서 만들어 PR로 `main`에 합친다. 커밋 메시지 형식은 [커밋 규칙](CommitRule.md)에, 작업 ID와 상태는 [작업 관리 규칙](TaskRule.md)에 있다. 이 규칙의 기계적으로 검사할 수 있는 부분은 [커밋 메시지 검사기](VerificationTools.md#10-커밋-메시지-검사기), [PR 순서 검사기](VerificationTools.md#13-pr-순서-검사기), [CI](VerificationTools.md#12-ci)가 검증한다. 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
-원격 저장소는 `아직 없음`(`origin`)이다.
+원격 저장소는 `git@github-qazcdesnu:qazcdesnu/Jjabtero.git`(`origin`)이다.
 
 ## 1. 브랜치
 

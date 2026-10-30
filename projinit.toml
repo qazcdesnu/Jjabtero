@@ -1,7 +1,7 @@
 # ProjInit 검사기 설정. 형식은 docs/VerificationTools.md 11절에 있다.
 
 [projinit]
-version = "0.1.0"
+version = "0.1.1"
 source = "git+https://github.com/qazcdesnu/ProjInit"
 
 [paths]
@@ -14,4 +14,4 @@ code_roots = ["src", "tests"]
 commands = []
 
 [template]
-repository = "아직 없음"
+repository = "git@github-qazcdesnu:qazcdesnu/Jjabtero.git"
