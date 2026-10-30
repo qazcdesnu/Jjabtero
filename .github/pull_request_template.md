@@ -16,7 +16,7 @@
 ## 검증
 
 ```text
-uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.0 projinit check
+uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.1 projinit check
 ```
 
 <!-- 결과를 적는다. -->
