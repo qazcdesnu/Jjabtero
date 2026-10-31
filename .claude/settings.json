@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.2 projinit check --hook stop",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.3 projinit check --hook stop",
             "timeout": 180,
             "statusMessage": "검증 검사 실행 중"
           }
