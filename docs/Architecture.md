@@ -23,7 +23,7 @@
 | --- | --- |
 | `src/jjabtero/` | 백엔드 코드(Python 패키지). |
 | `tests/` | 백엔드 pytest 테스트. |
-| `frontend/` | 프론트엔드 앱(Vue, TypeScript, Vite). `package.json`, `package-lock.json`, Vite 설정을 이 안에 둔다. |
+| `frontend/` | 프론트엔드 앱(Vue, TypeScript, Vite). `package.json`, `package-lock.json`, Vite 설정, 자체 `.gitignore`(`node_modules/`, 빌드 결과 `dist/`)를 이 안에 둔다. |
 | `frontend/src/` | 프론트엔드 코드. |
 | `pyproject.toml` | 패키지 정보와 의존성, pytest 설정. |
 | `uv.lock` | uv가 만드는 의존성 잠금 파일. 커밋한다. |
@@ -31,7 +31,7 @@
 | `.gitignore` | 커밋하지 않을 파일(가상 환경 `.venv/`, 캐시). |
 | `README.md` | 저장소 소개와 사용법. |
 
-`src/`와 `tests/`는 [검증 도구의 설정](VerificationTools.md#11-설정)의 코드 루트다. `frontend/src/`는 프론트엔드 골격을 만들 때 코드 루트에 더한다. 패키지와 프론트엔드 안의 모듈 구성은 기능별 상세 설계 문서(`docs/design/`)에서 정한다.
+`src/`, `tests/`, `frontend/src/`는 [검증 도구의 설정](VerificationTools.md#11-설정)의 코드 루트다. 패키지와 프론트엔드 안의 모듈 구성은 기능별 상세 설계 문서(`docs/design/`)에서 정한다.
 
 [포인터 검사기](VerificationTools.md#4-포인터-검사기)는 `.ts` 파일은 해석하지만 Vue 단일 파일 컴포넌트(`.vue`)는 해석하지 않는다([포인터 규약의 언어별 심볼 규칙](Traceability.md#7-언어별-심볼-규칙)). 그래서 상태 관리, API 호출, 계산 같은 로직은 `.ts` 모듈에 두고 포인터를 단다. `.vue` 컴포넌트는 화면 구성에 집중하고, 근거 문서는 주석으로 적되 검사되지 않는다.
 
@@ -75,7 +75,7 @@ Python 버전은 `.python-version`과 `pyproject.toml`의 `requires-python`(`>=3
 
 - 백엔드 테스트는 `tests/` 아래에 `test_<대상>.py` 이름으로 둔다.
 - API 테스트는 FastAPI의 테스트 클라이언트로 하고, 데이터베이스를 쓰는 테스트는 테스트마다 새 임시 SQLite 데이터베이스를 쓴다.
-- 프론트엔드 테스트는 Vitest로 하며, 실행 명령은 프론트엔드 골격을 만들 때 정해 `check.commands`에 더한다.
+- 프론트엔드 테스트는 Vitest로 하며 `frontend/src/` 안에 대상 옆에 `<대상>.test.ts` 이름으로 둔다. 실행 명령은 `frontend/`에서 `npm test`이고, `check.commands`에는 `node_modules`가 없으면 `npm ci`로 먼저 설치하도록 등록한다. CI처럼 처음 받은 저장소에서도 검사가 돌게 하기 위해서다.
 - 백엔드 실행 명령은 `uv run pytest`이고, [검증 도구의 설정](VerificationTools.md#11-설정)의 `check.commands`에 등록해 일괄 검사가 함께 실행한다.
 - 패키지 골격 테스트는 [test_package](../tests/test_package.py)에 있다. 패키지를 불러올 수 있는지, `__version__`이 설치된 패키지 버전과 같은지 확인한다.
 - 외부 서비스(인용 데이터 API 등)를 부르는 코드는 테스트에서 실제 네트워크 호출 대신 고정된 응답으로 대신한다.
