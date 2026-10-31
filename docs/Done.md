@@ -2,6 +2,49 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M1-T1 Python 프로젝트 골격(uv, pytest) 구성과 테스트 명령 등록
+
+- 시작일: 2026-10-31
+- 완료일: 2026-10-31
+- 근거 문서: [시스템 구조](Architecture.md)
+
+### 계획
+- 시스템 구조 문서에 Python 버전, 골격 파일, 테스트 파일을 먼저 적는다.
+- `pyproject.toml`, `.python-version`, `.gitignore`, `src/jjabtero/__init__.py`, `tests/test_package.py`를 만들고 `uv sync`로 `uv.lock`을 만든다.
+- `projinit.toml`의 `check.commands`에 `uv run pytest`를 등록한다.
+- README에 설치와 실행 방법을 적는다.
+
+### 진행 기록
+- 2026-10-31: 작업을 시작했다. PR #3(I4)이 병합되지 않아 `i4-projinit-0-1-3` 위에 작업 브랜치를 만들었다.
+- 2026-10-31: 시스템 구조에 Python 3.14, 골격 파일, 최상위 모듈과 테스트 포인터를 적었다.
+- 2026-10-31: `pyproject.toml`(빌드 백엔드 uv_build, 개발 의존성 그룹 `dev`에 pytest), `.python-version`, `.gitignore`, 패키지와 테스트를 만들고 `uv sync`로 `uv.lock`을 만들었다. `uv run pytest`에서 테스트 2개가 통과했다.
+- 2026-10-31: `check.commands`에 `uv run pytest`를 등록하고 README에 설치와 테스트 방법을 적었다.
+
+### 결정 사항
+- Python 버전은 3.14로 한다. 사용자가 따로 정하지 않아 제안대로 정했다. 3.15.0은 막 나와서 라이브러리 지원이 따라오지 않았을 수 있다.
+- 패키지 버전은 `pyproject.toml`에만 적고 `__version__`은 설치된 패키지 정보에서 읽는다. 버전을 두 곳에서 관리하지 않기 위해서다.
+- 웹 프레임워크가 미정이므로 실행 진입점(`project.scripts`)은 아직 두지 않는다. M1-T2에서 프레임워크를 정한 뒤 추가한다.
+
+### 변경 파일
+- `docs/Architecture.md`
+- `README.md`
+- `projinit.toml`
+- `pyproject.toml`
+- `uv.lock`
+- `.python-version`
+- `.gitignore`
+- `src/jjabtero/__init__.py`
+- `tests/test_package.py`
+- `docs/Roadmap.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+
+### 결과
+- `uv sync`로 개발 환경을 만들고 `uv run pytest`로 테스트를 실행할 수 있다. 일괄 검사가 테스트도 함께 실행한다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.3 projinit check`: 모든 검사기와 `uv run pytest` 통과(테스트 2개).
+
 ## I3 ProjInit 0.1.2 업그레이드
 
 - 시작일: 2026-10-31
