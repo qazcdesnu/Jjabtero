@@ -7,11 +7,14 @@ source = "git+https://github.com/qazcdesnu/ProjInit"
 [paths]
 docs = "docs"
 entry = "CLAUDE.md"
-code_roots = ["src", "tests"]
+code_roots = ["src", "tests", "frontend/src"]
 
 [check]
 # 프로젝트의 테스트 명령을 적는다(예: "cargo test"). 시스템 구조 문서에서 정한다.
-commands = ["uv run pytest"]
+commands = [
+  "uv run pytest",
+  "cd frontend && (test -d node_modules || npm ci) && npm test",
+]
 
 [template]
 repository = "git@github-qazcdesnu:qazcdesnu/Jjabtero.git"
