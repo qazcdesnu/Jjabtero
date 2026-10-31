@@ -21,13 +21,13 @@ jobs:
       - name: git hook 경로 설정 (강제 장치 검사기용)
         run: git config core.hooksPath .githooks
       - name: 일괄 검사 (문서, 포인터, 작업 관리, 강제 장치, 커밋 이력, 테스트)
-        run: uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.3 projinit check
+        run: uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.4 projinit check
       - name: PR 제목과 브랜치 이름
         if: github.event_name == 'pull_request'
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           BRANCH: ${{ github.head_ref }}
-        run: uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.3 projinit commits --subject "$PR_TITLE" --branch "$BRANCH"
+        run: uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.4 projinit commits --subject "$PR_TITLE" --branch "$BRANCH"
       - name: 앞선 열린 PR 포함 여부
         if: github.event_name == 'pull_request'
         env:
@@ -35,4 +35,4 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number,headRefName,headRefOid > "$RUNNER_TEMP/open-prs.json"
-          uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.3 projinit pr-order --pr "$PR_NUMBER" --open-prs "$RUNNER_TEMP/open-prs.json"
+          uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.4 projinit pr-order --pr "$PR_NUMBER" --open-prs "$RUNNER_TEMP/open-prs.json"
