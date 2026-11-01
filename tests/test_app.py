@@ -16,7 +16,7 @@ def test_health_returns_ok_and_version(tmp_path: Path) -> None:
 
     @doc: docs/design/AppSkeleton.md#4-테스트
     """
-    client = TestClient(create_app(frontend_dist=tmp_path / "missing"))
+    client = TestClient(create_app(frontend_dist=tmp_path / "missing", db_path=tmp_path / "library.db"))
     response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "version": __version__}
@@ -28,7 +28,7 @@ def test_unknown_api_path_returns_404(tmp_path: Path) -> None:
     @doc: docs/design/AppSkeleton.md#4-테스트
     """
     (tmp_path / "index.html").write_text("<p>app</p>")
-    client = TestClient(create_app(frontend_dist=tmp_path))
+    client = TestClient(create_app(frontend_dist=tmp_path, db_path=tmp_path / "library.db"))
     assert client.get("/api/nope").status_code == 404
 
 
@@ -38,7 +38,7 @@ def test_root_serves_built_frontend(tmp_path: Path) -> None:
     @doc: docs/design/AppSkeleton.md#4-테스트
     """
     (tmp_path / "index.html").write_text("<p>app</p>")
-    client = TestClient(create_app(frontend_dist=tmp_path))
+    client = TestClient(create_app(frontend_dist=tmp_path, db_path=tmp_path / "library.db"))
     response = client.get("/")
     assert response.status_code == 200
     assert "<p>app</p>" in response.text
@@ -49,6 +49,6 @@ def test_root_is_404_without_built_frontend(tmp_path: Path) -> None:
 
     @doc: docs/design/AppSkeleton.md#4-테스트
     """
-    client = TestClient(create_app(frontend_dist=tmp_path / "missing"))
+    client = TestClient(create_app(frontend_dist=tmp_path / "missing", db_path=tmp_path / "library.db"))
     assert client.get("/").status_code == 404
     assert client.get("/api/health").status_code == 200

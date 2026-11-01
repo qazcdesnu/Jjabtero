@@ -8,6 +8,7 @@
 
 - [create_app](../../src/jjabtero/app.py#create_app)은 FastAPI 앱을 만들어 돌려준다. 인자 `frontend_dist`는 빌드된 프론트엔드 디렉터리이며, 기본값은 [DEFAULT_FRONTEND_DIST](../../src/jjabtero/app.py#DEFAULT_FRONTEND_DIST)(저장소의 `frontend/dist`)다.
   - API는 모두 `/api` 아래에 둔다.
+  - 데이터베이스와 HTTP 클라이언트를 준비하는 인자 `db_path`, `http_client`는 [논문 검색과 추가 설계](PaperSearch.md#3-api)에 있다.
   - `frontend_dist`가 디렉터리로 있으면 그 안의 정적 파일을 `/`에서 제공하고, `/`에는 `index.html`을 준다. 없으면 정적 파일을 제공하지 않는다. 개발할 때는 Vite 개발 서버가 화면을 제공하므로 빌드 없이도 앱이 떠야 하기 때문이다.
   - API 경로를 정적 파일보다 먼저 등록해, 정적 파일이 API를 가리지 않게 한다.
 - [Health](../../src/jjabtero/app.py#Health)는 상태 확인 응답이다. `status`(항상 `"ok"`)와 `version`(패키지 버전)을 가진다.

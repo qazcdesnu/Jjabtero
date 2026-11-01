@@ -1,15 +1,19 @@
 """백엔드 FastAPI 앱.
 
 @doc: docs/design/AppSkeleton.md#1-백엔드-앱
+@doc: docs/design/PaperSearch.md#3-api
 """
 
 from pathlib import Path
 
+import httpx2
 from fastapi import APIRouter, FastAPI
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from jjabtero import __version__
+from jjabtero.db import create_db_engine, default_db_path, upgrade_database
+from jjabtero.papers_api import router as papers_router
 
 # @doc: docs/design/AppSkeleton.md#1-백엔드-앱
 DEFAULT_FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
@@ -36,13 +40,26 @@ def health() -> Health:
     return Health(status="ok", version=__version__)
 
 
-def create_app(frontend_dist: Path = DEFAULT_FRONTEND_DIST) -> FastAPI:
+def _default_http_client() -> httpx2.Client:
+    return httpx2.Client(timeout=10, headers={"User-Agent": f"Jjabtero/{__version__}"})
+
+
+def create_app(
+    frontend_dist: Path = DEFAULT_FRONTEND_DIST,
+    db_path: Path | None = None,
+    http_client: httpx2.Client | None = None,
+) -> FastAPI:
     """FastAPI 앱을 만든다.
 
     @doc: docs/design/AppSkeleton.md#1-백엔드-앱
+    @doc: docs/design/PaperSearch.md#3-api
     """
     app = FastAPI(title="Jjabtero", version=__version__)
+    app.state.engine = create_db_engine(db_path or default_db_path())
+    upgrade_database(app.state.engine)
+    app.state.http_client = http_client or _default_http_client()
     app.include_router(_api)
+    app.include_router(papers_router)
     # 정적 파일 마운트는 "/" 전체를 차지하므로 API 라우터 다음에 둔다.
     if frontend_dist.is_dir():
         app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
