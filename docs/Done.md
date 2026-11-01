@@ -2,6 +2,62 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M1-T8 FastAPI 서버와 Vue 프론트엔드 골격 구성
+
+- 시작일: 2026-10-31
+- 완료일: 2026-10-31
+- 근거 문서: [시스템 구조](Architecture.md), [앱 골격 설계](design/AppSkeleton.md)
+
+### 계획
+- 상세 설계 문서 `docs/design/AppSkeleton.md`를 쓰고 인덱스에서 링크한다. 백엔드 앱 생성, 상태 확인 API, 빌드된 화면 제공, 실행 명령, 프론트엔드의 API 호출 모듈을 정한다.
+- 목업을 만들고 검사를 통과시킨 뒤 구현한다.
+- 백엔드: FastAPI, uvicorn 의존성과 테스트용 httpx를 추가하고 실행 명령 `jjabtero`를 등록한다.
+- 프론트엔드: Vite의 Vue + TypeScript 템플릿으로 `frontend/`를 만들고, Vitest와 `/api` 프록시를 설정한다.
+- `frontend/src`를 코드 루트에, 프론트엔드 테스트 명령을 `check.commands`에 더한다.
+- README에 개발·실행 방법을 적는다.
+
+### 진행 기록
+- 2026-10-31: 작업을 시작했다. PR #6까지 병합되어 최신 `main`에서 작업 브랜치를 만들었다.
+- 2026-10-31: 앱 골격 설계를 쓰고 인덱스의 상세 설계 절에 링크했다. 백엔드(`app.py`, `cli.py`)와 프론트엔드(`api.ts`)의 목업을 만든 뒤 구현했다.
+- 2026-10-31: `npm create vite@latest`의 `vue-ts` 템플릿으로 `frontend/`를 만들고, 템플릿 예제(HelloWorld 컴포넌트, 이미지, 스타일, `README.md`, `.vscode/`)를 지웠다.
+- 2026-10-31: 테스트용으로 httpx를 넣었더니 Starlette가 httpx2를 쓰라는 사용 중단 경고를 냈다. httpx2로 바꿔 경고를 없앴다.
+- 2026-10-31: `uv run jjabtero`로 실제 서버를 띄워 `/api/health`(200, 버전 0.1.0), 빌드된 `/`(제목 Jjabtero), `/api/nope`(404)를 확인했다. 처음 쓴 포트 8765는 다른 프로그램이 쓰고 있어 빈 포트로 다시 확인했다.
+
+### 결정 사항
+- 상태 확인 API `GET /api/health`를 첫 API로 둔다. 화면과 서버가 연결되는지 확인하는 가장 작은 기능이라서다. [앱 골격 설계](design/AppSkeleton.md#1-백엔드-앱)에 적었다.
+- 빌드된 화면이 없으면 정적 파일을 제공하지 않는다. 개발할 때는 Vite가 화면을 제공하므로 빌드 없이도 백엔드가 떠야 한다.
+- 실행 명령의 기본 주소는 `127.0.0.1:8000`이다. 혼자 쓰는 앱을 외부에 열지 않기 위해서다.
+- 프론트엔드 검사 명령은 `node_modules`가 없을 때만 `npm ci`를 실행한다. 매 검사마다 설치하면 Stop hook이 느려지고, 아예 안 하면 CI에서 실패하기 때문이다.
+- 테스트 클라이언트 의존성은 httpx 대신 httpx2를 쓴다. Starlette가 권하는 쪽이다.
+- 프론트엔드 테스트 파일은 대상 옆에 `<대상>.test.ts`로 둔다. [시스템 구조](Architecture.md#5-테스트)에 적었다.
+
+### 변경 파일
+- `docs/design/AppSkeleton.md`
+- `docs/index.md`
+- `docs/Architecture.md`
+- `README.md`
+- `projinit.toml`
+- `pyproject.toml`
+- `uv.lock`
+- `src/jjabtero/app.py`
+- `src/jjabtero/cli.py`
+- `tests/test_app.py`
+- `tests/test_cli.py`
+- `frontend/` (Vite 프로젝트 전체: `package.json`, `package-lock.json`, `vite.config.ts`, `index.html`, `tsconfig*.json`, `.gitignore`, `public/favicon.svg`, `src/main.ts`, `src/App.vue`, `src/api.ts`, `src/api.test.ts`)
+- `docs/Roadmap.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+
+### 결과
+- `uv run jjabtero`로 서버를 띄우면 빌드된 화면과 `/api`가 함께 제공된다. 개발할 때는 Vite 개발 서버가 `/api`를 백엔드로 넘긴다.
+- 화면 첫 페이지가 서버 연결 상태와 버전을 보여 준다.
+- 일괄 검사가 백엔드 pytest와 프론트엔드 Vitest를 함께 실행한다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.4 projinit check`: 모든 검사기, `uv run pytest`(테스트 9개), 프론트엔드 `npm test`(테스트 2개) 통과.
+- `npm run build`: `vue-tsc` 타입 검사와 빌드 통과.
+- 실제 서버 실행 확인은 진행 기록에 적었다.
+
 ## M1-T2 웹 프레임워크와 데이터 저장 방식 결정
 
 - 시작일: 2026-10-31

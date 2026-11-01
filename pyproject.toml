@@ -4,10 +4,19 @@ version = "0.1.0"
 description = "데이터사이언스 대학원생을 위한 개인 서지관리 앱"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "fastapi>=0.162.0",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+jjabtero = "jjabtero.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "httpx2>=2.16.0",
+    "pytest>=8",
+]
 
 [build-system]
 requires = ["uv_build>=0.13.1,<0.14.0"]
