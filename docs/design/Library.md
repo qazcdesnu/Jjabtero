@@ -25,13 +25,15 @@
 | `venue` | 문자열 | 아니요 | 게재처(저널, 학회 이름 등) |
 | `doi` | 문자열 | 아니요 | DOI. 정규화해 저장하며, 값이 있으면 서재 안에서 겹치면 안 된다. |
 | `url` | 문자열 | 아니요 | 원문 주소 |
+| `read_status` | 문자열 | 예 | 읽기 상태([읽기 상태와 메모 설계](ReadingStatus.md#1-데이터)) |
+| `note` | 문자열 | 아니요 | 메모([읽기 상태와 메모 설계](ReadingStatus.md#1-데이터)) |
 | `created_at`, `updated_at` | 시각(UTC) | 예 | 만든 시각과 마지막으로 고친 시각 |
 
 - 항목 종류는 `journal-article`(저널 논문), `conference-paper`(학회 논문), `preprint`(프리프린트), `book`(책), `book-chapter`(책의 장), `thesis`(학위논문), `report`(보고서), `other`(그 밖)다.
 - 저자와 태그는 없어도 된다. 저자는 이름 하나의 문자열로 저장하고, 성과 이름을 나누지 않는다.
 - 논문을 지우면 그 논문의 저자 연결과 태그 연결도 지운다. 저자와 태그 자체는 남긴다. 다른 논문이 쓰거나 다시 쓸 수 있기 때문이다.
 - [Paper.author_names](../../src/jjabtero/models.py#Paper.author_names)는 저자 이름을 순서대로, [Paper.tag_names](../../src/jjabtero/models.py#Paper.tag_names)는 태그 이름을 가나다순으로 돌려준다.
-- 읽기 상태와 메모는 M1-T7에서 더한다.
+- 읽기 상태와 메모를 바꾸는 함수와 API는 [읽기 상태와 메모 설계](ReadingStatus.md#2-저장-함수와-api)에 있다.
 
 ## 2. 데이터베이스 파일과 연결
 
@@ -54,6 +56,7 @@
 | 리비전 | 내용 |
 | --- | --- |
 | [0001](../../src/jjabtero/migrations/versions/0001_create_library.py) | `papers`, `authors`, `paper_authors`, `tags`, `paper_tags` 테이블을 만든다. |
+| [0002](../../src/jjabtero/migrations/versions/0002_reading_status.py) | `papers`에 `read_status`(기본 `to-read`)와 `note`를 더한다. |
 
 ## 4. 저장 함수
 
@@ -65,7 +68,7 @@
 - [add_paper](../../src/jjabtero/library.py#add_paper)는 논문을 만들어 돌려준다. 같은 이름의 저자와 태그가 있으면 그것을 쓰고, 없으면 만든다.
 - [get_paper](../../src/jjabtero/library.py#get_paper)는 ID로 논문을 찾아 돌려주고, 없으면 `None`을 돌려준다.
 - [list_papers](../../src/jjabtero/library.py#list_papers)는 모든 논문을 최근에 만든 것부터 돌려준다. 검색과 필터는 M1-T6에서 더한다.
-- [update_paper](../../src/jjabtero/library.py#update_paper)는 논문의 모든 항목을 `PaperData`로 바꾸고 `updated_at`을 갱신한다. 저자와 태그도 입력 그대로 바꾼다.
+- [update_paper](../../src/jjabtero/library.py#update_paper)는 논문의 모든 서지 항목을 `PaperData`로 바꾸고 `updated_at`을 갱신한다. 저자와 태그도 입력 그대로 바꾼다. 읽기 상태와 메모는 건드리지 않는다.
 - [delete_paper](../../src/jjabtero/library.py#delete_paper)는 논문을 지운다.
 
 **오류**

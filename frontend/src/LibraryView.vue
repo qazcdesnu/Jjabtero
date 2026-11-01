@@ -1,5 +1,6 @@
 <!-- @doc: docs/design/LibraryView.md#3-화면 -->
 <!-- @doc: docs/design/LibraryFilter.md#4-화면 -->
+<!-- @doc: docs/design/ReadingStatus.md#3-화면 -->
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Chip from 'primevue/chip'
@@ -11,9 +12,10 @@ import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import MultiSelect from 'primevue/multiselect'
+import Tag from 'primevue/tag'
 import { computed } from 'vue'
 import type { Paper } from './api'
-import { ITEM_TYPE_LABELS, formatDate } from './labels'
+import { ITEM_TYPE_LABELS, READ_STATUSES, readStatusInfo } from './labels'
 import { isFilterActive } from './libraryFilter'
 import { createLibraryState } from './libraryState'
 
@@ -65,6 +67,17 @@ const selection = computed({
         size="small"
         class="w-36"
       />
+      <MultiSelect
+        v-model="state.filter.readStatuses"
+        :options="[...READ_STATUSES]"
+        option-label="label"
+        option-value="value"
+        placeholder="상태"
+        :max-selected-labels="1"
+        selected-items-label="상태 {0}개"
+        size="small"
+        class="w-32"
+      />
       <InputNumber v-model="state.filter.yearFrom" placeholder="연도부터" :use-grouping="false" size="small" input-class="w-24" />
       <span class="text-surface-400">–</span>
       <InputNumber v-model="state.filter.yearTo" placeholder="연도까지" :use-grouping="false" size="small" input-class="w-24" />
@@ -112,16 +125,17 @@ const selection = computed({
         </template>
       </Column>
       <Column field="year" header="연도" sortable header-style="width: 5.25rem" body-class="text-sm" />
+      <Column field="read_status" header="상태" sortable header-style="width: 6.5rem">
+        <template #body="{ data }">
+          <Tag :value="readStatusInfo(data.read_status).label" :severity="readStatusInfo(data.read_status).severity" />
+        </template>
+      </Column>
       <Column field="item_type" header="종류" sortable header-style="width: 6.5rem">
         <template #body="{ data }">
           <span class="text-sm">{{ ITEM_TYPE_LABELS[data.item_type] ?? data.item_type }}</span>
         </template>
       </Column>
-      <Column field="created_at" header="추가일" sortable header-style="width: 7rem">
-        <template #body="{ data }">
-          <span class="text-sm tabular-nums">{{ formatDate(data.created_at) }}</span>
-        </template>
-      </Column>
+
     </DataTable>
   </div>
 </template>

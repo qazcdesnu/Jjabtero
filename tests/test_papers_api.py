@@ -2,6 +2,7 @@
 
 @doc: docs/design/PaperSearch.md#5-테스트
 @doc: docs/design/LibraryView.md#4-테스트
+@doc: docs/design/ReadingStatus.md#4-테스트
 """
 
 from pathlib import Path
@@ -150,3 +151,33 @@ def test_remove_missing_paper_returns_404(client: TestClient) -> None:
     @doc: docs/design/LibraryView.md#4-테스트
     """
     assert client.delete("/api/papers/999").status_code == 404
+
+
+def test_change_reading_returns_updated_paper(client: TestClient) -> None:
+    """상태와 메모를 바꾸면 200과 바뀐 논문을 돌려주고, 새 논문은 읽을 것이다.
+
+    @doc: docs/design/ReadingStatus.md#4-테스트
+    """
+    paper = client.post("/api/papers", json={"title": "A"}).json()
+    assert (paper["read_status"], paper["note"]) == ("to-read", None)
+    response = client.patch(f"/api/papers/{paper['id']}", json={"read_status": "read", "note": "메모"})
+    assert response.status_code == 200
+    assert (response.json()["read_status"], response.json()["note"]) == ("read", "메모")
+
+
+def test_change_reading_missing_returns_404(client: TestClient) -> None:
+    """없는 ID면 404다.
+
+    @doc: docs/design/ReadingStatus.md#4-테스트
+    """
+    assert client.patch("/api/papers/999", json={"read_status": "read"}).status_code == 404
+
+
+def test_change_reading_invalid_returns_422(client: TestClient) -> None:
+    """모르는 상태는 422다.
+
+    @doc: docs/design/ReadingStatus.md#4-테스트
+    """
+    paper = client.post("/api/papers", json={"title": "A"}).json()
+    assert client.patch(f"/api/papers/{paper['id']}", json={"read_status": "done"}).status_code == 422
+

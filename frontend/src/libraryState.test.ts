@@ -1,5 +1,6 @@
 // @doc: docs/design/LibraryView.md#4-테스트
 // @doc: docs/design/LibraryFilter.md#5-테스트
+// @doc: docs/design/ReadingStatus.md#4-테스트
 
 import { describe, expect, it, vi } from 'vitest'
 import { PaperNotFoundError, type Paper } from './api'
@@ -16,6 +17,8 @@ function paper(id: number): Paper {
     doi: null,
     url: null,
     tags: [],
+    read_status: 'to-read',
+    note: null,
     created_at: '2026-11-01T00:00:00',
     updated_at: '2026-11-01T00:00:00',
   }
@@ -25,6 +28,7 @@ function setup(overrides: Partial<Parameters<typeof createLibraryState>[0]> = {}
   const deps = {
     listPapers: vi.fn().mockResolvedValue([paper(2), paper(1)]),
     deletePaper: vi.fn().mockResolvedValue(undefined),
+    updateReading: vi.fn(async (id: number, update: object) => ({ ...paper(id), ...update })),
     ...overrides,
   }
   return { library: createLibraryState(deps), deps }
@@ -114,7 +118,7 @@ describe('필터', () => {
     expect(library.state.filter.tags).toEqual(['b'])
     library.state.filter.text = 'x'
     library.clearFilter()
-    expect(library.state.filter).toEqual({ text: '', tags: [], itemTypes: [], yearFrom: null, yearTo: null })
+    expect(library.state.filter).toEqual({ text: '', tags: [], itemTypes: [], readStatuses: [], yearFrom: null, yearTo: null })
   })
 
   it('고른 논문이 거르기로 사라지면 상세도 빈다', async () => {
@@ -126,6 +130,29 @@ describe('필터', () => {
     expect(library.selected.value).toBeNull()
     library.clearFilter()
     expect(library.selected.value?.id).toBe(2)
+  })
+})
+
+describe('changeReading', () => {
+  it('성공하면 목록의 논문을 응답으로 바꾼다', async () => {
+    const { library, deps } = setup()
+    await library.load()
+    await expect(library.changeReading(paper(2), { read_status: 'read', note: '메모' })).resolves.toBe(true)
+    expect(deps.updateReading).toHaveBeenCalledWith(2, { read_status: 'read', note: '메모' })
+    expect(library.state.papers.find((p) => p.id === 2)).toMatchObject({ read_status: 'read', note: '메모' })
+  })
+
+  it('404면 목록에서 빼고, 그 밖의 실패는 오류로 둔다', async () => {
+    const missing = setup({ updateReading: vi.fn().mockRejectedValue(new PaperNotFoundError(2)) })
+    await missing.library.load()
+    await expect(missing.library.changeReading(paper(2), { read_status: 'read' })).resolves.toBe(false)
+    expect(missing.library.state.papers.map((p) => p.id)).toEqual([1])
+
+    const failing = setup({ updateReading: vi.fn().mockRejectedValue(new Error('저장 실패: 500')) })
+    await failing.library.load()
+    await failing.library.changeReading(paper(2), { note: 'x' })
+    expect(failing.library.state.readingError).toBe('저장 실패: 500')
+    expect(failing.library.state.papers.map((p) => p.id)).toEqual([2, 1])
   })
 })
 

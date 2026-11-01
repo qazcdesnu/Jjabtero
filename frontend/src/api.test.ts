@@ -1,6 +1,7 @@
 // @doc: docs/design/AppSkeleton.md#4-테스트
 // @doc: docs/design/PaperSearch.md#5-테스트
 // @doc: docs/design/LibraryView.md#4-테스트
+// @doc: docs/design/ReadingStatus.md#4-테스트
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -12,6 +13,7 @@ import {
   fetchHealth,
   searchPapers,
   toPaperInput,
+  updateReading,
   type SearchResult,
 } from './api'
 
@@ -159,3 +161,26 @@ describe('deletePaper', () => {
     await expect(deletePaper(3)).rejects.toThrow('500')
   })
 })
+
+describe('updateReading', () => {
+  it('보낸 항목을 PATCH로 보내고 바뀐 논문을 돌려준다', async () => {
+    const changed = { id: 3, read_status: 'read' }
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(changed)))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(updateReading(3, { read_status: 'read' })).resolves.toEqual(changed)
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/papers/3',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ read_status: 'read' }) }),
+    )
+  })
+
+  it('404면 PaperNotFoundError를, 그 밖의 실패면 상태 코드를 담은 오류를 던진다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 404 })))
+    await expect(updateReading(3, { note: 'x' })).rejects.toBeInstanceOf(PaperNotFoundError)
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 500 })))
+    await expect(updateReading(3, { note: 'x' })).rejects.toThrow('500')
+  })
+})
+

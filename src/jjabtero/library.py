@@ -1,6 +1,7 @@
 """논문 저장 함수.
 
 @doc: docs/design/Library.md#4-저장-함수
+@doc: docs/design/ReadingStatus.md#2-저장-함수와-api
 """
 
 import re
@@ -10,7 +11,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from jjabtero.models import ITEM_TYPES, Author, Paper, PaperAuthor, Tag
+from jjabtero.models import ITEM_TYPES, READ_STATUSES, Author, Paper, PaperAuthor, Tag
 
 _DOI_PREFIX = re.compile(r"^(https?://(dx\.)?doi\.org/|doi:)", re.IGNORECASE)
 
@@ -193,3 +194,43 @@ def delete_paper(session: Session, paper_id: int) -> None:
         raise PaperNotFoundError(paper_id)
     session.delete(paper)
     session.commit()
+
+
+class ReadingUpdate(BaseModel):
+    """읽기 상태와 메모를 바꾸는 입력. 보낸 항목만 바꾼다.
+
+    @doc: docs/design/ReadingStatus.md#2-저장-함수와-api
+    """
+
+    read_status: str | None = None
+    note: str | None = None
+
+    @field_validator("read_status")
+    @classmethod
+    def _check_read_status(cls, value: str | None) -> str:
+        if value not in READ_STATUSES:
+            raise ValueError(f"알 수 없는 읽기 상태입니다: {value}")
+        return value
+
+    @field_validator("note")
+    @classmethod
+    def _clean_note(cls, value: str | None) -> str | None:
+        return _strip_or_none(value)
+
+
+def update_reading(session: Session, paper_id: int, update: ReadingUpdate) -> Paper:
+    """논문의 읽기 상태와 메모를 바꾼다.
+
+    @doc: docs/design/ReadingStatus.md#2-저장-함수와-api
+    """
+    paper = session.get(Paper, paper_id)
+    if paper is None:
+        raise PaperNotFoundError(paper_id)
+    if "read_status" in update.model_fields_set:
+        paper.read_status = update.read_status
+    if "note" in update.model_fields_set:
+        paper.note = update.note
+    paper.updated_at = datetime.now(UTC)
+    session.commit()
+    return paper
+

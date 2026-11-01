@@ -41,7 +41,8 @@
 | [논문 검색과 추가 설계](design/PaperSearch.md) | OpenAlex·arXiv 검색, 검색·추가 API, 검색 화면 | M1-T4, M1-T10 |
 | [UI 기반 설계](design/UiLayout.md) | PrimeVue·Tailwind, 테마, 3단 화면 배치 | M1-T10 |
 | [서재 화면 설계](design/LibraryView.md) | 서재 목록·삭제 API, 목록 표와 상세 | M1-T5 |
-| [서재 필터 설계](design/LibraryFilter.md) | 글자·태그·항목 종류·연도 필터, 사이드바 태그 목록 | M1-T6 |
+| [서재 필터 설계](design/LibraryFilter.md) | 글자·태그·항목 종류·연도 필터, 사이드바 태그 목록 | M1-T6, M1-T7 |
+| [읽기 상태와 메모 설계](design/ReadingStatus.md) | 읽기 상태·메모 데이터, 마이그레이션 0002, API, 상세 편집 | M1-T7 |
 
 ### 문서 작업
 

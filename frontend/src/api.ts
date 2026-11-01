@@ -1,6 +1,7 @@
 // @doc: docs/design/AppSkeleton.md#3-프론트엔드-앱
 // @doc: docs/design/PaperSearch.md#4-화면
 // @doc: docs/design/LibraryView.md#2-화면-상태
+// @doc: docs/design/ReadingStatus.md#3-화면
 
 // @doc: docs/design/AppSkeleton.md#3-프론트엔드-앱
 export interface Health {
@@ -52,6 +53,8 @@ export interface PaperInput {
 // @doc: docs/design/PaperSearch.md#4-화면
 export interface Paper extends PaperInput {
   id: number
+  read_status: string
+  note: string | null
   created_at: string
   updated_at: string
 }
@@ -139,3 +142,23 @@ export async function deletePaper(paperId: number): Promise<void> {
     throw new Error(`논문 삭제 실패: ${response.status}`)
   }
 }
+
+// @doc: docs/design/ReadingStatus.md#3-화면
+export async function updateReading(
+  paperId: number,
+  update: { read_status?: string; note?: string | null },
+): Promise<Paper> {
+  const response = await fetch(`/api/papers/${paperId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(update),
+  })
+  if (response.status === 404) {
+    throw new PaperNotFoundError(paperId)
+  }
+  if (!response.ok) {
+    throw new Error(`저장 실패: ${response.status}`)
+  }
+  return (await response.json()) as Paper
+}
+
