@@ -4,9 +4,12 @@
 @doc: docs/design/PaperSearch.md#3-api
 @doc: docs/design/DriveSync.md#6-api
 @doc: docs/design/Auth.md#3-세션
+@doc: docs/design/DriveSync.md#8-서버-환경
 """
 
-from collections.abc import Callable
+import os
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx2
@@ -26,7 +29,13 @@ from jjabtero.auth import (
 from jjabtero.auth import router as auth_router
 from jjabtero.db import create_db_engine, default_db_path, upgrade_database
 from jjabtero.drive_api import router as drive_router
-from jjabtero.drive_sync import DrivePaths, DriveSync, FilesLike, default_drive_paths
+from jjabtero.drive_sync import (
+    DrivePaths,
+    DriveSync,
+    FilesLike,
+    default_drive_paths,
+    seed_token_from_env,
+)
 from jjabtero.papers_api import router as papers_router
 
 # @doc: docs/design/AppSkeleton.md#1-백엔드-앱
@@ -65,6 +74,7 @@ def create_app(
     drive_paths: DrivePaths | None = None,
     drive_files: Callable[[httpx2.Client, Callable[[], str]], FilesLike] | None = None,
     auth: AuthSettings | None = None,
+    wait_initial_sync: bool | None = None,
 ) -> FastAPI:
     """FastAPI 앱을 만든다.
 
@@ -72,10 +82,17 @@ def create_app(
     @doc: docs/design/PaperSearch.md#3-api
     @doc: docs/design/DriveSync.md#6-api
     @doc: docs/design/Auth.md#3-세션
+    @doc: docs/design/DriveSync.md#8-서버-환경
     """
     settings = auth or auth_settings_from_env()
     settings.validate()
-    app = FastAPI(title="Jjabtero", version=__version__)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        yield
+        app.state.drive.flush()
+
+    app = FastAPI(title="Jjabtero", version=__version__, lifespan=lifespan)
     app.state.auth = settings
     if settings.enabled:
         # 나중에 더한 미들웨어가 바깥을 감싸므로, 세션을 로그인 검사보다 뒤에 더해 먼저 풀리게 한다.
@@ -99,7 +116,10 @@ def create_app(
         app.state.http_client,
         **drive_options,
     )
-    app.state.drive.start_background_sync()
+    seed_token_from_env(app.state.drive.tokens)
+    if wait_initial_sync is None:
+        wait_initial_sync = os.environ.get("JJABTERO_INITIAL_SYNC") == "wait"
+    app.state.drive.start(wait=wait_initial_sync)
     app.include_router(_api)
     app.include_router(papers_router)
     app.include_router(drive_router)

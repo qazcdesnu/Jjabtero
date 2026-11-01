@@ -1,7 +1,7 @@
 """외부 API(검색, 구글 드라이브)를 대신하는 가짜.
 
 @doc: docs/design/PaperSearch.md#5-테스트
-@doc: docs/design/DriveSync.md#8-테스트
+@doc: docs/design/DriveSync.md#9-테스트
 """
 
 import json
@@ -82,7 +82,7 @@ def fixed_responses(request: httpx2.Request) -> httpx2.Response:
 class FakeDrive:
     """메모리 안의 가짜 드라이브. `FilesLike`와 같은 모양이다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
 
     def __init__(self) -> None:
@@ -106,7 +106,7 @@ class FakeDrive:
     def find_folder(self, name: str):
         """이름이 같은 폴더를 찾는다.
 
-        @doc: docs/design/DriveSync.md#8-테스트
+        @doc: docs/design/DriveSync.md#9-테스트
         """
         for file_id, item in self.files.items():
             if item["folder"] and item["name"] == name and not item["trashed"]:
@@ -116,7 +116,7 @@ class FakeDrive:
     def create_folder(self, name: str):
         """폴더를 만든다.
 
-        @doc: docs/design/DriveSync.md#8-테스트
+        @doc: docs/design/DriveSync.md#9-테스트
         """
         self.calls.append("create_folder")
         file_id = self._new_id()
@@ -126,7 +126,7 @@ class FakeDrive:
     def find_file(self, folder_id: str, name: str):
         """폴더 안에서 파일을 찾는다.
 
-        @doc: docs/design/DriveSync.md#8-테스트
+        @doc: docs/design/DriveSync.md#9-테스트
         """
         for file_id, item in self.files.items():
             if not item["folder"] and item["parent"] == folder_id and item["name"] == name and not item["trashed"]:
@@ -136,7 +136,7 @@ class FakeDrive:
     def get(self, file_id: str):
         """파일 정보를 돌려준다.
 
-        @doc: docs/design/DriveSync.md#8-테스트
+        @doc: docs/design/DriveSync.md#9-테스트
         """
         item = self.files.get(file_id)
         return None if item is None or item["trashed"] else self._remote(file_id)
@@ -144,7 +144,7 @@ class FakeDrive:
     def download(self, file_id: str) -> bytes:
         """내용을 돌려준다.
 
-        @doc: docs/design/DriveSync.md#8-테스트
+        @doc: docs/design/DriveSync.md#9-테스트
         """
         self.calls.append("download")
         return self.files[file_id]["data"]
@@ -152,7 +152,7 @@ class FakeDrive:
     def create(self, folder_id: str, name: str, data: bytes):
         """새 파일을 만든다.
 
-        @doc: docs/design/DriveSync.md#8-테스트
+        @doc: docs/design/DriveSync.md#9-테스트
         """
         self.calls.append("create")
         file_id = self._new_id()
@@ -162,7 +162,7 @@ class FakeDrive:
     def update(self, file_id: str, data: bytes):
         """내용을 바꾼다.
 
-        @doc: docs/design/DriveSync.md#8-테스트
+        @doc: docs/design/DriveSync.md#9-테스트
         """
         self.calls.append("update")
         self.files[file_id]["data"] = data
@@ -172,7 +172,7 @@ class FakeDrive:
 def write_client_secret(path: Path) -> None:
     """가짜 웹 애플리케이션 클라이언트 JSON을 쓴다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(

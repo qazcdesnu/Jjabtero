@@ -2,6 +2,61 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M2-T3 서버 환경의 서재 보존(시작할 때 드라이브에서 받기, 바뀔 때 올리기) 구현
+
+- 시작일: 2026-11-01
+- 완료일: 2026-11-01
+- 근거 문서: [배포 설계](design/Deployment.md#3-데이터와-비밀-값), [구글 드라이브 동기화 설계](design/DriveSync.md)
+- 참고 자료: 없음
+
+### 계획
+- Render의 비밀 파일, 배포 때 종료 신호 동작을 확인하고 서버 환경 동작을 구글 드라이브 동기화 설계에 적는다.
+- 갱신 토큰을 환경 변수에서 받아 토큰 파일을 만드는 기능, 시작할 때 동기화를 끝내고 요청을 받는 설정, 종료할 때 대기 중인 올리기를 바로 하는 기능, 로컬 갱신 토큰을 꺼내는 명령을 만든다.
+- 테스트하고, 실제 드라이브로 "빈 서버가 시작할 때 서재를 받는" 흐름을 확인한다.
+
+### 진행 기록
+- 2026-11-01: 작업을 시작했다. PR #19까지 병합되어 최신 `main`에서 작업 브랜치를 만들었다.
+- 2026-11-01: Render 문서를 확인했다. 비밀 파일은 실행 중 `/etc/secrets/<파일 이름>`에 있고 재배포에도 남는다. 배포 때는 새 인스턴스가 먼저 뜨고 트래픽이 옮겨진 뒤 60초 뒤에 옛 인스턴스에 SIGTERM을 보내며, 기본 30초 뒤 SIGKILL한다.
+- 2026-11-01: 구글 드라이브 동기화 설계에 서버 환경 절(8절)을 더하고 테스트 절 번호가 9로 밀려, 코드의 `#8-테스트` 포인터를 `#9-테스트`로 고쳤다. 배포 설계와 시스템 구조의 미결정 사항을 고쳤다.
+- 2026-11-01: `seed_token_from_env`, `DriveSync.start(wait)`(전의 `start_background_sync`를 바꿈), `DriveSync.flush`, 앱 종료 때 `flush`를 부르는 lifespan, `JJABTERO_INITIAL_SYNC=wait`, 실행 명령 `--print-drive-token`을 만들었다. 테스트 격리에 새 환경 변수 두 개를 더했다. 백엔드 테스트는 134개다.
+- 2026-11-01: 실제 드라이브로 빈 서버를 흉내 냈다. 빈 데이터 폴더와 빈 데이터베이스, 환경 변수로 넘긴 갱신 토큰(값은 출력하지 않음), `JJABTERO_INITIAL_SYNC=wait`으로 서버를 띄우자 토큰 파일이 만들어지고, 첫 요청부터 서재(논문 1편)가 보였으며, 상태는 맞춤(`data_version` 1)이었다. 서재를 고치지 않아 드라이브는 바뀌지 않았다. 종료도 정상이었다.
+- 2026-11-01: 포인터 검사기가 `test_cli.py`의 동기화 설계 포인터를 받아 주는 문서 포인터가 없다고 알려, 테스트 절에 서버 환경 테스트 목록을 적었다.
+
+### 결정 사항
+- 없음
+- 위 "없음"은 시작할 때 적은 줄이다. 아래 결정을 작업 중에 내렸다.
+- OAuth 클라이언트 JSON은 Render 비밀 파일로 두고 기존 경로 환경 변수로 가리킨다. 재배포에도 남기 때문이다.
+- 드라이브 갱신 토큰은 환경 변수 `JJABTERO_GOOGLE_REFRESH_TOKEN`으로 넣는다. 유료 영구 디스크 없이 재시작을 견디는 가장 단순한 방법이다. 로컬에서 연결해 `--print-drive-token`으로 꺼낸다. 동의 화면이 테스트 상태인 동안은 7일마다 새 값이 필요하다.
+- 서버는 `JJABTERO_INITIAL_SYNC=wait`으로 시작할 때 받기를 끝낸 뒤 요청을 받는다. 빈 서재가 보이는 동안 논문을 넣어 충돌이 나는 일을 막기 위해서다.
+- 앱이 끝날 때 대기 중인 올리기를 바로 한다. 고친 직후 재배포·정지로 변경을 잃지 않기 위해서다.
+
+### 변경 파일
+- `docs/design/DriveSync.md`
+- `docs/design/Deployment.md`
+- `docs/Architecture.md`
+- `src/jjabtero/drive_sync.py`
+- `src/jjabtero/app.py`
+- `src/jjabtero/cli.py`
+- `tests/conftest.py`
+- `tests/test_drive_sync.py`
+- `tests/test_drive_api.py`
+- `tests/test_cli.py`
+- `tests/fakes.py`
+- `tests/test_drive.py`
+- `tests/test_google_auth.py`
+- `frontend/src/driveState.test.ts`
+- `frontend/src/api.test.ts`
+- `docs/Roadmap.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+
+### 결과
+- 파일 시스템이 지워지는 서버에서도 환경 변수의 갱신 토큰으로 드라이브에 연결되고, 시작할 때 서재를 받은 뒤 요청을 받으며, 끝날 때 대기 중인 변경을 올린다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기, `uv run pytest`(테스트 134개), 프론트엔드 `npm test` 통과.
+- 실제 드라이브로 빈 서버가 시작할 때 서재를 받는 것을 확인했다.
+
 ## M2-T2 본인 전용 로그인 구현
 
 - 시작일: 2026-11-01

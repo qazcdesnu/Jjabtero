@@ -2,6 +2,7 @@
 
 @doc: docs/design/AppSkeleton.md#4-테스트
 @doc: docs/design/Auth.md#7-테스트
+@doc: docs/design/DriveSync.md#9-테스트
 """
 
 from pathlib import Path
@@ -10,6 +11,9 @@ from typing import Any
 import pytest
 
 from jjabtero import cli
+from jjabtero.db import default_db_path
+from jjabtero.drive_sync import default_drive_paths
+from jjabtero.google_auth import Token, TokenStore
 
 
 @pytest.fixture
@@ -79,4 +83,26 @@ def test_main_refuses_short_session_secret(
     with pytest.raises(SystemExit):
         cli.main([])
     assert uvicorn_calls == []
+
+
+def test_print_drive_token_outputs_refresh_token(
+    uvicorn_calls: list[dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """로컬 토큰 파일의 갱신 토큰을 출력하고 서버는 띄우지 않는다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    TokenStore(default_drive_paths(default_db_path()).token).save(Token("a", "r-local", 1))
+    cli.main(["--print-drive-token"])
+    assert capsys.readouterr().out.strip() == "r-local"
+    assert uvicorn_calls == []
+
+
+def test_print_drive_token_without_connection_fails(uvicorn_calls: list[dict[str, Any]]) -> None:
+    """드라이브에 연결되어 있지 않으면 오류로 끝난다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    with pytest.raises(SystemExit):
+        cli.main(["--print-drive-token"])
 

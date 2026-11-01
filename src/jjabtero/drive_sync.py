@@ -2,6 +2,7 @@
 
 @doc: docs/design/DriveSync.md#5-동기화
 @doc: docs/design/DriveSync.md#2-로컬-파일
+@doc: docs/design/DriveSync.md#8-서버-환경
 """
 
 import hashlib
@@ -28,6 +29,7 @@ from jjabtero.google_auth import (
     DriveAuthError,
     DriveNotConfiguredError,
     OAuthClient,
+    Token,
     TokenStore,
     access_token,
     authorization_url,
@@ -81,6 +83,18 @@ def default_drive_paths(db_path: Path) -> DrivePaths:
         state=db_path.parent / "drive_sync.json",
         backups=db_path.parent / "backups",
     )
+
+
+def seed_token_from_env(store: TokenStore) -> bool:
+    """토큰 파일이 없고 `JJABTERO_GOOGLE_REFRESH_TOKEN`이 있으면 갱신 토큰만 든 토큰 파일을 만든다.
+
+    @doc: docs/design/DriveSync.md#8-서버-환경
+    """
+    refresh = os.environ.get("JJABTERO_GOOGLE_REFRESH_TOKEN", "").strip()
+    if not refresh or store.load() is not None:
+        return False
+    store.save(Token(access_token="", refresh_token=refresh, expires_at=0))
+    return True
 
 
 def snapshot_db(engine: Engine) -> bytes:
@@ -426,10 +440,23 @@ class DriveSync:
         self._timer = timer
         timer.start()
 
-    def start_background_sync(self) -> None:
-        """연결되어 있으면 백그라운드에서 한 번 동기화한다.
+    def start(self, wait: bool = False) -> None:
+        """연결되어 있으면 한 번 동기화한다. `wait`이면 끝날 때까지 기다리고, 아니면 백그라운드에서 한다.
 
         @doc: docs/design/DriveSync.md#5-동기화
+        @doc: docs/design/DriveSync.md#8-서버-환경
         """
-        if self.is_connected():
+        if not self.is_connected():
+            return
+        if wait:
+            self.sync()
+        else:
             threading.Thread(target=self.sync, daemon=True).start()
+
+    def flush(self) -> None:
+        """대기 중인 자동 올리기가 있으면 예약을 취소하고 바로 동기화한다.
+
+        @doc: docs/design/DriveSync.md#8-서버-환경
+        """
+        if self._timer is not None:
+            self.sync()

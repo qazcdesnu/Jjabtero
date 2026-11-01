@@ -2,7 +2,7 @@
 // @doc: docs/design/PaperSearch.md#5-테스트
 // @doc: docs/design/LibraryView.md#4-테스트
 // @doc: docs/design/ReadingStatus.md#4-테스트
-// @doc: docs/design/DriveSync.md#8-테스트
+// @doc: docs/design/DriveSync.md#9-테스트
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {

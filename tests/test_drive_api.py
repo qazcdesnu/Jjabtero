@@ -1,6 +1,6 @@
 """드라이브 연결과 동기화 API를 검증한다.
 
-@doc: docs/design/DriveSync.md#8-테스트
+@doc: docs/design/DriveSync.md#9-테스트
 """
 
 import time
@@ -20,7 +20,7 @@ from jjabtero.google_auth import Token, TokenStore
 def token_endpoint(request: httpx2.Request) -> httpx2.Response:
     """가짜 토큰 서버. 코드를 받으면 토큰을 준다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     return httpx2.Response(200, json={"access_token": "a1", "refresh_token": "r1", "expires_in": 3600})
 
@@ -28,7 +28,7 @@ def token_endpoint(request: httpx2.Request) -> httpx2.Response:
 def make_app(tmp_path: Path, drive: FakeDrive, configured: bool = True, connected: bool = False):
     """임시 경로와 가짜 드라이브를 쓰는 앱과 그 경로.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     paths = DrivePaths(tmp_path / "client.json", tmp_path / "token.json", tmp_path / "drive_sync.json", tmp_path / "backups")
     if configured:
@@ -48,7 +48,7 @@ def make_app(tmp_path: Path, drive: FakeDrive, configured: bool = True, connecte
 def start_connect(client: TestClient, return_to: str | None) -> str:
     """연결을 시작하고 동의 주소의 `state`를 돌려준다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     params = {"return_to": return_to} if return_to else {}
     response = client.get("/api/drive/connect", params=params)
@@ -61,7 +61,7 @@ def start_connect(client: TestClient, return_to: str | None) -> str:
 def test_status_not_configured_without_client(tmp_path: Path) -> None:
     """클라이언트 파일이 없으면 설정 안 됨이고 연결은 409다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     client, _ = make_app(tmp_path, FakeDrive(), configured=False)
     assert client.get("/api/drive/status").json()["state"] == "not_configured"
@@ -71,7 +71,7 @@ def test_status_not_configured_without_client(tmp_path: Path) -> None:
 def test_connect_and_callback_saves_token_syncs_and_returns(tmp_path: Path) -> None:
     """콜백이 토큰을 저장하고 동기화한 뒤 돌아갈 주소로 보낸다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     drive = FakeDrive()
     client, paths = make_app(tmp_path, drive)
@@ -88,7 +88,7 @@ def test_connect_and_callback_saves_token_syncs_and_returns(tmp_path: Path) -> N
 def test_connect_rejects_non_local_return_to(tmp_path: Path, return_to: str | None) -> None:
     """돌아갈 주소가 로컬이 아니면 `/`로 돌아간다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     client, _ = make_app(tmp_path, FakeDrive())
     state = start_connect(client, return_to)
@@ -100,7 +100,7 @@ def test_connect_rejects_non_local_return_to(tmp_path: Path, return_to: str | No
 def test_callback_rejects_unknown_state_or_error(tmp_path: Path, params: dict[str, str]) -> None:
     """모르는 `state`나 거부 응답은 400이다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     client, paths = make_app(tmp_path, FakeDrive())
     assert client.get("/api/drive/callback", params=params).status_code == 400
@@ -110,7 +110,7 @@ def test_callback_rejects_unknown_state_or_error(tmp_path: Path, params: dict[st
 def test_sync_resolve_and_disconnect(tmp_path: Path) -> None:
     """동기화, 충돌 풀기, 연결 해제가 상태를 돌려준다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     client, paths = make_app(tmp_path, FakeDrive(), connected=True)
     assert client.post("/api/drive/sync").json()["state"] == "idle"
@@ -123,7 +123,7 @@ def test_sync_resolve_and_disconnect(tmp_path: Path) -> None:
 def test_paper_changes_schedule_push(tmp_path: Path) -> None:
     """논문을 넣고, 고치고, 지우면 자동 올리기를 예약한다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     client, _ = make_app(tmp_path, FakeDrive(), connected=True)
     client.post("/api/drive/sync")
@@ -137,3 +137,30 @@ def test_paper_changes_schedule_push(tmp_path: Path) -> None:
     client.delete(f"/api/papers/{paper['id']}")
     assert client.get("/api/drive/status").json()["pending"] is True
     client.post("/api/drive/disconnect")
+
+
+def test_create_app_waits_for_initial_sync_and_flushes_on_shutdown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """서버 설정이면 시작할 때 드라이브 서재를 받아 두고, 끝날 때 대기 중인 변경을 올린다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    drive = FakeDrive()
+    laptop_client, _ = make_app(tmp_path / "laptop", drive, connected=True)
+    laptop_client.post("/api/drive/sync")
+    laptop_client.post("/api/papers", json={"title": "from laptop"})
+    laptop_client.post("/api/drive/sync")
+    laptop_client.post("/api/drive/disconnect")
+
+    monkeypatch.setenv("JJABTERO_GOOGLE_REFRESH_TOKEN", "r-env")
+    monkeypatch.setenv("JJABTERO_INITIAL_SYNC", "wait")
+    server_client, paths = make_app(tmp_path / "server", drive)
+    assert TokenStore(paths.token).load().refresh_token == "r-env"
+    with server_client:
+        assert [paper["title"] for paper in server_client.get("/api/papers").json()] == ["from laptop"]
+        server_client.post("/api/papers", json={"title": "from server"})
+        assert server_client.get("/api/drive/status").json()["pending"] is True
+        drive.calls.clear()
+    assert drive.calls == ["update"]
+

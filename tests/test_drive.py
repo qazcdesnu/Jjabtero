@@ -1,6 +1,6 @@
 """드라이브 파일 요청을 검증한다.
 
-@doc: docs/design/DriveSync.md#8-테스트
+@doc: docs/design/DriveSync.md#9-테스트
 """
 
 import httpx2
@@ -12,7 +12,7 @@ from jjabtero.drive import DriveApiError, DriveFiles, RemoteFile
 def files_with(handler, seen: list[httpx2.Request]) -> DriveFiles:
     """요청을 모으고 가짜로 응답하는 `DriveFiles`.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
 
     def recording(request: httpx2.Request) -> httpx2.Response:
@@ -25,7 +25,7 @@ def files_with(handler, seen: list[httpx2.Request]) -> DriveFiles:
 def test_find_folder_queries_root_folder() -> None:
     """맨 위 폴더를 이름과 종류로 찾고 접근 토큰을 붙인다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     seen: list[httpx2.Request] = []
     files = files_with(lambda r: httpx2.Response(200, json={"files": [{"id": "d1"}]}), seen)
@@ -39,7 +39,7 @@ def test_find_folder_queries_root_folder() -> None:
 def test_find_file_returns_none_when_empty() -> None:
     """찾는 파일이 없으면 `None`이다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     seen: list[httpx2.Request] = []
     files = files_with(lambda r: httpx2.Response(200, json={"files": []}), seen)
@@ -50,7 +50,7 @@ def test_find_file_returns_none_when_empty() -> None:
 def test_get_handles_missing_and_trashed() -> None:
     """없거나(404) 휴지통에 있으면 `None`이다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     seen: list[httpx2.Request] = []
     responses = [
@@ -67,7 +67,7 @@ def test_get_handles_missing_and_trashed() -> None:
 def test_create_uploads_multipart_and_update_uploads_media() -> None:
     """새 파일은 multipart로, 내용 바꾸기는 media로 올린다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     seen: list[httpx2.Request] = []
     files = files_with(lambda r: httpx2.Response(200, json={"id": "f1", "md5Checksum": "m7"}), seen)
@@ -84,7 +84,7 @@ def test_create_uploads_multipart_and_update_uploads_media() -> None:
 def test_download_returns_bytes() -> None:
     """`alt=media`로 내용을 받는다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     seen: list[httpx2.Request] = []
     files = files_with(lambda r: httpx2.Response(200, content=b"BYTES"), seen)
@@ -95,7 +95,7 @@ def test_download_returns_bytes() -> None:
 def test_api_error_carries_status() -> None:
     """4xx·5xx 응답은 상태 코드를 담은 `DriveApiError`다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     files = files_with(lambda r: httpx2.Response(403, text="forbidden"), [])
     with pytest.raises(DriveApiError) as caught:
