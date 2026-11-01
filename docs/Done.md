@@ -2,6 +2,66 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M1-T3 논문 서지 정보 데이터 모델과 저장 구현
+
+- 시작일: 2026-11-01
+- 완료일: 2026-11-01
+- 근거 문서: [시스템 구조](Architecture.md), [제품 비전](ProductVision.md#3-핵심-요구사항), [서재 데이터 설계](design/Library.md)
+
+### 계획
+- 저장할 서지 정보 항목, 데이터베이스 파일 위치, 스키마 변경 방식을 사용자와 정한다.
+- 상세 설계 문서를 쓰고 인덱스에서 링크한다.
+- 목업을 만든 뒤 SQLAlchemy 모델, 데이터베이스 연결, 논문 저장·조회·수정·삭제 함수를 구현하고 테스트한다.
+- 시스템 구조의 미결정 사항과 README를 맞춘다.
+
+### 진행 기록
+- 2026-11-01: 작업을 시작했다. PR #8까지 병합되어 최신 `main`에서 작업 브랜치를 만들었다.
+- 2026-11-01: 저장 항목, 데이터베이스 위치, 스키마 변경 방식을 물었다. 사용자는 연도·게재처·DOI·URL, 항목 종류, 태그(선택)를 골랐다. 초록은 고르지 않았다. 스키마 변경은 Alembic을 골랐다.
+- 2026-11-01: 데이터베이스 위치로 사용자는 구글 드라이브 `Jjabtero` 폴더 연동을 원했다. 이 Mac에는 Google Drive 데스크톱 앱이 없다(`~/Library/CloudStorage`에 OneDrive만 있음). Drive API 동기화와 데스크톱 앱 동기화 폴더를 비교해 제시했고, 사용자는 Drive API 동기화를 별도 태스크로 하는 것을 골랐다. 로드맵에 M1-T9를 추가했다.
+- 2026-11-01: 제품 비전의 범위 제외 항목에 "클라우드 동기화"가 있어 결정과 어긋났다. 핵심 요구사항에 구글 드라이브 보관을 더하고 제외 항목을 고쳤다. 저장 항목도 제품 비전에 적었다.
+- 2026-11-01: 서재 데이터 설계를 쓰고 인덱스에 링크했다. 시스템 구조에 마이그레이션 디렉터리, `alembic.ini`, Alembic, platformdirs를 더하고 미결정 사항을 갱신했다.
+- 2026-11-01: SQLAlchemy, Alembic, platformdirs를 추가하고 모델, 연결, 마이그레이션 환경과 첫 리비전 0001, 저장 함수를 구현했다. 임시 데이터베이스에서 `alembic upgrade head` 뒤 `alembic check`가 "No new upgrade operations detected"를 내어, 모델과 마이그레이션이 일치함을 확인했다.
+- 2026-11-01: 테스트 `test_db.py`, `test_library.py`를 더해 백엔드 테스트 36개가 통과했다. README에 서재 데이터 위치를 적었다.
+
+### 결정 사항
+- 저장 항목은 제목, 저자(순서 있음), 연도, 게재처, DOI, URL, 항목 종류, 태그(선택)다. 사용자가 골랐다. [서재 데이터 설계](design/Library.md#1-데이터-모델)에 적었다.
+- 저자와 태그는 별도 테이블로 두고 이름이 같으면 공유한다. 저자별 통계와 인용 연결, 태그 필터에서 같은 저자·태그를 하나로 다루기 위해서다.
+- 항목 종류는 8가지(`journal-article`, `conference-paper`, `preprint`, `book`, `book-chapter`, `thesis`, `report`, `other`)로 하고 기본값은 `other`다.
+- DOI는 정규화해 저장하고 겹치지 않게 한다. 같은 논문을 두 번 넣는 것을 막고, 인용 데이터 조회의 열쇠로 쓰기 위해서다.
+- 서재는 구글 드라이브 `Jjabtero` 폴더에 Drive API로 동기화한다. 사용자가 골랐다. 구현은 M1-T9로 나눴다.
+- 데이터베이스 파일은 동기화의 로컬 작업 사본으로, 기본 위치는 운영체제의 사용자 데이터 폴더이고 `JJABTERO_DB`로 바꿀 수 있다. Drive API 방식에서는 로컬 사본이 필요하고, 저장소 안에 두면 저장소와 함께 지워질 수 있기 때문이다.
+- 스키마 변경은 Alembic으로 한다. 사용자가 골랐다. 마이그레이션은 패키지 안에 둬서 설치된 패키지에서도 `upgrade_database`가 찾게 한다.
+- 백엔드 앱에 데이터베이스를 연결하는 일은 API를 처음 만드는 태스크로 미룬다.
+
+### 변경 파일
+- `docs/design/Library.md`
+- `docs/ProductVision.md`
+- `docs/Architecture.md`
+- `docs/index.md`
+- `README.md`
+- `alembic.ini`
+- `pyproject.toml`
+- `uv.lock`
+- `src/jjabtero/models.py`
+- `src/jjabtero/db.py`
+- `src/jjabtero/library.py`
+- `src/jjabtero/migrations/env.py`
+- `src/jjabtero/migrations/script.py.mako`
+- `src/jjabtero/migrations/versions/0001_create_library.py`
+- `tests/test_db.py`
+- `tests/test_library.py`
+- `docs/Roadmap.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+
+### 결과
+- 논문 서지 정보를 SQLite에 저장·조회·수정·삭제하는 함수가 생겼다. 스키마는 Alembic 마이그레이션으로 만들고 바꾼다.
+- 데이터베이스 위치는 사용자 데이터 폴더이며 환경 변수로 바꿀 수 있다. 구글 드라이브 동기화는 M1-T9에서 이 파일에 더한다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.5 projinit check`: 모든 검사기, `uv run pytest`(테스트 36개), 프론트엔드 `npm test` 통과.
+- 임시 데이터베이스에서 `uv run alembic upgrade head`와 `uv run alembic check` 통과.
+
 ## M1-T8 FastAPI 서버와 Vue 프론트엔드 골격 구성
 
 - 시작일: 2026-10-31

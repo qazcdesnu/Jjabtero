@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 백엔드 | FastAPI (Python), uvicorn | `/api` 아래에서 JSON API를 제공한다. 서지 데이터의 저장·검색과 인용·통계 계산을 맡는다. |
 | 프론트엔드 | Vue 3, TypeScript, Vite | 브라우저에서 도는 단일 페이지 앱(SPA)이다. 백엔드 API를 불러 화면을 그린다. |
-| 데이터 | SQLite, SQLAlchemy | 서재 데이터를 SQLite 파일 하나에 저장하고, 백엔드가 SQLAlchemy로 읽고 쓴다. |
+| 데이터 | SQLite, SQLAlchemy | 서재 데이터를 SQLite 파일 하나에 저장하고, 백엔드가 SQLAlchemy로 읽고 쓴다. 파일은 로컬 작업 사본이며, 구글 드라이브 `Jjabtero` 폴더와 Drive API로 동기화한다([서재 데이터 설계](design/Library.md#2-데이터베이스-파일과-연결)). |
 
 - **개발할 때**: Vite 개발 서버가 화면을 제공하고, `/api` 요청은 FastAPI 개발 서버로 넘긴다(proxy). 두 서버를 함께 띄운다.
 - **쓸 때**: 프론트엔드를 빌드한 정적 파일을 FastAPI가 함께 제공한다. 서버 하나만 띄우면 된다.
@@ -22,10 +22,12 @@
 | 경로 | 용도 |
 | --- | --- |
 | `src/jjabtero/` | 백엔드 코드(Python 패키지). |
+| `src/jjabtero/migrations/` | 데이터베이스 스키마 마이그레이션(Alembic)([서재 데이터 설계](design/Library.md#3-스키마-변경)). |
 | `tests/` | 백엔드 pytest 테스트. |
 | `frontend/` | 프론트엔드 앱(Vue, TypeScript, Vite). `package.json`, `package-lock.json`, Vite 설정, 자체 `.gitignore`(`node_modules/`, 빌드 결과 `dist/`)를 이 안에 둔다. |
 | `frontend/src/` | 프론트엔드 코드. |
 | `pyproject.toml` | 패키지 정보와 의존성, pytest 설정. |
+| `alembic.ini` | 개발할 때 쓰는 Alembic 명령 설정. |
 | `uv.lock` | uv가 만드는 의존성 잠금 파일. 커밋한다. |
 | `.python-version` | uv가 쓰는 Python 버전. |
 | `.gitignore` | 커밋하지 않을 파일(가상 환경 `.venv/`, 캐시). |
@@ -50,6 +52,8 @@
 | 빌드 백엔드 | uv_build |
 | 웹 프레임워크 | FastAPI, ASGI 서버 uvicorn |
 | 데이터베이스 | SQLite, SQLAlchemy |
+| 스키마 변경 | Alembic |
+| 데이터 폴더 찾기 | platformdirs |
 | 테스트 | pytest (개발 의존성 그룹 `dev`) |
 
 Python 버전은 `.python-version`과 `pyproject.toml`의 `requires-python`(`>=3.14`)에 적는다.
@@ -86,7 +90,6 @@ Python 버전은 `.python-version`과 `pyproject.toml`의 `requires-python`(`>=3
 
 - 시각화 라이브러리(통계 차트, 인용 그래프).
 - UI 컴포넌트 라이브러리를 쓸지, 쓴다면 무엇을 쓸지.
-- SQLite 데이터베이스 파일의 위치.
-- 데이터베이스 스키마를 바꾸는 방식(예: Alembic 마이그레이션).
+- 구글 드라이브 동기화의 세부 방식(인증 정보 보관, 동기화 시점, 충돌 처리). M1-T9에서 정한다.
 - 백엔드 API의 타입을 프론트엔드와 공유하는 방식(예: OpenAPI 명세에서 TypeScript 타입 생성).
 - Node.js 버전과 프론트엔드 린터·포매터.
