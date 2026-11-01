@@ -36,6 +36,8 @@ uv run jjabtero                # 터미널 1: 백엔드
 npm --prefix frontend run dev  # 터미널 2: 프론트엔드
 ```
 
+**서재 데이터**: 서재는 SQLite 파일 하나에 저장한다. 기본 위치는 운영체제의 사용자 데이터 폴더이며(macOS: `~/Library/Application Support/Jjabtero/library.db`), 환경 변수 `JJABTERO_DB`로 바꿀 수 있다. 구글 드라이브 동기화는 아직 없다.
+
 **테스트**
 
 ```sh
