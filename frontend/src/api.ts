@@ -1,5 +1,6 @@
 // @doc: docs/design/AppSkeleton.md#3-프론트엔드-앱
 // @doc: docs/design/PaperSearch.md#4-화면
+// @doc: docs/design/LibraryView.md#2-화면-상태
 
 // @doc: docs/design/AppSkeleton.md#3-프론트엔드-앱
 export interface Health {
@@ -106,5 +107,35 @@ export function toPaperInput(result: SearchResult, tags: string[]): PaperInput {
     doi: result.doi,
     url: result.url,
     tags: [...new Set(tags.map((tag) => tag.trim()).filter((tag) => tag !== ''))],
+  }
+}
+
+// @doc: docs/design/LibraryView.md#2-화면-상태
+export class PaperNotFoundError extends Error {
+  readonly paperId: number
+
+  constructor(paperId: number) {
+    super(`서재에 없는 논문입니다: ${paperId}`)
+    this.paperId = paperId
+  }
+}
+
+// @doc: docs/design/LibraryView.md#2-화면-상태
+export async function listPapers(): Promise<Paper[]> {
+  const response = await fetch('/api/papers')
+  if (!response.ok) {
+    throw new Error(`서재 불러오기 실패: ${response.status}`)
+  }
+  return (await response.json()) as Paper[]
+}
+
+// @doc: docs/design/LibraryView.md#2-화면-상태
+export async function deletePaper(paperId: number): Promise<void> {
+  const response = await fetch(`/api/papers/${paperId}`, { method: 'DELETE' })
+  if (response.status === 404) {
+    throw new PaperNotFoundError(paperId)
+  }
+  if (!response.ok) {
+    throw new Error(`논문 삭제 실패: ${response.status}`)
   }
 }

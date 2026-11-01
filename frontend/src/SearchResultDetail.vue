@@ -5,7 +5,8 @@ import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Tag from 'primevue/tag'
 import { computed, ref, watch } from 'vue'
-import { ITEM_TYPE_LABELS, createSearchState, resultKey, sourceLabel } from './searchState'
+import { ITEM_TYPE_LABELS } from './labels'
+import { createSearchState, resultKey, sourceLabel } from './searchState'
 
 const props = defineProps<{ search: ReturnType<typeof createSearchState> }>()
 const result = computed(() => props.search.selected.value)

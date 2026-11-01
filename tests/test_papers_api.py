@@ -1,6 +1,7 @@
-"""논문 검색과 추가 API를 검증한다.
+"""논문 검색, 추가, 목록, 삭제 API를 검증한다.
 
 @doc: docs/design/PaperSearch.md#5-테스트
+@doc: docs/design/LibraryView.md#4-테스트
 """
 
 from pathlib import Path
@@ -109,3 +110,43 @@ def test_create_paper_invalid_returns_422(client: TestClient) -> None:
     @doc: docs/design/PaperSearch.md#5-테스트
     """
     assert client.post("/api/papers", json={"title": " "}).status_code == 422
+
+
+def test_read_papers_newest_first(client: TestClient) -> None:
+    """목록은 최근에 넣은 논문부터 저자와 태그를 담아 돌려준다.
+
+    @doc: docs/design/LibraryView.md#4-테스트
+    """
+    client.post("/api/papers", json={"title": "old", "authors": ["Kim"]})
+    client.post("/api/papers", json={"title": "new", "tags": ["nlp"]})
+    papers = client.get("/api/papers").json()
+    assert [paper["title"] for paper in papers] == ["new", "old"]
+    assert papers[0]["tags"] == ["nlp"]
+    assert papers[1]["authors"] == ["Kim"]
+
+
+def test_read_papers_empty(client: TestClient) -> None:
+    """서재가 비면 빈 목록이다.
+
+    @doc: docs/design/LibraryView.md#4-테스트
+    """
+    assert client.get("/api/papers").json() == []
+
+
+def test_remove_paper_returns_204(client: TestClient) -> None:
+    """지우면 204이고 목록에서 사라진다.
+
+    @doc: docs/design/LibraryView.md#4-테스트
+    """
+    paper = client.post("/api/papers", json={"title": "A"}).json()
+    response = client.delete(f"/api/papers/{paper['id']}")
+    assert response.status_code == 204
+    assert client.get("/api/papers").json() == []
+
+
+def test_remove_missing_paper_returns_404(client: TestClient) -> None:
+    """없는 ID를 지우면 404다.
+
+    @doc: docs/design/LibraryView.md#4-테스트
+    """
+    assert client.delete("/api/papers/999").status_code == 404

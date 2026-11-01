@@ -56,7 +56,7 @@ API는 [papers_api 모듈](../../src/jjabtero/papers_api.py)의 라우터다. �
   - `add(result, tags)`는 결과를 서재에 넣는다. 성공하거나 409면 그 결과를 서재에 있는 것으로 표시하고, 그 밖의 실패는 결과별 추가 오류로 둔다.
   - `isInLibrary(result)`는 결과에 `library_paper_id`가 있거나 이번에 넣었으면 참이다.
   - 결과의 열쇠는 [resultKey](../../frontend/src/searchState.ts#resultKey)(`<검색원>:<검색원 ID>`)다.
-  - 화면에는 영어 코드 대신 표시 이름을 쓴다. 검색원은 [sourceLabel](../../frontend/src/searchState.ts#sourceLabel)(`OpenAlex`, `arXiv`), 항목 종류는 [ITEM_TYPE_LABELS](../../frontend/src/searchState.ts#ITEM_TYPE_LABELS)(저널 논문, 학회 논문 등)다.
+  - 화면에는 영어 코드 대신 표시 이름을 쓴다. 검색원은 [sourceLabel](../../frontend/src/searchState.ts#sourceLabel)(`OpenAlex`, `arXiv`), 항목 종류는 `labels.ts`의 `ITEM_TYPE_LABELS`(저널 논문, 학회 논문 등)다([서재 화면 설계](LibraryView.md#2-화면-상태)).
 - 화면은 [UI 기반 설계](UiLayout.md#3-화면-배치)의 3단 배치를 쓴다.
   - 가운데 칸 `SearchView.vue`: 위에 검색어 입력, 검색원 선택, 검색 단추가 있다. 검색 중에는 단추가 돈다. 아래는 결과 표(PrimeVue `DataTable`)로 제목, 저자, 연도, 게재처, 검색원, 상태를 보여 준다. 제목 열이 남는 너비를 모두 쓰고 두 줄까지 보이며, 저자와 게재처는 한 줄로 줄이고 전체는 마우스를 올리면 보인다. 서재에 있는 결과는 체크 아이콘(툴팁 "서재에 있음")으로 표시한다. 행을 누르면 그 결과를 고른다. 실패한 검색원은 표 위에 경고로 알린다.
   - 오른쪽 칸 `SearchResultDetail.vue`: 고른 결과의 제목, 저자, 연도, 게재처, 항목 종류, DOI, 원문 링크를 보여 주고, 태그 입력(입력하고 Enter로 하나씩 더함)과 "서재에 추가" 단추를 둔다. 서재에 있으면 단추 대신 "서재에 있음"을 보여 준다.

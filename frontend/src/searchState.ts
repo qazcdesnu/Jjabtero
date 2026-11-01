@@ -16,18 +16,6 @@ export const SEARCH_SOURCES = [
 ] as const
 
 // @doc: docs/design/PaperSearch.md#4-화면
-export const ITEM_TYPE_LABELS: Record<string, string> = {
-  'journal-article': '저널 논문',
-  'conference-paper': '학회 논문',
-  preprint: '프리프린트',
-  book: '책',
-  'book-chapter': '책의 장',
-  thesis: '학위논문',
-  report: '보고서',
-  other: '그 밖',
-}
-
-// @doc: docs/design/PaperSearch.md#4-화면
 export function sourceLabel(name: string): string {
   return SEARCH_SOURCES.find((source) => source.name === name)?.label ?? name
 }

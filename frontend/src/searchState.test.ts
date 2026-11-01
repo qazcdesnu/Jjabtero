@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { DuplicatePaperError, type SearchResult } from './api'
-import { ITEM_TYPE_LABELS, createSearchState, resultKey, sourceLabel } from './searchState'
+import { createSearchState, resultKey, sourceLabel } from './searchState'
 
 const result: SearchResult = {
   source: 'openalex',
@@ -105,11 +105,5 @@ describe('표시 이름', () => {
     expect(sourceLabel('openalex')).toBe('OpenAlex')
     expect(sourceLabel('arxiv')).toBe('arXiv')
     expect(sourceLabel('unknown')).toBe('unknown')
-  })
-
-  it('모든 항목 종류에 한국어 이름이 있다', () => {
-    expect(Object.keys(ITEM_TYPE_LABELS).sort()).toEqual(
-      ['book', 'book-chapter', 'conference-paper', 'journal-article', 'other', 'preprint', 'report', 'thesis'],
-    )
   })
 })
