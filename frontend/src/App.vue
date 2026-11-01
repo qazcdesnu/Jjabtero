@@ -3,12 +3,16 @@
 <!-- @doc: docs/design/LibraryView.md#3-화면 -->
 <!-- @doc: docs/design/LibraryFilter.md#3-화면-상태 -->
 <!-- @doc: docs/design/DriveSync.md#7-화면 -->
+<!-- @doc: docs/design/Auth.md#6-화면 -->
 <script setup lang="ts">
+import Button from 'primevue/button'
 import Splitter from 'primevue/splitter'
 import SplitterPanel from 'primevue/splitterpanel'
 import Tag from 'primevue/tag'
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { fetchHealth, type Health } from './api'
+import { createAuthState, watchUnauthorized } from './auth'
+import LoginView from './LoginView.vue'
 import { createDriveState } from './driveState'
 import DriveStatus from './DriveStatus.vue'
 import LibraryView from './LibraryView.vue'
@@ -24,6 +28,10 @@ const view = ref<string>(DEFAULT_VIEW)
 const search = createSearchState()
 const library = createLibraryState()
 const drive = createDriveState(() => library.load())
+const auth = createAuthState()
+const ready = ref(false)
+
+watchUnauthorized(() => auth.refresh())
 
 watch(view, (name) => {
   if (name === 'library') library.load()
@@ -33,7 +41,15 @@ const healthFailed = ref(false)
 
 onUnmounted(() => drive.stop())
 
+async function signOut() {
+  drive.stop()
+  await auth.signOut()
+}
+
 onMounted(async () => {
+  await auth.refresh()
+  ready.value = true
+  if (auth.needsLogin.value) return
   library.load()
   drive.start()
   try {
@@ -45,7 +61,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col bg-surface-50 text-surface-800 dark:bg-surface-950 dark:text-surface-100">
+  <div v-if="!ready" class="h-full bg-surface-50 dark:bg-surface-950" />
+  <LoginView v-else-if="auth.needsLogin.value" />
+  <div v-else class="flex h-full flex-col bg-surface-50 text-surface-800 dark:bg-surface-950 dark:text-surface-100">
     <header
       class="flex items-center justify-between border-b border-surface-200 bg-surface-0 px-4 py-2 dark:border-surface-700 dark:bg-surface-900"
     >
@@ -58,6 +76,10 @@ onMounted(async () => {
         <Tag v-if="health" severity="secondary" :value="`v${health.version}`" />
         <Tag v-else-if="healthFailed" severity="danger" value="서버에 연결할 수 없음" />
         <Tag v-else severity="secondary" value="서버 확인 중" />
+        <template v-if="auth.state.me?.email">
+          <span class="text-sm text-surface-500">{{ auth.state.me.email }}</span>
+          <Button label="로그아웃" icon="pi pi-sign-out" size="small" text severity="secondary" @click="signOut" />
+        </template>
       </div>
     </header>
 

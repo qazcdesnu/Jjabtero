@@ -1,6 +1,7 @@
 """구글 OAuth 2.0 인증.
 
 @doc: docs/design/DriveSync.md#3-인증
+@doc: docs/design/Auth.md#5-api
 """
 
 import base64
@@ -90,22 +91,32 @@ def new_pkce_pair() -> tuple[str, str]:
     return verifier, challenge
 
 
-def authorization_url(client: OAuthClient, redirect_uri: str, state: str, code_challenge: str) -> str:
-    """동의 화면 주소를 만든다.
+def authorization_url(
+    client: OAuthClient,
+    redirect_uri: str,
+    state: str,
+    code_challenge: str,
+    scope: str = DRIVE_SCOPE,
+    offline: bool = True,
+    prompt: str = "consent",
+) -> str:
+    """동의 화면 주소를 만든다. 기본값은 드라이브 연결용이다.
 
     @doc: docs/design/DriveSync.md#3-인증
+    @doc: docs/design/Auth.md#5-api
     """
     params = {
         "client_id": client.client_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": DRIVE_SCOPE,
-        "access_type": "offline",
-        "prompt": "consent",
+        "scope": scope,
+        "prompt": prompt,
         "state": state,
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
     }
+    if offline:
+        params["access_type"] = "offline"
     return f"{client.auth_uri}?{urlencode(params)}"
 
 
@@ -141,6 +152,26 @@ def exchange_code(
     if "refresh_token" not in body:
         raise DriveAuthError("갱신 토큰을 받지 못했습니다. 다시 연결하세요.")
     return Token(body["access_token"], body["refresh_token"], time.time() + body["expires_in"])
+
+
+def exchange_code_for_access(
+    http: httpx2.Client, client: OAuthClient, code: str, redirect_uri: str, code_verifier: str
+) -> str:
+    """인증 코드를 접근 토큰으로만 바꾼다. 로그인에 쓴다.
+
+    @doc: docs/design/Auth.md#5-api
+    """
+    body = _token_request(
+        http,
+        client,
+        {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "code_verifier": code_verifier,
+        },
+    )
+    return body["access_token"]
 
 
 def refresh_token(http: httpx2.Client, client: OAuthClient, token: Token) -> Token:
