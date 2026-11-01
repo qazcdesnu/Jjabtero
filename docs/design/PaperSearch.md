@@ -49,12 +49,17 @@ API는 [papers_api 모듈](../../src/jjabtero/papers_api.py)의 라우터다. �
 - API 호출과 변환은 [api 모듈](../../frontend/src/api.ts)에 둔다([시스템 구조](../Architecture.md#2-디렉터리-구조)의 `.vue` 제약).
   - [searchPapers](../../frontend/src/api.ts#searchPapers)는 `GET /api/search`를 불러 [SearchResponse](../../frontend/src/api.ts#SearchResponse)를 돌려준다.
   - [addPaper](../../frontend/src/api.ts#addPaper)는 `POST /api/papers`를 불러 [Paper](../../frontend/src/api.ts#Paper)를 돌려준다. 409면 이미 있는 논문 ID를 담은 [DuplicatePaperError](../../frontend/src/api.ts#DuplicatePaperError)를, 그 밖의 실패면 상태 코드를 담은 오류를 던진다.
-  - [toPaperInput](../../frontend/src/api.ts#toPaperInput)은 검색 결과와 쉼표로 구분한 태그 문자열을 [PaperInput](../../frontend/src/api.ts#PaperInput)으로 바꾼다. 빈 태그는 버린다.
-- `SearchPanel.vue`는 첫 화면의 검색 영역이다.
-  - 검색어 입력, 검색원 체크박스(기본 모두 선택), 검색 버튼이 있다. 검색 중에는 버튼을 막는다.
-  - 결과마다 제목, 저자, 연도, 게재처, 검색원, 원문 링크를 보여 준다. 실패한 검색원은 결과 위에 알린다.
-  - 결과마다 태그 입력(쉼표 구분)과 "서재에 추가" 버튼이 있다. 추가하면 "서재에 있음"으로 바뀐다. 이미 서재에 있는 결과(`library_paper_id`가 있거나 409)는 처음부터 "서재에 있음"으로 보여 준다.
-- `App.vue`는 앱 이름, 서버 상태 한 줄, `SearchPanel`을 보여 준다.
+  - [toPaperInput](../../frontend/src/api.ts#toPaperInput)은 검색 결과와 태그 목록을 [PaperInput](../../frontend/src/api.ts#PaperInput)으로 바꾼다. 태그의 앞뒤 공백을 지우고, 빈 태그와 겹치는 태그는 버린다.
+- 검색 화면의 상태와 동작은 [searchState 모듈](../../frontend/src/searchState.ts)의 [createSearchState](../../frontend/src/searchState.ts#createSearchState)가 만든다. 검색과 추가 함수를 인자로 받아, 테스트에서 가짜로 바꿀 수 있다.
+  - 상태: 검색어, 고른 검색원(기본 모두), 검색 중 여부, 검색 오류, 결과, 검색원별 실패, 고른 결과, 결과별 추가 오류.
+  - `run()`은 검색어가 비거나 검색원이 없으면 아무것도 하지 않는다. 검색하면 결과를 바꾸고 고른 결과와 추가 상태를 비운다.
+  - `add(result, tags)`는 결과를 서재에 넣는다. 성공하거나 409면 그 결과를 서재에 있는 것으로 표시하고, 그 밖의 실패는 결과별 추가 오류로 둔다.
+  - `isInLibrary(result)`는 결과에 `library_paper_id`가 있거나 이번에 넣었으면 참이다.
+  - 결과의 열쇠는 [resultKey](../../frontend/src/searchState.ts#resultKey)(`<검색원>:<검색원 ID>`)다.
+  - 화면에는 영어 코드 대신 표시 이름을 쓴다. 검색원은 [sourceLabel](../../frontend/src/searchState.ts#sourceLabel)(`OpenAlex`, `arXiv`), 항목 종류는 [ITEM_TYPE_LABELS](../../frontend/src/searchState.ts#ITEM_TYPE_LABELS)(저널 논문, 학회 논문 등)다.
+- 화면은 [UI 기반 설계](UiLayout.md#3-화면-배치)의 3단 배치를 쓴다.
+  - 가운데 칸 `SearchView.vue`: 위에 검색어 입력, 검색원 선택, 검색 단추가 있다. 검색 중에는 단추가 돈다. 아래는 결과 표(PrimeVue `DataTable`)로 제목, 저자, 연도, 게재처, 검색원, 상태를 보여 준다. 제목 열이 남는 너비를 모두 쓰고 두 줄까지 보이며, 저자와 게재처는 한 줄로 줄이고 전체는 마우스를 올리면 보인다. 서재에 있는 결과는 체크 아이콘(툴팁 "서재에 있음")으로 표시한다. 행을 누르면 그 결과를 고른다. 실패한 검색원은 표 위에 경고로 알린다.
+  - 오른쪽 칸 `SearchResultDetail.vue`: 고른 결과의 제목, 저자, 연도, 게재처, 항목 종류, DOI, 원문 링크를 보여 주고, 태그 입력(입력하고 Enter로 하나씩 더함)과 "서재에 추가" 단추를 둔다. 서재에 있으면 단추 대신 "서재에 있음"을 보여 준다.
 
 ## 5. 테스트
 
@@ -63,3 +68,4 @@ API는 [papers_api 모듈](../../src/jjabtero/papers_api.py)의 라우터다. �
 - [test_search](../../tests/test_search.py)는 OpenAlex·arXiv 응답 해석(항목 종류 대응, arXiv DOI, 공백 정리, 제목 없는 결과), 검색어 구성과 API 키, 결과 합치기와 DOI 중복 제거, 검색원 하나가 실패할 때를 확인한다.
 - [test_papers_api](../../tests/test_papers_api.py)는 검색 API의 정상 응답, 서재에 있는 논문 표시, 잘못된 질의(빈 검색어, 모르는 검색원)와 논문 추가 API의 201, 409, 422를 확인한다.
 - [api.test](../../frontend/src/api.test.ts)는 `searchPapers`, `addPaper`(성공, 409, 그 밖의 실패), `toPaperInput`을 확인한다.
+- [searchState.test](../../frontend/src/searchState.test.ts)는 검색 실행과 건너뛰기, 검색 오류, 추가 성공·409·실패, 서재 표시를 확인한다.

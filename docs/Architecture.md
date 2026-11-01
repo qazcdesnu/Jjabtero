@@ -69,6 +69,7 @@ Python 버전은 `.python-version`과 `pyproject.toml`의 `requires-python`(`>=3
 | 프레임워크 | Vue 3 |
 | 빌드·개발 서버 | Vite |
 | 패키지 관리 | npm |
+| UI | PrimeVue 4.5.5(Aura 테마, primeicons), Tailwind CSS 4 ([UI 기반 설계](design/UiLayout.md)) |
 | 테스트 | Vitest |
 
 ## 4. 스타일
@@ -92,7 +93,6 @@ Python 버전은 `.python-version`과 `pyproject.toml`의 `requires-python`(`>=3
 아래 항목은 아직 정하지 않았다. 정하면 이 문서에 반영하고 이 목록에서 지운다.
 
 - 시각화 라이브러리(통계 차트, 인용 그래프).
-- UI 컴포넌트 라이브러리를 쓸지, 쓴다면 무엇을 쓸지.
 - 구글 드라이브 동기화의 세부 방식(인증 정보 보관, 동기화 시점, 충돌 처리). M1-T9에서 정한다.
 - Render 배포 구성(빌드 환경, 로그인 방식, 비밀 값 보관). M2에서 정한다.
 - 백엔드 API의 타입을 프론트엔드와 공유하는 방식(예: OpenAPI 명세에서 TypeScript 타입 생성).

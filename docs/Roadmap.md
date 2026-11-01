@@ -17,6 +17,7 @@
 - [ ] M1-T7 읽기 상태·메모 관리 구현
 - [x] M1-T8 FastAPI 서버와 Vue 프론트엔드 골격 구성
 - [ ] M1-T9 구글 드라이브 Jjabtero 폴더와 서재 동기화(Drive API) 조사와 구현
+- [x] M1-T10 UI 기반 구성(PrimeVue, Tailwind, 3단 레이아웃)과 검색 화면 개편
 
 ## M2 Render 배포
 

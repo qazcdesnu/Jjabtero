@@ -1,0 +1,11 @@
+/* docs/design/UiLayout.md 2절 참조 */
+@import 'tailwindcss';
+@import 'primeicons/primeicons.css';
+@plugin 'tailwindcss-primeui';
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
