@@ -42,6 +42,7 @@
 | [UI 기반 설계](design/UiLayout.md) | PrimeVue·Tailwind, 테마, 3단 화면 배치 | M1-T10 |
 | [서재 화면 설계](design/LibraryView.md) | 서재 목록·삭제 API, 목록 표와 상세 | M1-T5 |
 | [서재 필터 설계](design/LibraryFilter.md) | 글자·태그·항목 종류·연도 필터, 사이드바 태그 목록 | M1-T6, M1-T7 |
+| [배포 설계](design/Deployment.md) | Render 배포의 주소(jjabtero.qazcde.kr), 공개 범위, 비밀 값, 동의 화면 게시 | M2-T1 |
 | [구글 드라이브 동기화 설계](design/DriveSync.md) | OAuth 인증, 드라이브 파일, 동기화·충돌, API, 머리줄 상태 | M1-T9 |
 | [읽기 상태와 메모 설계](design/ReadingStatus.md) | 읽기 상태·메모 데이터, 마이그레이션 0002, API, 상세 편집 | M1-T7 |
 

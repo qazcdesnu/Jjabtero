@@ -36,7 +36,7 @@ uv run jjabtero                # 터미널 1: 백엔드
 npm --prefix frontend run dev  # 터미널 2: 프론트엔드
 ```
 
-**서재 데이터**: 서재는 SQLite 파일 하나에 저장한다. 기본 위치는 운영체제의 사용자 데이터 폴더이며(macOS: `~/Library/Application Support/Jjabtero/library.db`), 환경 변수 `JJABTERO_DB`로 바꿀 수 있다. 구글 드라이브 동기화는 아직 없다.
+**서재 데이터**: 서재는 SQLite 파일 하나에 저장한다. 기본 위치는 운영체제의 사용자 데이터 폴더이며(macOS: `~/Library/Application Support/Jjabtero/library.db`), 환경 변수 `JJABTERO_DB`로 바꿀 수 있다. 구글 드라이브와 동기화하는 방법은 아래에 있다.
 
 **논문 검색**: 첫 화면에서 OpenAlex와 arXiv를 검색하고, 결과를 골라 "서재에 추가"를 누른다. OpenAlex는 키 없이도 쓰지만 하루 사용량이 같은 IP 안에서 나뉜다. [OpenAlex 설정](https://openalex.org/settings/api)에서 무료 키를 받아 환경 변수 `OPENALEX_API_KEY`에 넣으면 사용량이 늘어난다.
 
