@@ -1,6 +1,7 @@
 <!-- @doc: docs/design/AppSkeleton.md#3-프론트엔드-앱 -->
 <!-- @doc: docs/design/UiLayout.md#3-화면-배치 -->
 <!-- @doc: docs/design/LibraryView.md#3-화면 -->
+<!-- @doc: docs/design/LibraryFilter.md#3-화면-상태 -->
 <script setup lang="ts">
 import Splitter from 'primevue/splitter'
 import SplitterPanel from 'primevue/splitterpanel'
@@ -27,6 +28,7 @@ const health = ref<Health | null>(null)
 const healthFailed = ref(false)
 
 onMounted(async () => {
+  library.load()
   try {
     health.value = await fetchHealth()
   } catch {
@@ -51,7 +53,7 @@ onMounted(async () => {
 
     <Splitter class="min-h-0 flex-1 rounded-none border-0">
       <SplitterPanel :size="15" :min-size="10" class="overflow-auto">
-        <Sidebar v-model="view" />
+        <Sidebar v-model="view" :library="library" />
       </SplitterPanel>
       <SplitterPanel :size="55" :min-size="30" class="overflow-auto">
         <SearchView v-if="view === 'search'" :search="search" />

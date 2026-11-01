@@ -1,4 +1,5 @@
 // @doc: docs/design/LibraryView.md#4-테스트
+// @doc: docs/design/LibraryFilter.md#5-테스트
 
 import { describe, expect, it, vi } from 'vitest'
 import { PaperNotFoundError, type Paper } from './api'
@@ -88,3 +89,43 @@ describe('createLibraryState', () => {
     expect(library.state.removeError).toBe('논문 삭제 실패: 500')
   })
 })
+
+describe('필터', () => {
+  const tagged = (id: number, tags: string[]) => ({ ...paper(id), tags })
+
+  it('visible은 필터를 적용하고 tags는 서재 전체를 센다', async () => {
+    const { library } = setup({
+      listPapers: vi.fn().mockResolvedValue([tagged(1, ['gnn']), tagged(2, ['nlp']), tagged(3, ['gnn'])]),
+    })
+    await library.load()
+    library.toggleTag('gnn')
+    expect(library.visible.value.map((p) => p.id)).toEqual([1, 3])
+    expect(library.tags.value).toEqual([
+      { name: 'gnn', count: 2 },
+      { name: 'nlp', count: 1 },
+    ])
+  })
+
+  it('toggleTag는 넣고 빼며, clearFilter는 처음으로 돌린다', async () => {
+    const { library } = setup()
+    library.toggleTag('a')
+    library.toggleTag('b')
+    library.toggleTag('a')
+    expect(library.state.filter.tags).toEqual(['b'])
+    library.state.filter.text = 'x'
+    library.clearFilter()
+    expect(library.state.filter).toEqual({ text: '', tags: [], itemTypes: [], yearFrom: null, yearTo: null })
+  })
+
+  it('고른 논문이 거르기로 사라지면 상세도 빈다', async () => {
+    const { library } = setup({ listPapers: vi.fn().mockResolvedValue([tagged(1, ['gnn']), tagged(2, [])]) })
+    await library.load()
+    library.select(paper(2))
+    expect(library.selected.value?.id).toBe(2)
+    library.toggleTag('gnn')
+    expect(library.selected.value).toBeNull()
+    library.clearFilter()
+    expect(library.selected.value?.id).toBe(2)
+  })
+})
+

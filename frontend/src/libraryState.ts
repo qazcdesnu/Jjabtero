@@ -1,9 +1,12 @@
 // @doc: docs/design/LibraryView.md#2-화면-상태
+// @doc: docs/design/LibraryFilter.md#3-화면-상태
 
 import { computed, reactive } from 'vue'
 import { PaperNotFoundError, deletePaper, listPapers, type Paper } from './api'
+import { emptyFilter, filterPapers, tagCounts } from './libraryFilter'
 
 // @doc: docs/design/LibraryView.md#2-화면-상태
+// @doc: docs/design/LibraryFilter.md#3-화면-상태
 export function createLibraryState(deps = { listPapers, deletePaper }) {
   const state = reactive({
     papers: [] as Paper[],
@@ -11,10 +14,13 @@ export function createLibraryState(deps = { listPapers, deletePaper }) {
     error: '',
     selectedId: null as number | null,
     removeError: '',
+    filter: emptyFilter(),
   })
 
+  const visible = computed(() => filterPapers(state.papers, state.filter))
+  const tags = computed(() => tagCounts(state.papers))
   const selected = computed(
-    () => state.papers.find((paper) => paper.id === state.selectedId) ?? null,
+    () => visible.value.find((paper) => paper.id === state.selectedId) ?? null,
   )
 
   async function load(): Promise<void> {
@@ -58,5 +64,14 @@ export function createLibraryState(deps = { listPapers, deletePaper }) {
     }
   }
 
-  return { state, selected, load, select, remove }
+  function toggleTag(name: string): void {
+    const tags = state.filter.tags
+    state.filter.tags = tags.includes(name) ? tags.filter((tag) => tag !== name) : [...tags, name]
+  }
+
+  function clearFilter(): void {
+    state.filter = emptyFilter()
+  }
+
+  return { state, visible, tags, selected, load, select, remove, toggleTag, clearFilter }
 }
