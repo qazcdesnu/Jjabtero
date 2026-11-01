@@ -70,7 +70,7 @@ describe('searchPapers', () => {
 })
 
 describe('addPaper', () => {
-  const input = toPaperInput(result, '')
+  const input = toPaperInput(result, [])
 
   it('성공하면 저장된 논문을 돌려준다', async () => {
     const paper = { ...input, id: 1, created_at: 'now', updated_at: 'now' }
@@ -103,8 +103,8 @@ describe('addPaper', () => {
 })
 
 describe('toPaperInput', () => {
-  it('검색 결과를 입력으로 바꾸고 쉼표로 나눈 태그의 빈 칸을 버린다', () => {
-    expect(toPaperInput(result, ' nlp, ,transformer ,')).toEqual({
+  it('검색 결과를 입력으로 바꾸고 태그의 공백·빈 값·중복을 정리한다', () => {
+    expect(toPaperInput(result, [' nlp', ' ', 'transformer ', 'nlp'])).toEqual({
       title: 'Attention Is All You Need',
       authors: ['Ashish Vaswani'],
       item_type: 'preprint',

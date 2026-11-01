@@ -2,6 +2,70 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M1-T10 UI 기반 구성(PrimeVue, Tailwind, 3단 레이아웃)과 검색 화면 개편
+
+- 시작일: 2026-11-01
+- 완료일: 2026-11-01
+- 근거 문서: [시스템 구조](Architecture.md#6-미결정-사항), [논문 검색과 추가 설계](design/PaperSearch.md#4-화면)
+
+### 계획
+- UI 기반 설계 문서를 쓰고 인덱스에서 링크한다. 시스템 구조의 도구와 미결정 사항을 맞춘다.
+- PrimeVue(테마 포함)와 Tailwind를 설치하고 함께 쓰도록 설정한다.
+- Zotero형 3단 레이아웃(사이드바, 목록, 상세)을 만든다.
+- 검색 화면을 새 UI로 다시 만들고, 검색 상태 로직을 `.ts` 모듈로 옮겨 테스트한다.
+- 헤드리스 브라우저로 화면을 찍어 확인한다.
+
+### 진행 기록
+- 2026-11-01: 사용자가 화면이 허술하다고 했다. UI 라이브러리(PrimeVue, Tailwind + shadcn-vue, Naive UI, Vuetify)와 레이아웃을 물었다. 사용자는 Zotero형 3단 레이아웃을 골랐고, PrimeVue와 Tailwind 사이에서 고민했다. 둘을 함께 쓰는 안(표·입력 부품은 PrimeVue, 레이아웃·여백은 Tailwind)을 권했고 사용자가 진행하라고 했다.
+- 2026-11-01: 로드맵에 M1-T10을 추가하고 시작했다. M1-T5보다 먼저 한다. PR #9~#11이 병합되지 않아 `m1-t4-add-paper` 위에 작업 브랜치를 만들었다.
+- 2026-11-01: 설치해 보니 PrimeVue 5.0.4, @primeuix/themes 3.1.0, primeicons 8.0.2가 들어왔고, 셋 다 MIT가 아닌 PrimeUI License(라이선스 키 필요, 컴파일된 패키지)였다. PrimeVue 4.5.5와 테마 2.0.3, primeicons 7.0.0은 MIT임을 확인해 사용자에게 물었고, 사용자는 PrimeVue 4.5.5 고정을 골랐다. 세 패키지를 정확한 버전으로 고정했다. Tailwind 4.3.3, @tailwindcss/vite, tailwindcss-primeui 0.6.1은 MIT다.
+- 2026-11-01: UI 기반 설계를 쓰고 인덱스에 링크했다. 논문 검색과 추가 설계의 화면 절을 새 배치에 맞게 고치고, 시스템 구조의 도구와 미결정 사항을 맞췄다.
+- 2026-11-01: PrimeVue와 Tailwind 설정, 3단 배치(`App.vue`, `Sidebar.vue`), 검색 화면(`SearchView.vue`, `SearchResultDetail.vue`)을 만들고 `SearchPanel.vue`를 지웠다. 검색 상태와 동작은 `searchState.ts`로, 화면 목록은 `navigation.ts`로 옮겨 테스트했다. `toPaperInput`은 태그를 쉼표 문자열 대신 목록으로 받게 바꿨다.
+- 2026-11-01: Playwright로 설치된 Chrome을 띄워 빌드한 앱을 찍었다. 처음 스크립트는 사이드바의 "논문 검색" 단추를 검색 단추로 잘못 눌러 검색이 돌지 않았고, 선택자를 고쳐 검색 → 행 선택 → 태그 입력 → 서재에 추가까지 확인했다.
+- 2026-11-01: 첫 화면에서 제목 열이 좁아 제목이 5~8줄로 감기고, 상태 태그가 두 줄로 깨지고, 항목 종류와 검색원이 영어 코드로 보였다. 표를 고정 너비 열로 바꾸고 제목을 두 줄까지 보이게 했으며, 상태는 체크 아이콘과 툴팁으로, 항목 종류와 검색원은 표시 이름으로 바꿨다. 라이트·다크 모드 모두 다시 찍어 확인했다.
+
+### 결정 사항
+- UI는 PrimeVue를 기본으로 하고 Tailwind를 함께 쓴다. 사용자가 권장안을 골랐다.
+- 화면은 Zotero형 3단 레이아웃이다. 사용자가 골랐다.
+- PrimeVue 4.5.5, @primeuix/themes 2.0.3, primeicons 7.0.0으로 정확히 고정한다. 다음 주 버전부터 상용 라이선스라 사용자가 고정을 골랐다. 올리는 일은 사용자가 정한다고 [UI 기반 설계](design/UiLayout.md#1-ui-도구)에 적었다.
+- 다크 모드는 운영체제 설정을 따른다. 바꾸는 단추는 필요해지면 더한다.
+- 서재 화면은 M1-T5에서 만들고, 이번에는 준비 중 안내만 둔다.
+- 화면 로직(검색 상태, 화면 목록, 표시 이름)은 `.ts` 모듈에 두어 테스트하고, `.vue`는 배치만 맡는다.
+
+### 변경 파일
+- `docs/design/UiLayout.md`
+- `docs/design/PaperSearch.md`
+- `docs/Architecture.md`
+- `docs/index.md`
+- `frontend/package.json`
+- `frontend/package-lock.json`
+- `frontend/vite.config.ts`
+- `frontend/src/style.css`
+- `frontend/src/main.ts`
+- `frontend/src/navigation.ts`
+- `frontend/src/navigation.test.ts`
+- `frontend/src/searchState.ts`
+- `frontend/src/searchState.test.ts`
+- `frontend/src/api.ts`
+- `frontend/src/api.test.ts`
+- `frontend/src/App.vue`
+- `frontend/src/Sidebar.vue`
+- `frontend/src/SearchView.vue`
+- `frontend/src/SearchResultDetail.vue`
+- `frontend/src/SearchPanel.vue` (삭제)
+- `docs/Roadmap.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+
+### 결과
+- 앱이 Zotero형 3단 배치(사이드바, 가운데 화면, 오른쪽 상세)로 바뀌었다. PrimeVue Aura 테마와 Tailwind를 쓰고, 운영체제의 라이트·다크 설정을 따른다.
+- 검색 결과가 표로 나오고, 행을 고르면 오른쪽에 상세와 태그 입력, 서재에 추가 단추가 보인다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.7 projinit check`: 모든 검사기, `uv run pytest`, 프론트엔드 `npm test`(테스트 19개) 통과.
+- `npm run build`: 타입 검사와 빌드 통과.
+- Playwright와 Chrome으로 라이트·다크 모드에서 검색 → 선택 → 태그 → 추가 흐름을 찍어 확인했다.
+
 ## M1-T4 논문 추가 방법 결정과 구현
 
 - 시작일: 2026-11-01

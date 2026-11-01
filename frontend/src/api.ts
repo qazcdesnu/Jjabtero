@@ -96,7 +96,7 @@ export async function addPaper(input: PaperInput): Promise<Paper> {
 }
 
 // @doc: docs/design/PaperSearch.md#4-화면
-export function toPaperInput(result: SearchResult, tags: string): PaperInput {
+export function toPaperInput(result: SearchResult, tags: string[]): PaperInput {
   return {
     title: result.title,
     authors: result.authors,
@@ -105,9 +105,6 @@ export function toPaperInput(result: SearchResult, tags: string): PaperInput {
     venue: result.venue,
     doi: result.doi,
     url: result.url,
-    tags: tags
-      .split(',')
-      .map((tag) => tag.trim())
-      .filter((tag) => tag !== ''),
+    tags: [...new Set(tags.map((tag) => tag.trim()).filter((tag) => tag !== ''))],
   }
 }
