@@ -42,6 +42,8 @@ npm --prefix frontend run dev  # 터미널 2: 프론트엔드
 
 **구글 드라이브 동기화**: 본인의 Google Cloud 프로젝트에서 Drive API를 켜고 웹 애플리케이션 OAuth 클라이언트(리디렉션 URI `http://127.0.0.1:8000/api/drive/callback`, 범위 `drive.file`)를 만든 뒤, 받은 JSON을 사용자 데이터 폴더의 `google_client_secret.json`(macOS: `~/Library/Application Support/Jjabtero/`)으로 둔다. 저장소 안에는 두지 않는다. 앱 오른쪽 위 "드라이브 연결"을 누르면 연결되고, 그 뒤로는 앱을 띄울 때와 서재를 고친 뒤 자동으로 동기화한다. 자세한 동작은 [구글 드라이브 동기화 설계](docs/design/DriveSync.md)에 있다.
 
+**로그인(배포용)**: 내 컴퓨터에서 쓸 때는 로그인이 없다. 환경 변수 `JJABTERO_ALLOWED_EMAIL`(들여보낼 구글 계정)과 `JJABTERO_SESSION_SECRET`(32자 이상 임의 값)을 넣으면 그 계정만 구글 로그인으로 들어올 수 있다. 로그인 없이 `127.0.0.1`이 아닌 주소로 띄우면 실행을 거부한다. OAuth 클라이언트에 리디렉션 URI `<주소>/api/auth/callback`을 더해야 한다. 자세한 동작은 [로그인 설계](docs/design/Auth.md)에 있다.
+
 **테스트**
 
 ```sh

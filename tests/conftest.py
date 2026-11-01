@@ -18,3 +18,5 @@ def isolated_user_data(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("JJABTERO_DB", str(tmp_path / "user-data" / "library.db"))
     monkeypatch.delenv("JJABTERO_GOOGLE_CLIENT_SECRET", raising=False)
     monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+    for name in ("JJABTERO_ALLOWED_EMAIL", "JJABTERO_SESSION_SECRET", "JJABTERO_SECURE_COOKIE"):
+        monkeypatch.delenv(name, raising=False)
