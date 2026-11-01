@@ -15,3 +15,6 @@
 - [x] I5 ProjInit 0.1.4 업그레이드
   - 경량: `projinit upgrade`로 ProjInit을 0.1.4로 올리고, 바뀐 규칙에 따라 문서 인덱스의 제품 이해 절에 README 링크를 추가했다.
   - 완료일: 2026-10-31
+- [x] I6 ProjInit 0.1.5 업그레이드
+  - 경량: `projinit upgrade`로 ProjInit을 0.1.5로 올리고, 새 자료 폴더 규칙 문서를 문서 인덱스의 문서 작업 절에 링크했다.
+  - 완료일: 2026-11-01
