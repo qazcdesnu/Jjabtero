@@ -40,7 +40,7 @@
 연결은 [db 모듈](../../src/jjabtero/db.py)이 맡는다.
 
 - [default_db_path](../../src/jjabtero/db.py#default_db_path)는 데이터베이스 파일 경로를 돌려준다. 환경 변수 `JJABTERO_DB`가 있으면 그 경로이고, 없으면 운영체제의 사용자 데이터 폴더 아래 `Jjabtero/library.db`다(macOS: `~/Library/Application Support/Jjabtero/library.db`). 폴더는 만들지 않는다.
-- 이 파일은 로컬 작업 사본이다. 구글 드라이브 `Jjabtero` 폴더와의 동기화는 M1-T9에서 이 파일을 대상으로 만든다. 저장 함수는 파일이 어디서 왔는지 모른다.
+- 이 파일은 로컬 작업 사본이다. 구글 드라이브 `Jjabtero` 폴더와의 동기화는 [구글 드라이브 동기화 설계](DriveSync.md)에 있다. 저장 함수는 파일이 어디서 왔는지 모른다.
 - [create_db_engine](../../src/jjabtero/db.py#create_db_engine)은 경로를 받아 SQLite 엔진을 만든다. 상위 폴더가 없으면 만든다. 연결마다 외래 키 검사(`PRAGMA foreign_keys=ON`)를 켠다. SQLite는 기본값이 꺼져 있어 연결 삭제가 동작하지 않기 때문이다.
 - [upgrade_database](../../src/jjabtero/db.py#upgrade_database)는 엔진의 데이터베이스를 최신 스키마로 올린다([3. 스키마 변경](#3-스키마-변경)). 빈 파일이면 테이블을 모두 만든다.
 - 백엔드 앱은 만들 때 스키마를 올리고 요청마다 세션을 연다([논문 검색과 추가 설계](PaperSearch.md#3-api)).

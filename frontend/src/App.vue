@@ -2,12 +2,15 @@
 <!-- @doc: docs/design/UiLayout.md#3-화면-배치 -->
 <!-- @doc: docs/design/LibraryView.md#3-화면 -->
 <!-- @doc: docs/design/LibraryFilter.md#3-화면-상태 -->
+<!-- @doc: docs/design/DriveSync.md#7-화면 -->
 <script setup lang="ts">
 import Splitter from 'primevue/splitter'
 import SplitterPanel from 'primevue/splitterpanel'
 import Tag from 'primevue/tag'
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { fetchHealth, type Health } from './api'
+import { createDriveState } from './driveState'
+import DriveStatus from './DriveStatus.vue'
 import LibraryView from './LibraryView.vue'
 import { createLibraryState } from './libraryState'
 import { DEFAULT_VIEW } from './navigation'
@@ -20,6 +23,7 @@ import Sidebar from './Sidebar.vue'
 const view = ref<string>(DEFAULT_VIEW)
 const search = createSearchState()
 const library = createLibraryState()
+const drive = createDriveState(() => library.load())
 
 watch(view, (name) => {
   if (name === 'library') library.load()
@@ -27,8 +31,11 @@ watch(view, (name) => {
 const health = ref<Health | null>(null)
 const healthFailed = ref(false)
 
+onUnmounted(() => drive.stop())
+
 onMounted(async () => {
   library.load()
+  drive.start()
   try {
     health.value = await fetchHealth()
   } catch {
@@ -46,9 +53,12 @@ onMounted(async () => {
         <i class="pi pi-bookmark-fill text-primary text-lg" />
         <span class="text-lg font-semibold tracking-tight">Jjabtero</span>
       </div>
-      <Tag v-if="health" severity="success" :value="`서버 연결됨 · v${health.version}`" />
-      <Tag v-else-if="healthFailed" severity="danger" value="서버에 연결할 수 없음" />
-      <Tag v-else severity="secondary" value="서버 확인 중" />
+      <div class="flex items-center gap-3">
+        <DriveStatus :drive="drive" />
+        <Tag v-if="health" severity="secondary" :value="`v${health.version}`" />
+        <Tag v-else-if="healthFailed" severity="danger" value="서버에 연결할 수 없음" />
+        <Tag v-else severity="secondary" value="서버 확인 중" />
+      </div>
     </header>
 
     <Splitter class="min-h-0 flex-1 rounded-none border-0">

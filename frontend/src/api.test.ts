@@ -2,6 +2,7 @@
 // @doc: docs/design/PaperSearch.md#5-테스트
 // @doc: docs/design/LibraryView.md#4-테스트
 // @doc: docs/design/ReadingStatus.md#4-테스트
+// @doc: docs/design/DriveSync.md#8-테스트
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -9,6 +10,11 @@ import {
   PaperNotFoundError,
   addPaper,
   deletePaper,
+  disconnectDrive,
+  driveConnectUrl,
+  fetchDriveStatus,
+  resolveDrive,
+  syncDrive,
   listPapers,
   fetchHealth,
   searchPapers,
@@ -181,6 +187,38 @@ describe('updateReading', () => {
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 500 })))
     await expect(updateReading(3, { note: 'x' })).rejects.toThrow('500')
+  })
+})
+
+describe('드라이브 API', () => {
+  const ok = { state: 'idle', message: '', last_synced_at: null, pending: false, data_version: 0 }
+
+  it('상태, 동기화, 충돌 풀기, 연결 해제를 부른다', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify(ok)))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchDriveStatus()).resolves.toEqual(ok)
+    await syncDrive()
+    await resolveDrive('remote')
+    await disconnectDrive()
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      '/api/drive/status',
+      '/api/drive/sync',
+      '/api/drive/resolve',
+      '/api/drive/disconnect',
+    ])
+    expect(fetchMock.mock.calls[2][1]).toMatchObject({ method: 'POST', body: JSON.stringify({ choice: 'remote' }) })
+  })
+
+  it('실패 응답이면 상태 코드를 담은 오류를 던진다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 500 })))
+    await expect(syncDrive()).rejects.toThrow('500')
+  })
+
+  it('연결 주소에 돌아올 주소를 담는다', () => {
+    expect(driveConnectUrl('http://localhost:5173/')).toBe(
+      '/api/drive/connect?return_to=http%3A%2F%2Flocalhost%3A5173%2F',
+    )
   })
 })
 
