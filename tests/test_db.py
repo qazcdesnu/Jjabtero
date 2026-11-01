@@ -1,6 +1,7 @@
 """데이터베이스 파일과 연결을 검증한다.
 
 @doc: docs/design/Library.md#5-테스트
+@doc: docs/design/ReadingStatus.md#4-테스트
 """
 
 from pathlib import Path
@@ -83,3 +84,24 @@ def test_foreign_keys_are_enforced(tmp_path: Path) -> None:
             connection.execute(
                 text("INSERT INTO paper_authors (paper_id, position, author_id) VALUES (99, 0, 1)")
             )
+
+
+def test_upgrade_0002_keeps_papers_and_sets_defaults(tmp_path: Path) -> None:
+    """0001 상태의 논문은 0002로 올린 뒤 읽을 것, 메모 없음이 된다.
+
+    @doc: docs/design/ReadingStatus.md#4-테스트
+    """
+    engine = create_db_engine(tmp_path / "library.db")
+    with engine.begin() as connection:
+        command.upgrade(_alembic_config(connection), "0001")
+        connection.execute(
+            text(
+                "INSERT INTO papers (id, title, item_type, created_at, updated_at) "
+                "VALUES (1, 'Old', 'other', '2026-01-01', '2026-01-01')"
+            )
+        )
+    upgrade_database(engine)
+    with engine.connect() as connection:
+        row = connection.execute(text("SELECT title, read_status, note FROM papers")).one()
+    assert tuple(row) == ("Old", "to-read", None)
+

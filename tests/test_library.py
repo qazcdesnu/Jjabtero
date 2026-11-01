@@ -1,6 +1,7 @@
 """논문 저장 함수를 검증한다.
 
 @doc: docs/design/Library.md#5-테스트
+@doc: docs/design/ReadingStatus.md#4-테스트
 """
 
 from collections.abc import Iterator
@@ -16,12 +17,14 @@ from jjabtero.library import (
     DuplicateDoiError,
     PaperData,
     PaperNotFoundError,
+    ReadingUpdate,
     add_paper,
     delete_paper,
     get_paper,
     list_papers,
     normalize_doi,
     update_paper,
+    update_reading,
 )
 from jjabtero.models import Author, Tag
 
@@ -248,3 +251,59 @@ def test_paper_data_rejects_invalid(fields: dict[str, str]) -> None:
     """
     with pytest.raises(ValidationError):
         PaperData(**fields)
+
+
+def test_new_paper_is_to_read_without_note(session: Session) -> None:
+    """새 논문은 읽을 것이고 메모가 없다.
+
+    @doc: docs/design/ReadingStatus.md#4-테스트
+    """
+    paper = add_paper(session, PaperData(title="A"))
+    assert (paper.read_status, paper.note) == ("to-read", None)
+
+
+def test_update_reading_changes_only_sent_fields(session: Session) -> None:
+    """보낸 항목만 바꾸고, 빈 메모는 메모를 지운다.
+
+    @doc: docs/design/ReadingStatus.md#4-테스트
+    """
+    paper = add_paper(session, PaperData(title="A", authors=["Kim"], tags=["nlp"]))
+    before = paper.updated_at
+    update_reading(session, paper.id, ReadingUpdate(read_status="reading"))
+    update_reading(session, paper.id, ReadingUpdate(note="  핵심은 3절  "))
+    assert (paper.read_status, paper.note) == ("reading", "핵심은 3절")
+    assert paper.updated_at > before
+    assert paper.author_names == ["Kim"] and paper.tag_names == ["nlp"]
+    update_reading(session, paper.id, ReadingUpdate(note="   "))
+    assert (paper.read_status, paper.note) == ("reading", None)
+
+
+def test_update_reading_missing_paper_raises(session: Session) -> None:
+    """없는 ID면 `PaperNotFoundError`다.
+
+    @doc: docs/design/ReadingStatus.md#4-테스트
+    """
+    with pytest.raises(PaperNotFoundError):
+        update_reading(session, 999, ReadingUpdate(read_status="read"))
+
+
+@pytest.mark.parametrize("fields", [{"read_status": "done"}, {"read_status": None}])
+def test_reading_update_rejects_invalid_status(fields: dict[str, str | None]) -> None:
+    """모르는 상태와 `null` 상태는 검증 오류다.
+
+    @doc: docs/design/ReadingStatus.md#4-테스트
+    """
+    with pytest.raises(ValidationError):
+        ReadingUpdate(**fields)
+
+
+def test_update_paper_keeps_reading(session: Session) -> None:
+    """서지 정보를 고쳐도 읽기 상태와 메모는 그대로다.
+
+    @doc: docs/design/ReadingStatus.md#4-테스트
+    """
+    paper = add_paper(session, PaperData(title="A"))
+    update_reading(session, paper.id, ReadingUpdate(read_status="read", note="좋음"))
+    update_paper(session, paper.id, PaperData(title="B"))
+    assert (paper.title, paper.read_status, paper.note) == ("B", "read", "좋음")
+

@@ -1,11 +1,12 @@
 """서재 데이터 모델.
 
 @doc: docs/design/Library.md#1-데이터-모델
+@doc: docs/design/ReadingStatus.md#1-데이터
 """
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 # @doc: docs/design/Library.md#1-데이터-모델
@@ -19,6 +20,9 @@ ITEM_TYPES = (
     "report",
     "other",
 )
+
+# @doc: docs/design/ReadingStatus.md#1-데이터
+READ_STATUSES = ("to-read", "reading", "read")
 
 
 def _now() -> datetime:
@@ -97,6 +101,8 @@ class Paper(Base):
     venue: Mapped[str | None] = mapped_column(String)
     doi: Mapped[str | None] = mapped_column(String, unique=True)
     url: Mapped[str | None] = mapped_column(String)
+    read_status: Mapped[str] = mapped_column(String, default="to-read", server_default="to-read")
+    note: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 

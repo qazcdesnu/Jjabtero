@@ -7,13 +7,14 @@ export interface LibraryFilter {
   text: string
   tags: string[]
   itemTypes: string[]
+  readStatuses: string[]
   yearFrom: number | null
   yearTo: number | null
 }
 
 // @doc: docs/design/LibraryFilter.md#2-필터-조건
 export function emptyFilter(): LibraryFilter {
-  return { text: '', tags: [], itemTypes: [], yearFrom: null, yearTo: null }
+  return { text: '', tags: [], itemTypes: [], readStatuses: [], yearFrom: null, yearTo: null }
 }
 
 // @doc: docs/design/LibraryFilter.md#2-필터-조건
@@ -22,6 +23,7 @@ export function isFilterActive(filter: LibraryFilter): boolean {
     filter.text.trim() !== '' ||
     filter.tags.length > 0 ||
     filter.itemTypes.length > 0 ||
+    filter.readStatuses.length > 0 ||
     filter.yearFrom !== null ||
     filter.yearTo !== null
   )
@@ -40,6 +42,7 @@ function matches(paper: Paper, filter: LibraryFilter, words: string[]): boolean 
   }
   if (!filter.tags.every((tag) => paper.tags.includes(tag))) return false
   if (filter.itemTypes.length > 0 && !filter.itemTypes.includes(paper.item_type)) return false
+  if (filter.readStatuses.length > 0 && !filter.readStatuses.includes(paper.read_status)) return false
   if (filter.yearFrom !== null || filter.yearTo !== null) {
     if (paper.year === null) return false
     if (filter.yearFrom !== null && paper.year < filter.yearFrom) return false

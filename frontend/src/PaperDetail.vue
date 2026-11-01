@@ -1,18 +1,54 @@
 <!-- @doc: docs/design/LibraryView.md#3-화면 -->
+<!-- @doc: docs/design/ReadingStatus.md#3-화면 -->
 <script setup lang="ts">
 import Button from 'primevue/button'
 import ConfirmPopup from 'primevue/confirmpopup'
 import Message from 'primevue/message'
+import SelectButton from 'primevue/selectbutton'
 import Tag from 'primevue/tag'
+import Textarea from 'primevue/textarea'
 import { useConfirm } from 'primevue/useconfirm'
-import { computed, ref } from 'vue'
-import { ITEM_TYPE_LABELS, formatDate } from './labels'
+import { computed, ref, watch } from 'vue'
+import { ITEM_TYPE_LABELS, READ_STATUSES, formatDate } from './labels'
 import { createLibraryState } from './libraryState'
 
 const props = defineProps<{ library: ReturnType<typeof createLibraryState> }>()
 const paper = computed(() => props.library.selected.value)
 const removing = ref(false)
 const confirm = useConfirm()
+
+const note = ref('')
+const savingNote = ref(false)
+const noteSaved = ref(false)
+const noteDirty = computed(() => (paper.value?.note ?? '') !== note.value)
+
+watch(
+  () => paper.value?.id,
+  () => {
+    note.value = paper.value?.note ?? ''
+    noteSaved.value = false
+  },
+  { immediate: true },
+)
+
+async function changeStatus(value: string | null) {
+  if (!paper.value || !value || value === paper.value.read_status) return
+  await props.library.changeReading(paper.value, { read_status: value })
+}
+
+async function saveNote() {
+  if (!paper.value) return
+  savingNote.value = true
+  try {
+    noteSaved.value = await props.library.changeReading(paper.value, { note: note.value })
+    if (noteSaved.value) {
+      note.value = paper.value?.note ?? ''
+      setTimeout(() => (noteSaved.value = false), 2000)
+    }
+  } finally {
+    savingNote.value = false
+  }
+}
 
 function askRemove(event: Event) {
   const target = paper.value
@@ -47,6 +83,17 @@ function askRemove(event: Event) {
       </p>
     </div>
 
+    <SelectButton
+      :model-value="paper.read_status"
+      :options="[...READ_STATUSES]"
+      option-label="label"
+      option-value="value"
+      :allow-empty="false"
+      size="small"
+      aria-label="읽기 상태"
+      @update:model-value="changeStatus"
+    />
+
     <dl class="grid grid-cols-[5rem_1fr] gap-x-3 gap-y-2 text-sm">
       <dt class="text-surface-500">연도</dt>
       <dd>{{ paper.year ?? '—' }}</dd>
@@ -72,6 +119,16 @@ function askRemove(event: Event) {
     </dl>
 
     <div class="flex flex-col gap-2">
+      <label for="note" class="text-sm text-surface-500">메모</label>
+      <Textarea id="note" v-model="note" auto-resize rows="5" placeholder="읽으며 남길 내용을 적으세요." fluid />
+      <div class="flex items-center gap-2">
+        <Button label="메모 저장" icon="pi pi-save" size="small" :disabled="!noteDirty" :loading="savingNote" @click="saveNote" />
+        <span v-if="noteSaved" class="text-sm text-primary"><i class="pi pi-check" /> 저장됨</span>
+      </div>
+      <Message v-if="library.state.readingError" severity="error">{{ library.state.readingError }}</Message>
+    </div>
+
+    <div class="flex flex-col gap-2 border-t border-surface-200 pt-4 dark:border-surface-700">
       <ConfirmPopup />
       <Button label="서재에서 삭제" icon="pi pi-trash" severity="danger" outlined :loading="removing" @click="askRemove" />
       <Message v-if="library.state.removeError" severity="error">{{ library.state.removeError }}</Message>

@@ -1,4 +1,5 @@
 // @doc: docs/design/LibraryFilter.md#5-테스트
+// @doc: docs/design/ReadingStatus.md#4-테스트
 
 import { describe, expect, it } from 'vitest'
 import type { Paper } from './api'
@@ -15,6 +16,8 @@ function paper(id: number, fields: Partial<Paper>): Paper {
     doi: null,
     url: null,
     tags: [],
+    read_status: 'to-read',
+    note: null,
     created_at: '2026-11-01T00:00:00',
     updated_at: '2026-11-01T00:00:00',
     ...fields,
@@ -23,8 +26,8 @@ function paper(id: number, fields: Partial<Paper>): Paper {
 
 const papers = [
   paper(1, { title: 'Graph Neural Networks', authors: ['Kim'], year: 2019, item_type: 'journal-article', tags: ['gnn', 'survey'] }),
-  paper(2, { title: 'Attention', authors: ['Vaswani'], year: 2017, item_type: 'preprint', venue: 'arXiv', tags: ['nlp'] }),
-  paper(3, { title: 'Social Recommendation', authors: ['Fan'], year: 2021, item_type: 'conference-paper', doi: '10.1145/abc', tags: ['gnn'] }),
+  paper(2, { title: 'Attention', authors: ['Vaswani'], year: 2017, item_type: 'preprint', venue: 'arXiv', tags: ['nlp'], read_status: 'read' }),
+  paper(3, { title: 'Social Recommendation', authors: ['Fan'], year: 2021, item_type: 'conference-paper', doi: '10.1145/abc', tags: ['gnn'], read_status: 'reading' }),
   paper(4, { title: 'No Year', item_type: 'report' }),
 ]
 
@@ -51,6 +54,12 @@ describe('filterPapers', () => {
 
   it('항목 종류는 고른 것 가운데 하나면 남긴다', () => {
     expect(ids(filterPapers(papers, { ...emptyFilter(), itemTypes: ['preprint', 'report'] }))).toEqual([2, 4])
+  })
+
+  it('읽기 상태는 고른 것 가운데 하나면 남긴다', () => {
+    expect(ids(filterPapers(papers, { ...emptyFilter(), readStatuses: ['read', 'reading'] }))).toEqual([2, 3])
+    expect(ids(filterPapers(papers, { ...emptyFilter(), readStatuses: ['to-read'] }))).toEqual([1, 4])
+    expect(isFilterActive({ ...emptyFilter(), readStatuses: ['read'] })).toBe(true)
   })
 
   it('연도는 양 끝을 포함하고, 연도 조건이 있으면 연도 없는 논문은 뺀다', () => {

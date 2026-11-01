@@ -2,6 +2,72 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M1-T7 읽기 상태·메모 관리 구현
+
+- 시작일: 2026-11-01
+- 완료일: 2026-11-01
+- 근거 문서: [제품 비전](ProductVision.md#3-핵심-요구사항), [서재 데이터 설계](design/Library.md)
+
+### 계획
+- 읽기 상태·메모 설계 문서를 쓰고 인덱스에서 링크한다. 서재 데이터 설계의 모델과 마이그레이션 목록을 고친다.
+- 논문에 읽기 상태와 메모 열을 더하는 마이그레이션 0002를 만들고, 저장 함수와 API를 더한다.
+- 서재 표에 상태 열, 필터에 읽기 상태, 상세에 상태 고르기와 메모 편집을 더한다.
+- 헤드리스 브라우저로 화면을 찍어 확인한다.
+
+### 진행 기록
+- 2026-11-01: 작업을 시작했다. PR #14(M1-T6)가 병합되지 않아 `m1-t6-library-filter` 위에 작업 브랜치를 만들었다.
+- 2026-11-01: 읽기 상태와 메모 설계를 쓰고 인덱스에 링크했다. 서재 데이터 설계(열, 마이그레이션 목록, `update_paper` 설명), 서재 필터 설계(읽기 상태 조건), 서재 화면 설계(표 열)를 고쳤다.
+- 2026-11-01: 모델에 `READ_STATUSES`, `read_status`(기본 `to-read`), `note`를 더하고 마이그레이션 0002를 만들었다. 임시 데이터베이스에서 `alembic upgrade head` 뒤 `alembic check`가 "No new upgrade operations detected"를 냈다. `ReadingUpdate`, `update_reading`, `PATCH /api/papers/{paper_id}`(`change_reading`)를 더하고, `PaperOut`에 두 항목을 더했다. 백엔드 테스트는 65개다.
+- 2026-11-01: 프론트엔드에 `updateReading`, `READ_STATUSES`·`readStatusInfo`, 필터의 `readStatuses`, 서재 상태의 `changeReading`을 더했다. 설계에 `updateReading`으로 적었던 서재 상태 함수 이름은 API 함수와 겹쳐 `changeReading`으로 바꾸고 설계를 고쳤다. 서재 표의 추가일 열을 상태 열로 바꾸고, 필터에 상태를, 상세에 상태 단추 묶음과 메모 편집을 더했다. 프론트엔드 테스트는 48개다.
+- 2026-11-01: M1-T6에서 만든 0001 상태의 데이터베이스(논문 10편) 사본으로 서버를 띄우자 0002로 올라가고 10편 모두 `to-read`가 됐다. Playwright로 상태 바꾸기, 메모 저장("저장됨"), 새로 고침 뒤 메모 유지, 상태 필터(읽는 중·다 읽음 2편)를 확인했다.
+- 2026-11-01: 포인터 검사기가 `libraryFilter.ts` 머리의 읽기 상태 설계 포인터를 받아 주는 문서 포인터가 없다고 알렸다. 필터 조건은 서재 필터 설계가 규정하므로 그 포인터를 지웠다.
+
+### 결정 사항
+- 없음
+- 위 "없음"은 시작할 때 적은 줄이다. 아래 결정을 작업 중에 내렸다.
+- 읽기 상태는 제품 비전의 예시대로 읽을 것, 읽는 중, 다 읽음 세 가지이고, 새 논문과 기존 논문은 읽을 것이다.
+- 메모는 논문마다 하나의 글이다. 여러 메모나 하이라이트는 필요해지면 더한다.
+- 읽기 상태와 메모는 서지 정보와 따로 `PATCH`로 바꾼다. 서지 수정과 서로 덮어쓰지 않게 하기 위해서다.
+- 서재 표에서 추가일 열을 빼고 상태 열을 넣는다. 제목 열 너비를 지키면서 읽기 흐름에 더 중요한 정보를 보이기 위해서다. 추가일은 상세에 있고, 처음 순서가 추가일 순이다.
+- 상태는 누르면 바로 저장하고, 메모는 "메모 저장" 단추로 저장한다. 메모는 쓰는 도중에 저장되면 안 되기 때문이다.
+
+### 변경 파일
+- `docs/design/ReadingStatus.md`
+- `docs/design/Library.md`
+- `docs/design/LibraryFilter.md`
+- `docs/design/LibraryView.md`
+- `docs/index.md`
+- `README.md`
+- `src/jjabtero/models.py`
+- `src/jjabtero/migrations/versions/0002_reading_status.py`
+- `src/jjabtero/library.py`
+- `src/jjabtero/papers_api.py`
+- `tests/test_db.py`
+- `tests/test_library.py`
+- `tests/test_papers_api.py`
+- `frontend/src/api.ts`
+- `frontend/src/api.test.ts`
+- `frontend/src/labels.ts`
+- `frontend/src/labels.test.ts`
+- `frontend/src/libraryFilter.ts`
+- `frontend/src/libraryFilter.test.ts`
+- `frontend/src/libraryState.ts`
+- `frontend/src/libraryState.test.ts`
+- `frontend/src/LibraryView.vue`
+- `frontend/src/PaperDetail.vue`
+- `docs/Roadmap.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+
+### 결과
+- 논문마다 읽기 상태(읽을 것, 읽는 중, 다 읽음)와 메모를 남길 수 있다. 서재 표에서 상태를 보고 정렬하며, 상태로 걸러 볼 수 있다.
+- 기존 서재는 앱을 띄우면 마이그레이션 0002로 올라가고 논문이 모두 읽을 것이 된다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.7 projinit check`: 모든 검사기, `uv run pytest`(테스트 65개), 프론트엔드 `npm test`(테스트 48개) 통과.
+- `npm run build`: 타입 검사와 빌드 통과.
+- 0001 상태의 실제 데이터베이스를 올리고 Playwright와 Chrome으로 상태·메모·필터를 확인했다.
+
 ## M1-T6 논문 검색·필터 구현
 
 - 시작일: 2026-11-01

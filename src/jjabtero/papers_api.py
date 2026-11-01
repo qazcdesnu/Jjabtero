@@ -2,6 +2,7 @@
 
 @doc: docs/design/PaperSearch.md#3-api
 @doc: docs/design/LibraryView.md#1-api
+@doc: docs/design/ReadingStatus.md#2-저장-함수와-api
 """
 
 from collections.abc import Iterator
@@ -18,9 +19,11 @@ from jjabtero.library import (
     DuplicateDoiError,
     PaperData,
     PaperNotFoundError,
+    ReadingUpdate,
     add_paper,
     delete_paper,
     list_papers,
+    update_reading,
 )
 from jjabtero.models import Paper
 from jjabtero.search import SOURCES, SearchResponse, search_papers
@@ -52,6 +55,8 @@ class PaperOut(BaseModel):
     doi: str | None
     url: str | None
     tags: list[str]
+    read_status: str
+    note: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -71,6 +76,8 @@ class PaperOut(BaseModel):
             doi=paper.doi,
             url=paper.url,
             tags=paper.tag_names,
+            read_status=paper.read_status,
+            note=paper.note,
             created_at=paper.created_at,
             updated_at=paper.updated_at,
         )
@@ -141,3 +148,19 @@ def remove_paper(paper_id: int, session: Annotated[Session, Depends(_session)]) 
     except PaperNotFoundError as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch("/papers/{paper_id}")
+def change_reading(
+    paper_id: int, update: ReadingUpdate, session: Annotated[Session, Depends(_session)]
+) -> PaperOut:
+    """`PATCH /api/papers/{paper_id}`를 처리한다.
+
+    @doc: docs/design/ReadingStatus.md#2-저장-함수와-api
+    """
+    try:
+        paper = update_reading(session, paper_id, update)
+    except PaperNotFoundError as error:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
+    return PaperOut.from_paper(paper)
+
