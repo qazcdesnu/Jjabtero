@@ -2,6 +2,66 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M1-T5 서재 목록 화면 구현
+
+- 시작일: 2026-11-01
+- 완료일: 2026-11-01
+- 근거 문서: [UI 기반 설계](design/UiLayout.md#3-화면-배치), [서재 데이터 설계](design/Library.md#4-저장-함수)
+
+### 계획
+- 서재 화면 설계 문서를 쓰고 인덱스에서 링크한다.
+- 백엔드에 논문 목록 API와 삭제 API를 더한다.
+- 가운데 칸에 정렬할 수 있는 서재 목록 표, 오른쪽 칸에 고른 논문의 상세와 삭제를 만든다. 화면 로직은 `.ts` 모듈에 두고 테스트한다.
+- 검색 화면에서 넣은 논문이 서재 화면으로 넘어올 때 보이게 한다.
+- 헤드리스 브라우저로 화면을 찍어 확인한다.
+
+### 진행 기록
+- 2026-11-01: 작업을 시작했다. PR #9~#12가 병합되지 않아 `m1-t10-ui-foundation` 위에 작업 브랜치를 만들었다.
+- 2026-11-01: 서재 화면 설계를 쓰고 인덱스에 링크했다. UI 기반 설계의 서재 화면 안내와 검색 화면 설계의 항목 종류 이름 위치를 고쳤다.
+- 2026-11-01: 백엔드에 `GET /api/papers`(`read_papers`)와 `DELETE /api/papers/{paper_id}`(`remove_paper`)를 더하고 테스트했다. 백엔드 테스트는 55개다.
+- 2026-11-01: 프론트엔드에 `listPapers`, `deletePaper`, `PaperNotFoundError`, 서재 상태 `libraryState.ts`, 표시 이름·날짜 `labels.ts`를 더하고, `ITEM_TYPE_LABELS`를 `searchState.ts`에서 `labels.ts`로 옮겼다. 화면 `LibraryView.vue`, `PaperDetail.vue`를 만들고 서재 화면으로 올 때마다 목록을 다시 불러오게 했다. 프론트엔드 테스트는 31개다. 테스트 하나는 가짜 목록 응답을 두 번만 준비해 세 번째 불러오기에서 실패했고, 응답을 하나 더해 고쳤다.
+- 2026-11-01: OpenAlex에서 논문 6편을 넣고 Playwright로 서재 화면을 찍었다. 열 여섯 개에 정렬 아이콘까지 붙어 제목 열이 한두 낱말만 보일 만큼 좁았다. 게재처 열을 표에서 빼고(상세에는 있음) 다른 열을 좁혀 제목이 두 줄로 다 보이게 했다. 연도 정렬, 행 선택, 상세, 삭제 확인 팝업, 삭제 뒤 목록 감소(6→5, 5→4)와 상세 비우기를 확인했다.
+- 2026-11-01: 포인터 검사기가 두 문제를 알렸다. 검색 화면 설계가 `labels.ts`를 코드 포인터로 가리켰으나 규정은 서재 화면 설계에 있으므로 인라인 코드로 바꿨다. `main.ts`의 서재 화면 설계 포인터를 받아 주는 문서 포인터가 없어, 확인 팝업 서비스 등록을 서재 화면 설계에 적고 `main.ts`를 링크했다.
+
+### 결정 사항
+- 범위는 목록, 정렬, 상세, 삭제다. 필터는 M1-T6, 읽기 상태·메모는 M1-T7이 맡는다. 서지 정보 수정 화면은 이번에 만들지 않는다.
+- 목록 API는 페이지 나눔 없이 모두 돌려주고 정렬은 화면에서 한다. 개인 서재는 많아야 수천 편이기 때문이다.
+- 서재 표에서 게재처 열을 뺀다. 가운데 칸 너비에서 제목을 읽을 수 있게 하기 위해서다. 게재처는 상세에서 본다.
+- 삭제는 확인 팝업을 거친다. 되돌릴 수 없기 때문이다.
+
+### 변경 파일
+- `docs/design/LibraryView.md`
+- `docs/design/PaperSearch.md`
+- `docs/design/UiLayout.md`
+- `docs/index.md`
+- `README.md`
+- `src/jjabtero/papers_api.py`
+- `tests/test_papers_api.py`
+- `frontend/src/api.ts`
+- `frontend/src/api.test.ts`
+- `frontend/src/labels.ts`
+- `frontend/src/labels.test.ts`
+- `frontend/src/libraryState.ts`
+- `frontend/src/libraryState.test.ts`
+- `frontend/src/searchState.ts`
+- `frontend/src/searchState.test.ts`
+- `frontend/src/LibraryView.vue`
+- `frontend/src/PaperDetail.vue`
+- `frontend/src/SearchResultDetail.vue`
+- `frontend/src/App.vue`
+- `frontend/src/main.ts`
+- `docs/Roadmap.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+
+### 결과
+- 사이드바의 "서재"에서 넣은 논문을 표로 보고 열마다 정렬할 수 있다. 논문을 고르면 오른쪽에 상세(태그 포함)가 보이고, 확인을 거쳐 지울 수 있다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.1.7 projinit check`: 모든 검사기, `uv run pytest`(테스트 55개), 프론트엔드 `npm test`(테스트 31개) 통과.
+- `npm run build`: 타입 검사와 빌드 통과.
+- Playwright와 Chrome으로 서재 목록, 정렬, 상세, 삭제 확인과 삭제를 찍어 확인했다.
+
 ## M1-T10 UI 기반 구성(PrimeVue, Tailwind, 3단 레이아웃)과 검색 화면 개편
 
 - 시작일: 2026-11-01

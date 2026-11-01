@@ -1,6 +1,7 @@
-"""논문 검색과 추가 API.
+"""논문 검색, 추가, 목록, 삭제 API.
 
 @doc: docs/design/PaperSearch.md#3-api
+@doc: docs/design/LibraryView.md#1-api
 """
 
 from collections.abc import Iterator
@@ -8,12 +9,19 @@ from datetime import datetime
 from typing import Annotated
 
 import httpx2
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from jjabtero.library import DuplicateDoiError, PaperData, add_paper
+from jjabtero.library import (
+    DuplicateDoiError,
+    PaperData,
+    PaperNotFoundError,
+    add_paper,
+    delete_paper,
+    list_papers,
+)
 from jjabtero.models import Paper
 from jjabtero.search import SOURCES, SearchResponse, search_papers
 
@@ -111,3 +119,25 @@ def create_paper(data: PaperData, session: Annotated[Session, Depends(_session)]
             status.HTTP_409_CONFLICT, {"message": str(error), "paper_id": error.paper_id}
         ) from error
     return PaperOut.from_paper(paper)
+
+
+@router.get("/papers")
+def read_papers(session: Annotated[Session, Depends(_session)]) -> list[PaperOut]:
+    """`GET /api/papers`를 처리한다.
+
+    @doc: docs/design/LibraryView.md#1-api
+    """
+    return [PaperOut.from_paper(paper) for paper in list_papers(session)]
+
+
+@router.delete("/papers/{paper_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_paper(paper_id: int, session: Annotated[Session, Depends(_session)]) -> Response:
+    """`DELETE /api/papers/{paper_id}`를 처리한다.
+
+    @doc: docs/design/LibraryView.md#1-api
+    """
+    try:
+        delete_paper(session, paper_id)
+    except PaperNotFoundError as error:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,10 +1,14 @@
 // @doc: docs/design/AppSkeleton.md#4-테스트
 // @doc: docs/design/PaperSearch.md#5-테스트
+// @doc: docs/design/LibraryView.md#4-테스트
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   DuplicatePaperError,
+  PaperNotFoundError,
   addPaper,
+  deletePaper,
+  listPapers,
   fetchHealth,
   searchPapers,
   toPaperInput,
@@ -114,5 +118,44 @@ describe('toPaperInput', () => {
       url: 'https://arxiv.org/abs/1706.03762',
       tags: ['nlp', 'transformer'],
     })
+  })
+})
+
+describe('listPapers', () => {
+  it('서재 목록을 돌려준다', async () => {
+    const papers = [{ id: 1, title: 'A' }]
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(papers)))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(listPapers()).resolves.toEqual(papers)
+    expect(fetchMock).toHaveBeenCalledWith('/api/papers')
+  })
+
+  it('실패 응답이면 상태 코드를 담은 오류를 던진다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 500 })))
+
+    await expect(listPapers()).rejects.toThrow('500')
+  })
+})
+
+describe('deletePaper', () => {
+  it('204면 끝난다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(deletePaper(3)).resolves.toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledWith('/api/papers/3', { method: 'DELETE' })
+  })
+
+  it('404면 PaperNotFoundError를 던진다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 404 })))
+
+    await expect(deletePaper(3)).rejects.toBeInstanceOf(PaperNotFoundError)
+  })
+
+  it('그 밖의 실패면 상태 코드를 담은 오류를 던진다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 500 })))
+
+    await expect(deletePaper(3)).rejects.toThrow('500')
   })
 })

@@ -1,12 +1,16 @@
 <!-- @doc: docs/design/AppSkeleton.md#3-프론트엔드-앱 -->
 <!-- @doc: docs/design/UiLayout.md#3-화면-배치 -->
+<!-- @doc: docs/design/LibraryView.md#3-화면 -->
 <script setup lang="ts">
 import Splitter from 'primevue/splitter'
 import SplitterPanel from 'primevue/splitterpanel'
 import Tag from 'primevue/tag'
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { fetchHealth, type Health } from './api'
+import LibraryView from './LibraryView.vue'
+import { createLibraryState } from './libraryState'
 import { DEFAULT_VIEW } from './navigation'
+import PaperDetail from './PaperDetail.vue'
 import { createSearchState } from './searchState'
 import SearchResultDetail from './SearchResultDetail.vue'
 import SearchView from './SearchView.vue'
@@ -14,6 +18,11 @@ import Sidebar from './Sidebar.vue'
 
 const view = ref<string>(DEFAULT_VIEW)
 const search = createSearchState()
+const library = createLibraryState()
+
+watch(view, (name) => {
+  if (name === 'library') library.load()
+})
 const health = ref<Health | null>(null)
 const healthFailed = ref(false)
 
@@ -46,13 +55,11 @@ onMounted(async () => {
       </SplitterPanel>
       <SplitterPanel :size="55" :min-size="30" class="overflow-auto">
         <SearchView v-if="view === 'search'" :search="search" />
-        <div v-else class="flex h-full flex-col items-center justify-center gap-2 text-surface-500">
-          <i class="pi pi-book text-4xl" />
-          <p>서재 목록은 준비 중입니다.</p>
-        </div>
+        <LibraryView v-else :library="library" />
       </SplitterPanel>
       <SplitterPanel :size="30" :min-size="20" class="overflow-auto">
         <SearchResultDetail v-if="view === 'search' && search.selected.value" :search="search" />
+        <PaperDetail v-else-if="view === 'library' && library.selected.value" :library="library" />
         <div v-else class="flex h-full flex-col items-center justify-center gap-2 text-surface-500">
           <i class="pi pi-file text-4xl" />
           <p>항목을 고르면 여기에 상세가 보입니다.</p>
