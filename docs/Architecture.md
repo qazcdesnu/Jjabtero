@@ -31,7 +31,7 @@
 | `alembic.ini` | 개발할 때 쓰는 Alembic 명령 설정. |
 | `uv.lock` | uv가 만드는 의존성 잠금 파일. 커밋한다. |
 | `.python-version` | uv가 쓰는 Python 버전. |
-| `.gitignore` | 커밋하지 않을 파일(가상 환경 `.venv/`, 캐시). |
+| `.gitignore` | 커밋하지 않을 파일(가상 환경 `.venv/`, 캐시, 비밀 값 파일 `client_secret*.json`·`*token*.json`, 데이터베이스 `*.db`, `.DS_Store`). |
 | `README.md` | 저장소 소개와 사용법. |
 
 `src/`, `tests/`, `frontend/src/`는 [검증 도구의 설정](VerificationTools.md#11-설정)의 코드 루트다. 패키지와 프론트엔드 안의 모듈 구성은 기능별 상세 설계 문서(`docs/design/`)에서 정한다.
@@ -39,6 +39,8 @@
 [포인터 검사기](VerificationTools.md#4-포인터-검사기)는 `.ts` 파일은 해석하지만 Vue 단일 파일 컴포넌트(`.vue`)는 해석하지 않는다([포인터 규약의 언어별 심볼 규칙](Traceability.md#7-언어별-심볼-규칙)). 그래서 상태 관리, API 호출, 계산 같은 로직은 `.ts` 모듈에 두고 포인터를 단다. `.vue` 컴포넌트는 화면 구성에 집중하고, 근거 문서는 주석으로 적되 검사되지 않는다.
 
 패키지의 최상위 모듈은 [jjabtero](../src/jjabtero/__init__.py)다. 지금은 패키지 버전을 [`__version__`](../src/jjabtero/__init__.py#__version__)으로 알리는 일만 한다. 값은 설치된 패키지 정보(`pyproject.toml`의 `version`)에서 읽어, 버전을 한 곳에서만 관리한다.
+
+비밀 값(OAuth 클라이언트 JSON, 토큰)과 서재 데이터베이스는 저장소에 두지 않고 운영체제의 사용자 데이터 폴더에 둔다([구글 드라이브 동기화 설계](design/DriveSync.md#2-로컬-파일)). 저장소는 공개이므로 이런 파일이 실수로 커밋되지 않도록 `.gitignore`에도 적는다.
 
 ## 3. 언어와 도구
 
@@ -93,7 +95,6 @@ Python 버전은 `.python-version`과 `pyproject.toml`의 `requires-python`(`>=3
 아래 항목은 아직 정하지 않았다. 정하면 이 문서에 반영하고 이 목록에서 지운다.
 
 - 시각화 라이브러리(통계 차트, 인용 그래프).
-- 구글 드라이브 동기화의 세부 방식(인증 정보 보관, 동기화 시점, 충돌 처리). M1-T9에서 정한다.
 - Render 배포 구성(빌드 환경, 로그인 방식, 비밀 값 보관). M2에서 정한다.
 - 백엔드 API의 타입을 프론트엔드와 공유하는 방식(예: OpenAPI 명세에서 TypeScript 타입 생성).
 - Node.js 버전과 프론트엔드 린터·포매터.

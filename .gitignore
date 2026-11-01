@@ -5,3 +5,9 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+
+# 비밀 값과 서재 데이터는 커밋하지 않는다(docs/Architecture.md 2절).
+client_secret*.json
+*token*.json
+*.db
+.DS_Store

@@ -114,7 +114,9 @@ def search(
 
 
 @router.post("/papers", status_code=status.HTTP_201_CREATED)
-def create_paper(data: PaperData, session: Annotated[Session, Depends(_session)]) -> PaperOut:
+def create_paper(
+    data: PaperData, request: Request, session: Annotated[Session, Depends(_session)]
+) -> PaperOut:
     """`POST /api/papers`를 처리한다.
 
     @doc: docs/design/PaperSearch.md#3-api
@@ -125,6 +127,7 @@ def create_paper(data: PaperData, session: Annotated[Session, Depends(_session)]
         raise HTTPException(
             status.HTTP_409_CONFLICT, {"message": str(error), "paper_id": error.paper_id}
         ) from error
+    request.app.state.drive.schedule_push()
     return PaperOut.from_paper(paper)
 
 
@@ -138,7 +141,9 @@ def read_papers(session: Annotated[Session, Depends(_session)]) -> list[PaperOut
 
 
 @router.delete("/papers/{paper_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_paper(paper_id: int, session: Annotated[Session, Depends(_session)]) -> Response:
+def remove_paper(
+    paper_id: int, request: Request, session: Annotated[Session, Depends(_session)]
+) -> Response:
     """`DELETE /api/papers/{paper_id}`를 처리한다.
 
     @doc: docs/design/LibraryView.md#1-api
@@ -147,12 +152,16 @@ def remove_paper(paper_id: int, session: Annotated[Session, Depends(_session)]) 
         delete_paper(session, paper_id)
     except PaperNotFoundError as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
+    request.app.state.drive.schedule_push()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch("/papers/{paper_id}")
 def change_reading(
-    paper_id: int, update: ReadingUpdate, session: Annotated[Session, Depends(_session)]
+    paper_id: int,
+    update: ReadingUpdate,
+    request: Request,
+    session: Annotated[Session, Depends(_session)],
 ) -> PaperOut:
     """`PATCH /api/papers/{paper_id}`를 처리한다.
 
@@ -162,5 +171,6 @@ def change_reading(
         paper = update_reading(session, paper_id, update)
     except PaperNotFoundError as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
+    request.app.state.drive.schedule_push()
     return PaperOut.from_paper(paper)
 

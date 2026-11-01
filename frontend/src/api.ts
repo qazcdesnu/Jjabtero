@@ -2,6 +2,7 @@
 // @doc: docs/design/PaperSearch.md#4-화면
 // @doc: docs/design/LibraryView.md#2-화면-상태
 // @doc: docs/design/ReadingStatus.md#3-화면
+// @doc: docs/design/DriveSync.md#7-화면
 
 // @doc: docs/design/AppSkeleton.md#3-프론트엔드-앱
 export interface Health {
@@ -160,5 +161,51 @@ export async function updateReading(
     throw new Error(`저장 실패: ${response.status}`)
   }
   return (await response.json()) as Paper
+}
+
+// @doc: docs/design/DriveSync.md#7-화면
+export interface DriveStatus {
+  state: 'not_configured' | 'disconnected' | 'idle' | 'syncing' | 'conflict' | 'error'
+  message: string
+  last_synced_at: string | null
+  pending: boolean
+  data_version: number
+}
+
+async function driveRequest(path: string, init?: RequestInit): Promise<DriveStatus> {
+  const response = await fetch(`/api/drive/${path}`, init)
+  if (!response.ok) {
+    throw new Error(`드라이브 요청 실패: ${response.status}`)
+  }
+  return (await response.json()) as DriveStatus
+}
+
+// @doc: docs/design/DriveSync.md#7-화면
+export function fetchDriveStatus(): Promise<DriveStatus> {
+  return driveRequest('status')
+}
+
+// @doc: docs/design/DriveSync.md#7-화면
+export function syncDrive(): Promise<DriveStatus> {
+  return driveRequest('sync', { method: 'POST' })
+}
+
+// @doc: docs/design/DriveSync.md#7-화면
+export function resolveDrive(choice: 'remote' | 'local'): Promise<DriveStatus> {
+  return driveRequest('resolve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ choice }),
+  })
+}
+
+// @doc: docs/design/DriveSync.md#7-화면
+export function disconnectDrive(): Promise<DriveStatus> {
+  return driveRequest('disconnect', { method: 'POST' })
+}
+
+// @doc: docs/design/DriveSync.md#7-화면
+export function driveConnectUrl(returnTo: string): string {
+  return `/api/drive/connect?${new URLSearchParams({ return_to: returnTo })}`
 }
 

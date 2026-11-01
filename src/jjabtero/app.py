@@ -2,8 +2,10 @@
 
 @doc: docs/design/AppSkeleton.md#1-백엔드-앱
 @doc: docs/design/PaperSearch.md#3-api
+@doc: docs/design/DriveSync.md#6-api
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 import httpx2
@@ -13,6 +15,8 @@ from pydantic import BaseModel
 
 from jjabtero import __version__
 from jjabtero.db import create_db_engine, default_db_path, upgrade_database
+from jjabtero.drive_api import router as drive_router
+from jjabtero.drive_sync import DrivePaths, DriveSync, FilesLike, default_drive_paths
 from jjabtero.papers_api import router as papers_router
 
 # @doc: docs/design/AppSkeleton.md#1-백엔드-앱
@@ -48,18 +52,31 @@ def create_app(
     frontend_dist: Path = DEFAULT_FRONTEND_DIST,
     db_path: Path | None = None,
     http_client: httpx2.Client | None = None,
+    drive_paths: DrivePaths | None = None,
+    drive_files: Callable[[httpx2.Client, Callable[[], str]], FilesLike] | None = None,
 ) -> FastAPI:
     """FastAPI 앱을 만든다.
 
     @doc: docs/design/AppSkeleton.md#1-백엔드-앱
     @doc: docs/design/PaperSearch.md#3-api
+    @doc: docs/design/DriveSync.md#6-api
     """
     app = FastAPI(title="Jjabtero", version=__version__)
-    app.state.engine = create_db_engine(db_path or default_db_path())
+    path = db_path or default_db_path()
+    app.state.engine = create_db_engine(path)
     upgrade_database(app.state.engine)
     app.state.http_client = http_client or _default_http_client()
+    drive_options = {"files_factory": drive_files} if drive_files else {}
+    app.state.drive = DriveSync(
+        app.state.engine,
+        drive_paths or default_drive_paths(path),
+        app.state.http_client,
+        **drive_options,
+    )
+    app.state.drive.start_background_sync()
     app.include_router(_api)
     app.include_router(papers_router)
+    app.include_router(drive_router)
     # 정적 파일 마운트는 "/" 전체를 차지하므로 API 라우터 다음에 둔다.
     if frontend_dist.is_dir():
         app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
