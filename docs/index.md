@@ -38,6 +38,7 @@
 | --- | --- | --- |
 | [앱 골격 설계](design/AppSkeleton.md) | 백엔드 앱과 실행 명령, 프론트엔드 API 모듈, 상태 확인 | M1-T8 |
 | [서재 데이터 설계](design/Library.md) | 논문 데이터 모델, 데이터베이스 파일과 연결, 마이그레이션, 저장 함수 | M1-T3 |
+| [논문 검색과 추가 설계](design/PaperSearch.md) | OpenAlex·arXiv 검색, 검색·추가 API, 검색 화면 | M1-T4 |
 
 ### 문서 작업
 

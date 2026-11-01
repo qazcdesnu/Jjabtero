@@ -3,6 +3,7 @@
 @doc: docs/design/AppSkeleton.md#4-테스트
 """
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -11,11 +12,12 @@ from jjabtero import cli
 
 
 @pytest.fixture
-def uvicorn_calls(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
-    """실제 서버 대신 uvicorn.run 호출 인자를 모은다.
+def uvicorn_calls(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[dict[str, Any]]:
+    """실제 서버 대신 uvicorn.run 호출 인자를 모은다. 데이터베이스는 임시 파일을 쓴다.
 
     @doc: docs/design/AppSkeleton.md#4-테스트
     """
+    monkeypatch.setenv("JJABTERO_DB", str(tmp_path / "library.db"))
     calls: list[dict[str, Any]] = []
     monkeypatch.setattr(cli.uvicorn, "run", lambda app, **kwargs: calls.append(kwargs))
     return calls
