@@ -97,8 +97,11 @@ class FakeDrive:
     def _remote(self, file_id: str):
         from jjabtero.drive import RemoteFile
 
+        import hashlib
+
         item = self.files[file_id]
-        return RemoteFile(id=file_id, version=str(item["version"]))
+        checksum = "" if item["folder"] else hashlib.md5(item["data"]).hexdigest()
+        return RemoteFile(id=file_id, checksum=checksum)
 
     def find_folder(self, name: str):
         """이름이 같은 폴더를 찾는다.
@@ -117,7 +120,7 @@ class FakeDrive:
         """
         self.calls.append("create_folder")
         file_id = self._new_id()
-        self.files[file_id] = {"name": name, "folder": True, "parent": None, "data": b"", "version": 1, "trashed": False}
+        self.files[file_id] = {"name": name, "folder": True, "parent": None, "data": b"", "trashed": False}
         return self._remote(file_id)
 
     def find_file(self, folder_id: str, name: str):
@@ -153,17 +156,16 @@ class FakeDrive:
         """
         self.calls.append("create")
         file_id = self._new_id()
-        self.files[file_id] = {"name": name, "folder": False, "parent": folder_id, "data": data, "version": 1, "trashed": False}
+        self.files[file_id] = {"name": name, "folder": False, "parent": folder_id, "data": data, "trashed": False}
         return self._remote(file_id)
 
     def update(self, file_id: str, data: bytes):
-        """내용을 바꾸고 버전을 올린다.
+        """내용을 바꾼다.
 
         @doc: docs/design/DriveSync.md#8-테스트
         """
         self.calls.append("update")
         self.files[file_id]["data"] = data
-        self.files[file_id]["version"] += 1
         return self._remote(file_id)
 
 

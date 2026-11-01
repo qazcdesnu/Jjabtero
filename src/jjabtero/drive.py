@@ -14,7 +14,7 @@ FILES_URL = "https://www.googleapis.com/drive/v3/files"
 UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 DB_MIME = "application/x-sqlite3"
-_FIELDS = "id,version,trashed"
+_FIELDS = "id,md5Checksum,trashed"
 
 
 class DriveApiError(Exception):
@@ -36,11 +36,11 @@ class RemoteFile:
     """
 
     id: str
-    version: str
+    checksum: str
 
 
 def _remote(body: dict) -> RemoteFile:
-    return RemoteFile(id=body["id"], version=str(body["version"]))
+    return RemoteFile(id=body["id"], checksum=body.get("md5Checksum", ""))
 
 
 def _quote(value: str) -> str:

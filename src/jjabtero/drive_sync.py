@@ -155,7 +155,7 @@ def _now() -> str:
 class _State:
     folder_id: str
     file_id: str
-    remote_version: str
+    remote_checksum: str
     local_hash: str
     synced_at: str
 
@@ -266,7 +266,7 @@ class DriveSync:
             return None
 
     def _save_state(self, folder_id: str, remote: RemoteFile) -> None:
-        state = _State(folder_id, remote.id, remote.version, content_hash(self.engine), _now())
+        state = _State(folder_id, remote.id, remote.checksum, content_hash(self.engine), _now())
         write_private(self.paths.state, json.dumps(asdict(state)))
 
     def status(self) -> SyncStatus:
@@ -362,12 +362,12 @@ class DriveSync:
                 self._conflict = (folder_id, remote)
             return
         local_changed = content_hash(self.engine) != saved.local_hash
-        remote_changed = remote.version != saved.remote_version
+        remote_changed = remote.checksum != saved.remote_checksum
         if local_changed and remote_changed:
             self._conflict = (folder_id, remote)
         elif local_changed:
             current = files.get(remote.id)
-            if current is None or current.version != remote.version:
+            if current is None or current.checksum != remote.checksum:
                 self._conflict = (folder_id, current or remote)
                 return
             self._save_state(folder_id, files.update(remote.id, snapshot_db(self.engine)))

@@ -28,8 +28,8 @@ def test_find_folder_queries_root_folder() -> None:
     @doc: docs/design/DriveSync.md#8-테스트
     """
     seen: list[httpx2.Request] = []
-    files = files_with(lambda r: httpx2.Response(200, json={"files": [{"id": "d1", "version": "3"}]}), seen)
-    assert files.find_folder("Jjabtero") == RemoteFile("d1", "3")
+    files = files_with(lambda r: httpx2.Response(200, json={"files": [{"id": "d1"}]}), seen)
+    assert files.find_folder("Jjabtero") == RemoteFile("d1", "")
     query = seen[0].url.params["q"]
     assert "name = 'Jjabtero'" in query and "'root' in parents" in query and "trashed = false" in query
     assert "application/vnd.google-apps.folder" in query
@@ -54,12 +54,12 @@ def test_get_handles_missing_and_trashed() -> None:
     """
     seen: list[httpx2.Request] = []
     responses = [
-        httpx2.Response(200, json={"id": "f1", "version": 5, "trashed": False}),
-        httpx2.Response(200, json={"id": "f1", "version": 5, "trashed": True}),
+        httpx2.Response(200, json={"id": "f1", "md5Checksum": "abc", "trashed": False}),
+        httpx2.Response(200, json={"id": "f1", "md5Checksum": "abc", "trashed": True}),
         httpx2.Response(404, json={}),
     ]
     files = files_with(lambda r: responses.pop(0), seen)
-    assert files.get("f1") == RemoteFile("f1", "5")
+    assert files.get("f1") == RemoteFile("f1", "abc")
     assert files.get("f1") is None
     assert files.get("f1") is None
 
@@ -70,9 +70,9 @@ def test_create_uploads_multipart_and_update_uploads_media() -> None:
     @doc: docs/design/DriveSync.md#8-테스트
     """
     seen: list[httpx2.Request] = []
-    files = files_with(lambda r: httpx2.Response(200, json={"id": "f1", "version": "7"}), seen)
-    assert files.create("d1", "library.db", b"DATA") == RemoteFile("f1", "7")
-    assert files.update("f1", b"NEW") == RemoteFile("f1", "7")
+    files = files_with(lambda r: httpx2.Response(200, json={"id": "f1", "md5Checksum": "m7"}), seen)
+    assert files.create("d1", "library.db", b"DATA") == RemoteFile("f1", "m7")
+    assert files.update("f1", b"NEW") == RemoteFile("f1", "m7")
     create, update = seen
     assert create.url.params["uploadType"] == "multipart"
     assert create.headers["Content-Type"].startswith("multipart/related; boundary=")

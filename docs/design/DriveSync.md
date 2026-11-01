@@ -7,7 +7,7 @@
 - 로컬 SQLite 파일이 작업 사본이고, 드라이브 `Jjabtero` 폴더의 `library.db`가 다른 컴퓨터·서버와 나누는 사본이다. 파일 전체를 받고 올린다. 서재가 작아(수 MB 이하) 행 단위 동기화보다 단순하고 안전하기 때문이다.
 - 드라이브 접근은 Google Drive API v3와 OAuth 2.0 웹 서버 흐름으로 한다. 범위는 `https://www.googleapis.com/auth/drive.file` 하나다. 이 범위로는 앱이 만든 파일만 볼 수 있으므로 `Jjabtero` 폴더와 `library.db`는 앱이 만든다. 사용자가 손으로 만든 같은 이름의 폴더는 보이지 않는다.
 - Google 클라이언트 라이브러리를 쓰지 않고 HTTP 요청(httpx2)으로 직접 부른다. 쓰는 요청이 몇 개뿐이고, 기존 외부 API 코드와 같은 방식으로 가짜 응답을 넣어 테스트할 수 있기 때문이다.
-- 동의 화면은 "프로덕션" 게시 상태로 둔다. "테스트" 상태에서는 갱신 토큰이 7일 뒤 만료되기 때문이다. `drive.file`은 민감하지 않은 범위라 검수 없이 게시해도 경고가 뜨지 않는다.
+- 동의 화면은 지금 "테스트" 게시 상태다. 테스트 상태에서는 갱신 토큰이 7일 뒤 만료되므로, 만료되면 앱이 "연결 안 됨"으로 바뀌고 다시 연결하게 한다. "프로덕션"으로 게시하면 만료가 없어지지만 홈페이지와 개인정보처리방침 주소가 필요해, M2 배포 때 Render 주소로 그 페이지를 만들면서 게시한다([로드맵의 M2](../Roadmap.md#m2-render-배포)). `drive.file`은 민감하지 않은 범위라 게시할 때 검수가 필요 없다.
 
 ## 2. 로컬 파일
 
@@ -17,7 +17,7 @@
 | --- | --- | --- |
 | OAuth 클라이언트 | 사용자 데이터 폴더의 `google_client_secret.json` | Google Cloud 콘솔에서 받은 웹 애플리케이션 클라이언트 JSON. 환경 변수 `JJABTERO_GOOGLE_CLIENT_SECRET`로 경로를 바꿀 수 있다. |
 | 토큰 | 사용자 데이터 폴더의 `google_token.json` | 접근 토큰, 갱신 토큰, 만료 시각 |
-| 동기화 상태 | 데이터베이스 파일과 같은 폴더의 `drive_sync.json` | 드라이브 폴더·파일 ID, 마지막으로 맞춘 드라이브 파일 버전, 그때의 로컬 내용 해시, 마지막 동기화 시각 |
+| 동기화 상태 | 데이터베이스 파일과 같은 폴더의 `drive_sync.json` | 드라이브 폴더·파일 ID, 마지막으로 맞춘 드라이브 파일의 내용 체크섬, 그때의 로컬 내용 해시, 마지막 동기화 시각 |
 | 백업 | 데이터베이스 파일과 같은 폴더의 `backups/library-<시각>-<쪽>.db` | 충돌을 풀 때 버린 쪽 사본 |
 
 - 사용자 데이터 폴더는 [user_data_dir](../../src/jjabtero/drive_sync.py#user_data_dir)가 돌려준다. 운영체제의 앱 데이터 폴더 아래 `Jjabtero`이며(macOS: `~/Library/Application Support/Jjabtero`), 환경 변수 `JJABTERO_DATA_DIR`로 바꿀 수 있다. 기본 데이터베이스도 여기 있다.
@@ -46,7 +46,7 @@
 - `download(file_id)`: 내용을 받는다.
 - `create(folder_id, name, data)`, `update(file_id, data)`: 새 파일을 올리거나 내용을 바꾼다.
 - 동기화 쪽은 이 요청들을 [FilesLike](../../src/jjabtero/drive_sync.py#FilesLike) 모양으로만 쓴다. 테스트는 같은 모양의 가짜 드라이브를 넘긴다.
-- 파일 정보는 [RemoteFile](../../src/jjabtero/drive.py#RemoteFile)(ID, `version`)이다. `version`은 드라이브가 파일이 바뀔 때마다 올리는 번호로, 충돌 감지에 쓴다.
+- 파일 정보는 [RemoteFile](../../src/jjabtero/drive.py#RemoteFile)(ID, `checksum`)이다. `checksum`은 드라이브가 파일 내용으로 계산한 `md5Checksum`이며(폴더는 빈 문자열), 드라이브 쪽 변경 감지에 쓴다. 드라이브의 `version` 필드는 내용이 그대로여도 올라가는 것을 실제 드라이브에서 확인했으므로(올린 직전 1, 잠시 뒤 2, 리비전 하나) 쓰지 않는다.
 - 드라이브 API 오류(4xx, 5xx)는 [DriveApiError](../../src/jjabtero/drive.py#DriveApiError)다.
 
 ## 5. 동기화
@@ -61,17 +61,17 @@
 
 **판단**
 
-[DriveSync.sync](../../src/jjabtero/drive_sync.py#DriveSync.sync)는 다음 순서로 한다. 로컬이 바뀌었는지는 지금 해시와 상태 파일의 해시가 다른지로, 드라이브가 바뀌었는지는 드라이브 파일 `version`과 상태 파일의 버전이 다른지로 판단한다.
+[DriveSync.sync](../../src/jjabtero/drive_sync.py#DriveSync.sync)는 다음 순서로 한다. 로컬이 바뀌었는지는 지금 해시와 상태 파일의 해시가 다른지로, 드라이브가 바뀌었는지는 드라이브 파일의 `checksum`과 상태 파일의 체크섬이 다른지로 판단한다.
 
 1. `Jjabtero` 폴더를 찾고 없으면 만든다. 상태 파일의 파일 ID로 `library.db`를 찾고, 없으면 폴더에서 이름으로 찾는다.
 2. 드라이브에 파일이 없으면 로컬을 올린다.
 3. 상태 파일이 없거나 다른 파일을 가리키면(이 컴퓨터에서 처음 연결): 로컬 서재가 비었으면 드라이브 것을 받고, 아니면 충돌이다.
 4. 둘 다 안 바뀌었으면 아무것도 하지 않는다.
-5. 로컬만 바뀌었으면 올린다. 올리기 직전에 드라이브 `version`을 다시 읽어 그새 바뀌었으면 충돌로 바꾼다.
+5. 로컬만 바뀌었으면 올린다. 올리기 직전에 드라이브 `checksum`을 다시 읽어 그새 바뀌었으면 충돌로 바꾼다.
 6. 드라이브만 바뀌었으면 받아서 로컬에 덮어쓴다.
 7. 둘 다 바뀌었으면 충돌이다. 아무것도 덮어쓰지 않는다.
 
-받거나 올린 뒤에는 상태 파일에 그때의 드라이브 `version`, 로컬 해시, 시각을 적는다.
+받거나 올린 뒤에는 상태 파일에 그때의 드라이브 `checksum`, 로컬 해시, 시각을 적는다.
 
 **충돌 풀기**
 

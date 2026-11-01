@@ -203,7 +203,7 @@ def test_resolve_without_conflict_does_nothing(tmp_path: Path, drive: FakeDrive)
 
 
 def test_remote_changed_just_before_upload_is_conflict(tmp_path: Path, drive: FakeDrive) -> None:
-    """올리기 직전에 드라이브 버전이 바뀌었으면 올리지 않고 충돌로 바꾼다.
+    """올리기 직전에 드라이브 내용이 바뀌었으면 올리지 않고 충돌로 바꾼다.
 
     @doc: docs/design/DriveSync.md#8-테스트
     """
@@ -216,7 +216,7 @@ def test_remote_changed_just_before_upload_is_conflict(tmp_path: Path, drive: Fa
     def racing_get(file_id: str):
         calls["count"] += 1
         if calls["count"] == 3:
-            drive.files[file_id]["version"] += 1
+            drive.files[file_id]["data"] += b"changed elsewhere"
         return original_get(file_id)
 
     drive.get = racing_get
@@ -269,7 +269,6 @@ def test_restore_rejects_broken_data(tmp_path: Path, drive: FakeDrive) -> None:
     for item in drive.files.values():
         if not item["folder"]:
             item["data"] = b"garbage" * 100
-            item["version"] += 1
     status = b.sync()
     assert status.state == "error" and status.message
 
@@ -328,3 +327,17 @@ def test_disconnect_clears_token_keeps_state(tmp_path: Path, drive: FakeDrive) -
     a.sync()
     assert a.disconnect().state == "disconnected"
     assert a.paths.state.exists() and not a.paths.token.exists()
+
+
+def test_remote_metadata_change_without_content_change_is_not_conflict(tmp_path: Path, drive: FakeDrive) -> None:
+    """드라이브 내용이 그대로면(버전 번호만 바뀐 경우) 로컬 변경은 그냥 올린다.
+
+    @doc: docs/design/DriveSync.md#8-테스트
+    """
+    a = computer(tmp_path, "a", drive)
+    a.sync()
+    add(a.engine, "A1")
+    drive.calls.clear()
+    assert a.sync().state == "idle"
+    assert drive.calls == ["update"]
+
