@@ -1,0 +1,32 @@
+# Render Blueprint. docs/design/Deployment.md 5절 참조.
+services:
+  - type: web
+    name: jjabtero
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    healthCheckPath: /api/health
+    domains:
+      - jjabtero.qazcde.kr
+    envVars:
+      - key: JJABTERO_INITIAL_SYNC
+        value: wait
+      - key: JJABTERO_SECURE_COOKIE
+        value: "1"
+      - key: JJABTERO_FORWARDED_ALLOW_IPS
+        value: "*"
+      - key: JJABTERO_DATA_DIR
+        value: /app/data
+      - key: JJABTERO_DB
+        value: /app/data/library.db
+      - key: JJABTERO_GOOGLE_CLIENT_SECRET
+        value: /etc/secrets/google_client_secret.json
+      - key: JJABTERO_SESSION_SECRET
+        generateValue: true
+      - key: JJABTERO_ALLOWED_EMAIL
+        sync: false
+      - key: JJABTERO_GOOGLE_REFRESH_TOKEN
+        sync: false
+      - key: OPENALEX_API_KEY
+        sync: false

@@ -33,6 +33,8 @@
 | `.python-version` | uv가 쓰는 Python 버전. |
 | `.gitignore` | 커밋하지 않을 파일(가상 환경 `.venv/`, 캐시, 비밀 값 파일 `client_secret*.json`·`*token*.json`, 데이터베이스 `*.db`, `.DS_Store`). |
 | `README.md` | 저장소 소개와 사용법. |
+| `Dockerfile`, `.dockerignore` | 배포용 컨테이너 이미지 빌드([배포 설계](design/Deployment.md#5-빌드와-실행)). |
+| `render.yaml` | Render Blueprint(서비스, 도메인, 환경 변수). |
 
 `src/`, `tests/`, `frontend/src/`는 [검증 도구의 설정](VerificationTools.md#11-설정)의 코드 루트다. 패키지와 프론트엔드 안의 모듈 구성은 기능별 상세 설계 문서(`docs/design/`)에서 정한다.
 
@@ -95,6 +97,5 @@ Python 버전은 `.python-version`과 `pyproject.toml`의 `requires-python`(`>=3
 아래 항목은 아직 정하지 않았다. 정하면 이 문서에 반영하고 이 목록에서 지운다.
 
 - 시각화 라이브러리(통계 차트, 인용 그래프).
-- Render 배포의 빌드 방식. [배포 설계의 미결정 사항](design/Deployment.md#5-미결정-사항)에 있다.
 - 백엔드 API의 타입을 프론트엔드와 공유하는 방식(예: OpenAPI 명세에서 TypeScript 타입 생성).
 - Node.js 버전과 프론트엔드 린터·포매터.
