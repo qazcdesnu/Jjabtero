@@ -34,21 +34,26 @@ def test_main_uses_local_defaults(uvicorn_calls: list[dict[str, Any]]) -> None:
     @doc: docs/design/AppSkeleton.md#4-테스트
     """
     cli.main([])
-    assert uvicorn_calls == [{"host": "127.0.0.1", "port": 8000}]
+    assert uvicorn_calls == [
+        {"host": "127.0.0.1", "port": 8000, "proxy_headers": True, "forwarded_allow_ips": "127.0.0.1"}
+    ]
 
 
 def test_main_uses_given_host_and_port(
     uvicorn_calls: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """로그인을 켜면 지정한 외부 호스트와 포트로 띄운다.
+    """로그인을 켜면 지정한 외부 호스트와 포트로 띄우고, 믿을 프록시 주소를 환경 변수에서 받는다.
 
     @doc: docs/design/AppSkeleton.md#4-테스트
     @doc: docs/design/Auth.md#7-테스트
     """
     monkeypatch.setenv("JJABTERO_ALLOWED_EMAIL", "me@example.com")
     monkeypatch.setenv("JJABTERO_SESSION_SECRET", "s" * 40)
+    monkeypatch.setenv("JJABTERO_FORWARDED_ALLOW_IPS", "*")
     cli.main(["--host", "0.0.0.0", "--port", "9000"])
-    assert uvicorn_calls == [{"host": "0.0.0.0", "port": 9000}]
+    assert uvicorn_calls == [
+        {"host": "0.0.0.0", "port": 9000, "proxy_headers": True, "forwarded_allow_ips": "*"}
+    ]
 
 
 def test_main_rejects_invalid_port(uvicorn_calls: list[dict[str, Any]]) -> None:

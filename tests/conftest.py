@@ -24,5 +24,6 @@ def isolated_user_data(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         "JJABTERO_SECURE_COOKIE",
         "JJABTERO_GOOGLE_REFRESH_TOKEN",
         "JJABTERO_INITIAL_SYNC",
+        "JJABTERO_FORWARDED_ALLOW_IPS",
     ):
         monkeypatch.delenv(name, raising=False)
