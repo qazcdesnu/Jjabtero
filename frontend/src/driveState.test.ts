@@ -1,4 +1,4 @@
-// @doc: docs/design/DriveSync.md#8-테스트
+// @doc: docs/design/DriveSync.md#9-테스트
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DriveStatus } from './api'

@@ -1,6 +1,6 @@
 """서재와 구글 드라이브의 동기화를 검증한다.
 
-@doc: docs/design/DriveSync.md#8-테스트
+@doc: docs/design/DriveSync.md#9-테스트
 """
 
 import time
@@ -12,7 +12,14 @@ from sqlalchemy.orm import Session
 
 from fakes import FakeDrive, write_client_secret
 from jjabtero.db import create_db_engine, upgrade_database
-from jjabtero.drive_sync import DrivePaths, DriveSync, content_hash, restore_db, snapshot_db
+from jjabtero.drive_sync import (
+    DrivePaths,
+    DriveSync,
+    content_hash,
+    restore_db,
+    seed_token_from_env,
+    snapshot_db,
+)
 from jjabtero.google_auth import DriveAuthError, Token, TokenStore
 from jjabtero.library import PaperData, add_paper, list_papers
 
@@ -20,7 +27,7 @@ from jjabtero.library import PaperData, add_paper, list_papers
 def computer(tmp_path: Path, name: str, drive: FakeDrive, connected: bool = True) -> DriveSync:
     """임시 폴더에 서재 하나와 그 동기화를 만든다. 여러 개가 같은 가짜 드라이브를 쓸 수 있다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     folder = tmp_path / name
     engine = create_db_engine(folder / "library.db")
@@ -35,7 +42,7 @@ def computer(tmp_path: Path, name: str, drive: FakeDrive, connected: bool = True
 def add(engine: Engine, title: str) -> None:
     """서재에 논문을 넣는다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     with Session(engine) as session:
         add_paper(session, PaperData(title=title))
@@ -44,7 +51,7 @@ def add(engine: Engine, title: str) -> None:
 def titles(engine: Engine) -> list[str]:
     """서재 논문 제목을 이름순으로 돌려준다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     with Session(engine) as session:
         return sorted(paper.title for paper in list_papers(session))
@@ -54,7 +61,7 @@ def titles(engine: Engine) -> list[str]:
 def drive() -> FakeDrive:
     """비어 있는 가짜 드라이브.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     return FakeDrive()
 
@@ -62,7 +69,7 @@ def drive() -> FakeDrive:
 def test_first_sync_creates_folder_and_uploads(tmp_path: Path, drive: FakeDrive) -> None:
     """드라이브에 파일이 없으면 폴더를 만들고 로컬을 올린다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     add(a.engine, "A1")
@@ -75,7 +82,7 @@ def test_first_sync_creates_folder_and_uploads(tmp_path: Path, drive: FakeDrive)
 def test_no_change_does_nothing(tmp_path: Path, drive: FakeDrive) -> None:
     """둘 다 안 바뀌었으면 올리거나 받지 않는다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     a.sync()
@@ -87,7 +94,7 @@ def test_no_change_does_nothing(tmp_path: Path, drive: FakeDrive) -> None:
 def test_local_change_uploads(tmp_path: Path, drive: FakeDrive) -> None:
     """로컬만 바뀌면 올린다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     a.sync()
@@ -100,7 +107,7 @@ def test_local_change_uploads(tmp_path: Path, drive: FakeDrive) -> None:
 def test_remote_change_downloads_on_other_computer(tmp_path: Path, drive: FakeDrive) -> None:
     """드라이브만 바뀌면 받아서 덮어쓰고 `data_version`을 올린다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     add(a.engine, "A1")
@@ -118,7 +125,7 @@ def test_remote_change_downloads_on_other_computer(tmp_path: Path, drive: FakeDr
 def test_first_connect_with_local_papers_is_conflict(tmp_path: Path, drive: FakeDrive) -> None:
     """처음 연결하는 컴퓨터에 논문이 있고 드라이브에도 서재가 있으면 충돌이다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     add(a.engine, "A1")
@@ -132,7 +139,7 @@ def test_first_connect_with_local_papers_is_conflict(tmp_path: Path, drive: Fake
 def test_both_changed_is_conflict_and_nothing_overwritten(tmp_path: Path, drive: FakeDrive) -> None:
     """둘 다 바뀌면 충돌이고, 다시 동기화해도 덮어쓰지 않으며 자동 올리기도 하지 않는다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     a.sync()
@@ -153,7 +160,7 @@ def test_both_changed_is_conflict_and_nothing_overwritten(tmp_path: Path, drive:
 def test_resolve_remote_backs_up_local(tmp_path: Path, drive: FakeDrive) -> None:
     """드라이브 것을 고르면 로컬을 백업하고 드라이브 것으로 바꾼다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     a.sync()
@@ -174,7 +181,7 @@ def test_resolve_remote_backs_up_local(tmp_path: Path, drive: FakeDrive) -> None
 def test_resolve_local_backs_up_remote(tmp_path: Path, drive: FakeDrive) -> None:
     """이 컴퓨터 것을 고르면 드라이브 사본을 백업하고 로컬을 올린다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     a.sync()
@@ -193,7 +200,7 @@ def test_resolve_local_backs_up_remote(tmp_path: Path, drive: FakeDrive) -> None
 def test_resolve_without_conflict_does_nothing(tmp_path: Path, drive: FakeDrive) -> None:
     """충돌이 아니면 아무것도 하지 않는다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     a.sync()
@@ -205,7 +212,7 @@ def test_resolve_without_conflict_does_nothing(tmp_path: Path, drive: FakeDrive)
 def test_remote_changed_just_before_upload_is_conflict(tmp_path: Path, drive: FakeDrive) -> None:
     """올리기 직전에 드라이브 내용이 바뀌었으면 올리지 않고 충돌로 바꾼다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     a.sync()
@@ -227,7 +234,7 @@ def test_remote_changed_just_before_upload_is_conflict(tmp_path: Path, drive: Fa
 def test_trashed_remote_file_is_uploaded_again(tmp_path: Path, drive: FakeDrive) -> None:
     """드라이브 파일이 휴지통으로 가면 새로 올린다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     a.sync()
@@ -242,7 +249,7 @@ def test_trashed_remote_file_is_uploaded_again(tmp_path: Path, drive: FakeDrive)
 def test_snapshot_and_restore_keep_content(tmp_path: Path) -> None:
     """사본을 되살리면 내용 해시가 같다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     source = create_db_engine(tmp_path / "s.db")
     upgrade_database(source)
@@ -257,7 +264,7 @@ def test_snapshot_and_restore_keep_content(tmp_path: Path) -> None:
 def test_restore_rejects_broken_data(tmp_path: Path, drive: FakeDrive) -> None:
     """SQLite가 아닌 사본은 거부하고 로컬을 그대로 두며, 동기화는 오류가 된다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     add(a.engine, "A1")
@@ -276,7 +283,7 @@ def test_restore_rejects_broken_data(tmp_path: Path, drive: FakeDrive) -> None:
 def test_status_not_configured_and_disconnected(tmp_path: Path, drive: FakeDrive) -> None:
     """클라이언트 파일이 없으면 설정 안 됨, 토큰이 없으면 연결 안 됨이고, 동기화하지 않는다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive, connected=False)
     assert a.sync().state == "disconnected"
@@ -288,7 +295,7 @@ def test_status_not_configured_and_disconnected(tmp_path: Path, drive: FakeDrive
 def test_auth_error_disconnects(tmp_path: Path) -> None:
     """인증 오류가 나면 토큰을 지우고 연결 안 됨으로 알린다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
 
     class Revoked(FakeDrive):
@@ -304,7 +311,7 @@ def test_auth_error_disconnects(tmp_path: Path) -> None:
 def test_schedule_push_uploads_after_delay(tmp_path: Path, drive: FakeDrive) -> None:
     """예약하면 잠시 뒤 백그라운드에서 올린다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     a.sync()
@@ -321,7 +328,7 @@ def test_schedule_push_uploads_after_delay(tmp_path: Path, drive: FakeDrive) -> 
 def test_disconnect_clears_token_keeps_state(tmp_path: Path, drive: FakeDrive) -> None:
     """연결을 끊으면 토큰만 지운다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     a.sync()
@@ -332,7 +339,7 @@ def test_disconnect_clears_token_keeps_state(tmp_path: Path, drive: FakeDrive) -
 def test_remote_metadata_change_without_content_change_is_not_conflict(tmp_path: Path, drive: FakeDrive) -> None:
     """드라이브 내용이 그대로면(버전 번호만 바뀐 경우) 로컬 변경은 그냥 올린다.
 
-    @doc: docs/design/DriveSync.md#8-테스트
+    @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     a.sync()
@@ -340,4 +347,51 @@ def test_remote_metadata_change_without_content_change_is_not_conflict(tmp_path:
     drive.calls.clear()
     assert a.sync().state == "idle"
     assert drive.calls == ["update"]
+
+
+def test_seed_token_from_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """환경 변수의 갱신 토큰으로 토큰 파일을 만들되, 이미 있으면 건드리지 않는다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    store = TokenStore(tmp_path / "token.json")
+    assert seed_token_from_env(store) is False
+    monkeypatch.setenv("JJABTERO_GOOGLE_REFRESH_TOKEN", " r-env ")
+    assert seed_token_from_env(store) is True
+    assert store.load() == Token("", "r-env", 0)
+    store.save(Token("a", "r-file", 1))
+    assert seed_token_from_env(store) is False
+    assert store.load().refresh_token == "r-file"
+
+
+def test_start_wait_downloads_into_empty_server(tmp_path: Path, drive: FakeDrive) -> None:
+    """빈 서버가 기다려 동기화하면, 돌아올 때 이미 드라이브 서재를 받아 두었다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    laptop = computer(tmp_path, "laptop", drive)
+    add(laptop.engine, "A1")
+    laptop.sync()
+    server = computer(tmp_path, "server", drive)
+    server.start(wait=True)
+    assert titles(server.engine) == ["A1"]
+    assert server.status().state == "idle"
+
+
+def test_flush_pushes_pending_change_now(tmp_path: Path, drive: FakeDrive) -> None:
+    """대기 중인 올리기가 있으면 바로 올리고, 없으면 아무것도 하지 않는다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    a = computer(tmp_path, "a", drive)
+    a.sync()
+    drive.calls.clear()
+    a.flush()
+    assert drive.calls == []
+    a.push_delay = 60
+    add(a.engine, "A1")
+    a.schedule_push()
+    a.flush()
+    assert drive.calls == ["update"]
+    assert a.status().pending is False
 

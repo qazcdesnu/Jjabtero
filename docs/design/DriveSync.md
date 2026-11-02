@@ -82,7 +82,7 @@
 
 - [DriveSync](../../src/jjabtero/drive_sync.py#DriveSync)는 앱마다 하나이며 현재 상태 [SyncStatus](../../src/jjabtero/drive_sync.py#SyncStatus)를 가진다. 상태 값은 `not_configured`(클라이언트 파일 없음), `disconnected`(토큰 없음), `idle`(맞춤), `syncing`, `conflict`, `error`다. 그 밖에 메시지, 마지막 동기화 시각, 자동 올리기 대기 여부, 로컬을 드라이브 것으로 바꾼 횟수(`data_version`)를 가진다. 화면은 `data_version`이 바뀌면 서재를 다시 불러온다.
 - 동기화와 충돌 풀기는 한 번에 하나만 돈다(잠금).
-- 앱이 시작되면 연결되어 있을 때 백그라운드에서 한 번 동기화한다.
+- 앱이 시작되면 연결되어 있을 때 한 번 동기화한다. 기본은 백그라운드이고, 서버에서는 끝날 때까지 기다릴 수 있다(8절).
 - 논문을 넣고, 고치고, 지우는 API가 성공하면 [DriveSync.schedule_push](../../src/jjabtero/drive_sync.py#DriveSync.schedule_push)를 부른다. 5초 동안 더 바뀌지 않으면 백그라운드에서 동기화한다. 연달아 고칠 때 매번 올리지 않기 위해서다.
 - 인증 오류(`DriveAuthError`)가 나면 상태를 `disconnected`로 바꾸고 다시 연결하라고 알린다.
 
@@ -112,7 +112,19 @@
   - 연결되어 있으면 메뉴에 "지금 동기화", "연결 해제"가 있다.
 - 앱(`App.vue`)은 `data_version`이 바뀌면 서재를 다시 불러온다. 머리줄의 서버 상태는 버전만 짧게 보여 주고, 드라이브 상태를 그 왼쪽에 둔다.
 
-## 8. 테스트
+## 8. 서버 환경
+
+Render처럼 파일 시스템이 재시작마다 지워지는 서버에서도 서재와 드라이브 연결을 잃지 않게 한다([배포 설계](Deployment.md#3-데이터와-비밀-값)).
+
+- **클라이언트 JSON**: 서버의 비밀 파일로 올리고, `JJABTERO_GOOGLE_CLIENT_SECRET`에 그 경로(Render는 `/etc/secrets/<파일 이름>`)를 적는다. 기존 경로 설정을 그대로 쓴다.
+- **갱신 토큰**: 환경 변수 `JJABTERO_GOOGLE_REFRESH_TOKEN`에 넣는다. [seed_token_from_env](../../src/jjabtero/drive_sync.py#seed_token_from_env)는 앱이 만들어질 때, 토큰 파일이 없고 이 환경 변수가 있으면 갱신 토큰만 든 토큰 파일(접근 토큰은 비고 만료 시각은 0)을 만든다. 처음 요청에서 [access_token](../../src/jjabtero/google_auth.py#access_token)이 갱신한다. 토큰 파일이 이미 있으면 건드리지 않는다.
+- **갱신 토큰 꺼내기**: 실행 명령 `jjabtero --print-drive-token`([main](../../src/jjabtero/cli.py#main))은 로컬 토큰 파일의 갱신 토큰을 출력하고 끝난다. 로컬에서 드라이브를 연결한 뒤 이 값을 서버 환경 변수에 한 번 넣는다. 토큰 파일이 없으면 오류로 끝난다. 갱신 토큰은 비밀이므로 사용자가 직접 실행해 복사한다.
+- **시작할 때 받기**: `JJABTERO_INITIAL_SYNC=wait`이면 [create_app](../../src/jjabtero/app.py#create_app)이 앱을 돌려주기 전에 동기화를 끝낸다([DriveSync.start](../../src/jjabtero/drive_sync.py#DriveSync.start)). 서버의 새 데이터베이스는 비어 있고 동기화 상태 파일도 없으므로, 5절의 "처음 연결이고 로컬이 비었으면 받는다"가 서재를 받는다. 기다리지 않으면 받기 전의 빈 서재가 보이고, 그때 논문을 넣으면 충돌이 되기 때문이다. 이 설정이 없으면 지금처럼 백그라운드에서 동기화한다.
+- **끝날 때 올리기**: 앱이 종료될 때(서버가 SIGTERM을 받아 uvicorn이 앱을 끝낼 때) [DriveSync.flush](../../src/jjabtero/drive_sync.py#DriveSync.flush)가 대기 중인 자동 올리기가 있으면 예약을 취소하고 바로 동기화한다. 고친 지 5초가 안 되어 서버가 꺼져도 변경을 잃지 않기 위해서다.
+- **배포가 겹칠 때**: 배포 때 새 인스턴스와 옛 인스턴스가 60초쯤 함께 돈다. 옛 인스턴스가 그사이 올리면 새 인스턴스는 드라이브가 바뀐 것을 알아채 다음 동기화에서 받거나, 자기도 바뀌었으면 충돌로 멈춘다. 덮어쓰지 않으므로 데이터를 잃지 않는다.
+- **서버에서 드라이브를 다시 연결하면**: 새 토큰은 서버의 토큰 파일에만 있어 재시작하면 사라진다. 다시 연결했으면 `--print-drive-token`과 같은 값을 서버에서 꺼낼 수 없으므로, 로컬에서 연결해 꺼낸 값을 환경 변수에 넣는다.
+
+## 9. 테스트
 
 실제 Google 서버는 부르지 않는다. [conftest](../../tests/conftest.py)는 모든 테스트에서 사용자 데이터 폴더, 데이터베이스, 클라이언트 경로를 임시 폴더로 바꿔, 테스트가 실제 토큰이나 서재를 건드리지 않게 한다. 가짜 드라이브와 가짜 OAuth 응답은 [fakes](../../tests/fakes.py)에 둔다.
 
@@ -120,5 +132,6 @@
 - [test_drive](../../tests/test_drive.py): `DriveFiles`의 요청 모양(검색 질의, 업로드 형식)과 응답 해석, 오류.
 - [test_drive_sync](../../tests/test_drive_sync.py): 메모리 안의 가짜 드라이브로 `sync`의 모든 경우(처음 올리기, 처음 받기, 처음 연결 충돌, 변경 없음, 로컬만, 드라이브만, 둘 다, 올리기 직전 충돌, 드라이브 파일이 지워짐), `resolve` 두 쪽과 백업, 사본 만들기·되살리기와 깨진 사본 거부, 인증 오류, 자동 올리기 대기.
 - [test_drive_api](../../tests/test_drive_api.py): 상태, 연결 주소와 `return_to` 검사, 콜백의 `state` 검사, 동기화·충돌 풀기·연결 해제, 논문 API가 자동 올리기를 예약하는지.
+- 서버 환경(8절): [test_drive_sync](../../tests/test_drive_sync.py)는 환경 변수로 토큰 파일 만들기, 빈 서버가 기다려 받기, 대기 중인 올리기를 바로 하기를, [test_drive_api](../../tests/test_drive_api.py)는 앱이 시작할 때 받고 끝날 때 올리기를, [test_cli](../../tests/test_cli.py)는 갱신 토큰 꺼내기와 연결이 없을 때의 오류를 확인한다.
 - 프론트엔드는 드라이브 API 함수([api.test](../../frontend/src/api.test.ts))와 [driveState.test](../../frontend/src/driveState.test.ts)(불러오기, `data_version` 콜백, 동작 뒤 상태 갱신, 오류)를 확인한다.
 - 실제 드라이브 확인은 사용자가 브라우저에서 연결한 뒤 한다.
