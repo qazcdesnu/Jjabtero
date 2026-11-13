@@ -2,6 +2,42 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M2-T6 `main` 첫 배포와 배포 확인(서비스, 비밀 파일, 도메인, 로그인·서재)
+
+- 시작일: 2026-11-13
+- 완료일: 2026-11-14
+- 근거 문서: [배포 설계](design/Deployment.md)
+- 참고 자료: 없음
+
+### 계획
+- 사용자가 Render Blueprint로 `main`을 배포하고, 비밀 파일과 환경 변수, 호스팅케이알 CNAME, OAuth 리디렉션 URI를 넣는다.
+- 서비스 상태, 로그인, 드라이브에서 받은 서재, 커스텀 도메인 인증서를 확인한다.
+
+### 진행 기록
+- 2026-11-13: PR #21(M2-T4)이 병합되었다. 사용자가 Render Blueprint로 `main`을 배포했다. 서비스 주소는 `https://jjabtero.onrender.com`이다. `/api/health`가 200이고 `/api/auth/me`가 로그인 켜짐이었다.
+- 2026-11-13: 사용자가 호스팅케이알에 CNAME `jjabtero` → `jjabtero.onrender.com`을 저장했다. ns1·ns3에는 보였으나 ns2·ns4와 구글 공용 DNS에는 보이지 않았다.
+- 2026-11-13: 로그인을 누르자 "OAuth 클라이언트 파일이 없습니다: /etc/secrets/google_client_secret.json"이 나왔다. 비밀 파일이 없던 것이다. 사용자가 비밀 파일을 저장했고 재배포가 끝난 16:28부터 로그인 요청이 구글 로그인으로 302 이동했으며, 리디렉션 주소가 `https://jjabtero.onrender.com/api/auth/callback`으로 `https`였다. 전달 헤더 설정이 Render에서도 동작함을 확인했다.
+- 2026-11-13: 작업 기록을 시작했다. 최신 `main`에서 작업 브랜치를 만들었다. CNAME은 여전히 ns2·ns4에 없다.
+- 2026-11-14: CNAME이 네 네임서버와 구글·클라우드플레어 공용 DNS에 모두 퍼졌다. `https://jjabtero.qazcde.kr/api/health`가 200이고, 인증서는 `jjabtero.qazcde.kr`용(Google Trust Services, 2027-02-11 만료)으로 발급되었다. 로그인 요청의 리디렉션 주소가 `https://jjabtero.qazcde.kr/api/auth/callback`이었다.
+- 2026-11-14: 사용자가 `https://jjabtero.qazcde.kr`에서 개인 Gmail로 로그인했다.
+- 2026-11-14: 사용자가 서재에 'Attention Is All You Need'가 보이고 드라이브 상태가 "드라이브 동기화됨"인 것을 확인했다. 서버가 시작할 때 드라이브에서 서재를 받아 왔다.
+
+### 결정 사항
+- 없음
+
+### 변경 파일
+- `docs/Roadmap.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+
+### 결과
+- `main`이 Render에 배포되어 `https://jjabtero.qazcde.kr`에서 HTTPS로 열린다. 본인 계정으로만 로그인되고, 서버가 드라이브에서 받은 서재가 보이며 동기화 상태가 정상이다. 코드 변경은 없었다.
+- 동의 화면은 아직 테스트 상태라 드라이브 연결이 7일마다 만료된다(현재 연결은 2026-11-20쯤 만료). M2-T5에서 프로덕션 게시한다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+- 배포 확인: `dig`로 네 네임서버와 공용 DNS의 CNAME, `curl`로 `/api/health` 200과 로그인 리디렉션 주소, `openssl`로 인증서를 확인했다. 로그인, 서재, 동기화 상태는 사용자가 브라우저에서 확인했다.
+
 ## M2-T4 Render 빌드·실행 설정과 첫 배포
 
 - 시작일: 2026-11-02
