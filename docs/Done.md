@@ -2,6 +2,60 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M2-T4 Render 빌드·실행 설정과 첫 배포
+
+- 시작일: 2026-11-02
+- 완료일: 2026-11-13
+- 근거 문서: [배포 설계](design/Deployment.md)
+- 참고 자료: 없음
+
+### 계획
+- 빌드 방식을 정하고 Docker 빌드 파일과 Render 설정 파일(`render.yaml`)을 만든다.
+- Render 앞단이 HTTPS를 끝내고 앱에는 `http`로 넘기므로, 앱이 `X-Forwarded-Proto`를 믿도록 실행 명령을 고친다. 그러지 않으면 OAuth 리디렉션 주소가 `http`로 만들어진다.
+- 로컬에 Docker가 없으므로 깨끗한 사본에서 같은 빌드 단계를 손으로 밟아 확인한다.
+- 사용자가 할 일(Render 서비스 만들기, 비밀 파일과 환경 변수, DNS CNAME, OAuth 리디렉션 URI)을 단계별로 안내하고, 첫 배포를 확인한다.
+
+### 진행 기록
+- 2026-11-02: 작업을 시작했다. PR #20까지 병합되어 최신 `main`에서 작업 브랜치를 만들었다.
+- 2026-11-02: Render 문서를 확인했다. Python 기본 환경은 `uv.lock`이 있으면 uv를 쓰지만, Node.js가 함께 있는지는 확인하지 못했다. 이 컴퓨터에는 Docker가 없다.
+- 2026-11-02: Render 앞단이 HTTPS를 끝내고 `http`로 넘겨, 지금대로면 OAuth 리디렉션 주소가 `http://jjabtero.qazcde.kr/...`로 만들어지는 문제를 찾았다. 실행 명령이 uvicorn의 전달 헤더 처리를 켜고 믿을 주소를 `JJABTERO_FORWARDED_ALLOW_IPS`(기본 `127.0.0.1`)로 받게 했다. 앱 골격 설계와 배포 설계에 적었다.
+- 2026-11-02: `Dockerfile`(Node로 프론트엔드 빌드, uv Python 3.14 이미지에 `uv sync --locked --no-dev`), `.dockerignore`, `render.yaml`(Docker, 무료, 싱가포르, 상태 확인 `/api/health`, 도메인, 환경 변수)을 만들었다. 시스템 구조의 디렉터리 표에 더하고 배포 설계의 미결정 사항을 빌드와 실행 절로 바꿨다. 백엔드 테스트는 134개다.
+- 2026-11-02: Docker가 없어 저장소의 커밋 대상 파일을 깨끗한 폴더에 복사해 Dockerfile의 단계를 손으로 밟았다. `npm ci`·빌드, `uv sync --locked --no-dev`가 되고 개발 의존성(pytest)은 빠졌으며, 앱의 기본 화면 경로가 빌드 결과를 가리켰다. 배포와 같은 환경 변수로 띄우자 `/api/health` 200, `/` 화면, 로그인 전 `/api/papers` 401, `Host: jjabtero.qazcde.kr`·`X-Forwarded-Proto: https` 요청의 로그인 리디렉션 주소가 `https://jjabtero.qazcde.kr/api/auth/callback`, 세션 쿠키가 Secure·HttpOnly·SameSite=Lax였다.
+- 2026-11-13: 사용자가 로드맵 진행 상황을 물었다. M2-T4는 사용자의 Render 작업을 기다리는 중이었고, 동의 화면이 테스트 상태라 11-01에 받은 드라이브 갱신 토큰이 만료되었을 것으로 보았다. 제품 비전의 인용 기반 연결·추천과 서재 통계·시각화가 어느 마일스톤에도 없다는 점을 알렸다.
+- 2026-11-13: 사용자가 드라이브를 다시 연결하려 했으나 8000번 포트를 다른 프로젝트(`TrainingSWhigh`)의 데모 서버가 쓰고 있었다. 사용자가 그 서버를 끄고 Jjabtero를 띄워 다시 연결했다. 토큰이 15:11에 새로 받아졌고 수동 동기화가 오류 없이 맞춤 상태였다.
+- 2026-11-13: 프론트엔드 빌드에서 "500kB보다 큰 묶음" 경고가 나온다고 사용자가 알렸다. 앱 코드 묶음이 약 935KB(gzip 약 206KB)이며 M1-T10부터 나던 경고다. 그동안 빌드 출력에서 오류와 성공 줄만 골라 보느라 알리지 못했다. 기능에는 영향이 없고, 서버가 응답을 압축하지 않아 배포 뒤 첫 로딩이 느릴 수 있어 이슈 I11로 등록했다.
+- 2026-11-13: 사용자가 작업 브랜치 대신 `main`을 배포하고, 그러려면 `main`에 병합하는 PR을 올리는 것이 맞다고 했다. 이 태스크는 빌드·실행 설정까지로 끝내고 로컬 빌드 재현으로 확인한 상태로 완료하며, 첫 배포와 확인은 로드맵에 새 태스크 M2-T6으로 더했다.
+
+### 결정 사항
+- 빌드는 Docker로 한다. 프론트엔드(Node)와 백엔드(Python)를 한 이미지에서 같은 방식으로 빌드할 수 있고, 기본 환경의 Node 유무에 기대지 않기 때문이다.
+- 앞단 프록시 헤더는 Render에서 `*`로 믿는다. Render 프록시의 주소가 정해져 있지 않고, 앱은 컨테이너 안에서 프록시를 거쳐서만 닿기 때문이다. 로컬 기본값은 `127.0.0.1`이다.
+- 지역은 사용자와 가까운 싱가포르로 한다.
+- 첫 배포는 이 작업 브랜치로 하고, 확인한 뒤 PR을 병합하고 Render 서비스의 브랜치를 `main`으로 바꾼다. 배포를 확인해야 작업을 완료할 수 있기 때문이다.
+- 위 결정을 바꾼다. 사용자 지시대로 `main`을 배포한다. 이 태스크는 빌드·실행 설정으로 끝내고, `main` 첫 배포와 확인은 M2-T6에서 한다. 아직 확인하지 않은 배포를 이 태스크의 결과로 적지 않기 위해서다.
+
+### 변경 파일
+- `Dockerfile`
+- `.dockerignore`
+- `render.yaml`
+- `src/jjabtero/cli.py`
+- `tests/test_cli.py`
+- `tests/conftest.py`
+- `docs/design/Deployment.md`
+- `docs/design/AppSkeleton.md`
+- `docs/Architecture.md`
+- `docs/Roadmap.md`
+- `docs/Issue.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+
+### 결과
+- 저장소에 Render용 Docker 빌드와 Blueprint 설정이 생겼다. 앱은 Render 앞단이 넘기는 `https` 정보를 믿어 OAuth 리디렉션 주소를 올바르게 만든다.
+- 실제 Render 배포와 확인은 M2-T6에서 한다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기, `uv run pytest`(테스트 134개), 프론트엔드 `npm test` 통과.
+- 깨끗한 사본에서 Dockerfile 단계(`npm ci`·빌드, `uv sync --locked --no-dev`)를 재현했고, 배포와 같은 환경 변수로 띄워 상태 확인, 로그인 차단, `https` 리디렉션 주소, Secure 쿠키를 확인했다. Docker 이미지 빌드 자체는 이 컴퓨터에 Docker가 없어 확인하지 못했다.
+
 ## M2-T3 서버 환경의 서재 보존(시작할 때 드라이브에서 받기, 바뀔 때 올리기) 구현
 
 - 시작일: 2026-11-01

@@ -6,6 +6,7 @@
 """
 
 import argparse
+import os
 from collections.abc import Sequence
 
 import uvicorn
@@ -50,4 +51,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         app = create_app(auth=settings)
     except AuthConfigError as error:
         parser.error(str(error))
-    uvicorn.run(app, host=args.host, port=args.port)
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        proxy_headers=True,
+        forwarded_allow_ips=os.environ.get("JJABTERO_FORWARDED_ALLOW_IPS", "127.0.0.1"),
+    )

@@ -26,6 +26,17 @@
 - 동의 화면은 M2-T5까지 "테스트" 상태로 둔다. 그동안은 7일마다 드라이브를 다시 연결한다.
 - M2-T5에서 홈페이지 주소 `https://jjabtero.qazcde.kr/about`, 개인정보처리방침 주소 `https://jjabtero.qazcde.kr/privacy`, 승인된 도메인 `qazcde.kr`을 브랜딩에 넣고 "프로덕션"으로 게시한다. `qazcde.kr`의 소유는 Google Search Console에서 DNS TXT 레코드로 이미 확인했다.
 
-## 5. 미결정 사항
+## 5. 빌드와 실행
 
-- Render 빌드 방식(Python과 Node를 함께 쓰는 기본 환경, 또는 Docker)과 실행 명령. M2-T4에서 정한다.
+- Docker로 빌드한다. Render의 Python 기본 환경에 Node.js가 있는지 확인할 수 없었고, Docker는 프론트엔드와 백엔드를 한 이미지에서 같은 방식으로 빌드하기 때문이다.
+- [Dockerfile](../../Dockerfile)은 두 단계다.
+  1. Node 이미지에서 `frontend/`를 `npm ci`, `npm run build`로 빌드한다.
+  2. uv가 든 Python 3.14 이미지에서 `uv sync --locked --no-dev`로 의존성과 패키지를 설치하고, 1단계의 `frontend/dist`를 `/app/frontend/dist`로 복사한다. 패키지는 편집 가능 설치(`src/` 그대로)라 앱의 기본 화면 경로(`frontend/dist`)가 맞는다.
+  - 실행 명령은 `jjabtero --host 0.0.0.0 --port $PORT`다. Render는 `PORT` 환경 변수로 받을 포트를 알려 준다.
+  - [.dockerignore](../../.dockerignore)는 가상 환경, `node_modules`, 빌드 결과, 데이터베이스, 비밀 파일, `private/`를 이미지에 넣지 않는다.
+- [render.yaml](../../render.yaml)은 Render Blueprint다. 서비스 하나(Docker, 무료 플랜, 싱가포르 지역), 상태 확인 경로 `/api/health`, 도메인 `jjabtero.qazcde.kr`, 환경 변수를 적는다.
+  - 값을 저장소에 둘 수 있는 것: `JJABTERO_INITIAL_SYNC=wait`, `JJABTERO_SECURE_COOKIE=1`, `JJABTERO_FORWARDED_ALLOW_IPS=*`, `JJABTERO_DB`·`JJABTERO_DATA_DIR`(컨테이너 안 `/app/data`), `JJABTERO_GOOGLE_CLIENT_SECRET=/etc/secrets/google_client_secret.json`.
+  - `JJABTERO_SESSION_SECRET`은 Render가 임의 값을 만든다(`generateValue`).
+  - 사용자가 대시보드에서 넣는 것(`sync: false`): `JJABTERO_ALLOWED_EMAIL`, `JJABTERO_GOOGLE_REFRESH_TOKEN`, `OPENALEX_API_KEY`(선택).
+  - 비밀 파일 `google_client_secret.json`은 Blueprint에 적을 수 없어 대시보드에서 올린다.
+- Render 앞단이 HTTPS를 끝내고 앱에는 `http`로 넘긴다. 앱이 원래 주소를 알아야 OAuth 리디렉션 주소를 `https://jjabtero.qazcde.kr/...`로 만들 수 있으므로, 실행 명령은 `X-Forwarded-Proto`·`X-Forwarded-For`를 믿을 주소를 `JJABTERO_FORWARDED_ALLOW_IPS`로 받는다([앱 골격 설계의 실행 명령](AppSkeleton.md#2-실행-명령)). Render에서는 앱 앞의 프록시 주소가 정해져 있지 않아 `*`로 둔다. 앱은 컨테이너 안에서 Render 프록시를 거쳐서만 닿으므로 위조된 헤더를 직접 보낼 길이 없다.

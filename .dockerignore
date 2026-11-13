@@ -1,0 +1,14 @@
+# 이미지에 넣지 않을 것. docs/design/Deployment.md 5절 참조.
+.git
+.venv
+**/__pycache__
+.pytest_cache
+frontend/node_modules
+frontend/dist
+*.db
+client_secret*.json
+*token*.json
+private
+.DS_Store
+.claude
+.githooks
