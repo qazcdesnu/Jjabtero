@@ -44,6 +44,7 @@
 | [서재 필터 설계](design/LibraryFilter.md) | 글자·태그·항목 종류·연도 필터, 사이드바 태그 목록 | M1-T6, M1-T7 |
 | [로그인 설계](design/Auth.md) | 구글 로그인으로 본인 계정만 허용, 세션, 막는 범위, 로그인 화면 | M2-T2 |
 | [배포 설계](design/Deployment.md) | Render 배포의 주소(jjabtero.qazcde.kr), 공개 범위, 비밀 값, 동의 화면 게시 | M2-T1 |
+| [공개 페이지 설계](design/PublicPages.md) | 로그인 없이 여는 앱 소개·개인정보처리방침 페이지, 검색 노출 막기 | M2-T5 |
 | [구글 드라이브 동기화 설계](design/DriveSync.md) | OAuth 인증, 드라이브 파일, 동기화·충돌, API, 머리줄 상태 | M1-T9 |
 | [읽기 상태와 메모 설계](design/ReadingStatus.md) | 읽기 상태·메모 데이터, 마이그레이션 0002, API, 상세 편집 | M1-T7 |
 

@@ -5,6 +5,7 @@
 @doc: docs/design/DriveSync.md#6-api
 @doc: docs/design/Auth.md#3-세션
 @doc: docs/design/DriveSync.md#8-서버-환경
+@doc: docs/design/PublicPages.md#1-제공-방식
 """
 
 import os
@@ -37,6 +38,7 @@ from jjabtero.drive_sync import (
     seed_token_from_env,
 )
 from jjabtero.papers_api import router as papers_router
+from jjabtero.public_pages import router as public_pages_router
 
 # @doc: docs/design/AppSkeleton.md#1-백엔드-앱
 DEFAULT_FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
@@ -83,6 +85,7 @@ def create_app(
     @doc: docs/design/DriveSync.md#6-api
     @doc: docs/design/Auth.md#3-세션
     @doc: docs/design/DriveSync.md#8-서버-환경
+    @doc: docs/design/PublicPages.md#1-제공-방식
     """
     settings = auth or auth_settings_from_env()
     settings.validate()
@@ -124,6 +127,7 @@ def create_app(
     app.include_router(papers_router)
     app.include_router(drive_router)
     app.include_router(auth_router)
+    app.include_router(public_pages_router)
     # 정적 파일 마운트는 "/" 전체를 차지하므로 API 라우터 다음에 둔다.
     if frontend_dist.is_dir():
         app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
