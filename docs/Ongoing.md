@@ -17,6 +17,8 @@
 - 2026-11-13: 사용자가 호스팅케이알에 CNAME `jjabtero` → `jjabtero.onrender.com`을 저장했다. ns1·ns3에는 보였으나 ns2·ns4와 구글 공용 DNS에는 보이지 않았다.
 - 2026-11-13: 로그인을 누르자 "OAuth 클라이언트 파일이 없습니다: /etc/secrets/google_client_secret.json"이 나왔다. 비밀 파일이 없던 것이다. 사용자가 비밀 파일을 저장했고 재배포가 끝난 16:28부터 로그인 요청이 구글 로그인으로 302 이동했으며, 리디렉션 주소가 `https://jjabtero.onrender.com/api/auth/callback`으로 `https`였다. 전달 헤더 설정이 Render에서도 동작함을 확인했다.
 - 2026-11-13: 작업 기록을 시작했다. 최신 `main`에서 작업 브랜치를 만들었다. CNAME은 여전히 ns2·ns4에 없다.
+- 2026-11-14: CNAME이 네 네임서버와 구글·클라우드플레어 공용 DNS에 모두 퍼졌다. `https://jjabtero.qazcde.kr/api/health`가 200이고, 인증서는 `jjabtero.qazcde.kr`용(Google Trust Services, 2027-02-11 만료)으로 발급되었다. 로그인 요청의 리디렉션 주소가 `https://jjabtero.qazcde.kr/api/auth/callback`이었다.
+- 2026-11-14: 사용자가 `https://jjabtero.qazcde.kr`에서 개인 Gmail로 로그인했다.
 
 ### 결정 사항
 - 없음
