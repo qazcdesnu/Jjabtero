@@ -18,14 +18,14 @@
 ## 3. 데이터와 비밀 값
 
 - Render 무료 플랜은 재시작·재배포·유휴 정지 때 파일 시스템이 지워진다. 서버에서는 구글 드라이브 사본을 서재의 원본으로 삼고, 서버의 SQLite 파일은 그때그때의 작업 사본이다. 서버는 시작할 때 드라이브에서 받기를 끝낸 뒤 요청을 받고, 끝날 때 대기 중인 변경을 올린다([구글 드라이브 동기화 설계의 서버 환경](DriveSync.md#8-서버-환경)).
-- 비밀 값은 저장소에 두지 않는다. OAuth 클라이언트 JSON은 Render 비밀 파일로, 드라이브 갱신 토큰(`JJABTERO_GOOGLE_REFRESH_TOKEN`)과 로그인 값(`JJABTERO_ALLOWED_EMAIL`, `JJABTERO_SESSION_SECRET`)은 환경 변수로 넣는다. 갱신 토큰은 로컬에서 드라이브를 연결한 뒤 `jjabtero --print-drive-token`으로 꺼낸다. 동의 화면이 테스트 상태인 동안에는 갱신 토큰이 7일 뒤 만료되므로, M2-T7에서 프로덕션으로 게시하기 전까지는 그때마다 새 값을 넣어야 한다.
+- 비밀 값은 저장소에 두지 않는다. OAuth 클라이언트 JSON은 Render 비밀 파일로, 드라이브 갱신 토큰(`JJABTERO_GOOGLE_REFRESH_TOKEN`)과 로그인 값(`JJABTERO_ALLOWED_EMAIL`, `JJABTERO_SESSION_SECRET`)은 환경 변수로 넣는다. 갱신 토큰은 로컬에서 드라이브를 연결한 뒤 `jjabtero --print-drive-token`으로 꺼낸다. 동의 화면은 프로덕션으로 게시되어 있으므로 갱신 토큰이 7일 만에 만료되지 않는다. 다만 6개월 동안 쓰지 않거나, 구글 계정에서 접근 권한을 취소하거나, 같은 클라이언트로 받은 갱신 토큰이 100개를 넘어 오래된 것이 무효가 되면 다시 연결해 새 값을 넣는다(4절).
 - OAuth 클라이언트에는 리디렉션 URI `https://jjabtero.qazcde.kr/api/drive/callback`과 `https://jjabtero.qazcde.kr/api/auth/callback`을 더한다. 로컬용 URI는 그대로 둔다.
 
 ## 4. OAuth 동의 화면 게시
 
-- 동의 화면은 M2-T7까지 "테스트" 상태로 둔다. 그동안은 7일마다 드라이브를 다시 연결한다.
-- M2-T7에서 홈페이지 주소 `https://jjabtero.qazcde.kr/about`, 개인정보처리방침 주소 `https://jjabtero.qazcde.kr/privacy`([공개 페이지 설계](PublicPages.md), M2-T5), 승인된 도메인 `qazcde.kr`을 브랜딩에 넣고 "프로덕션"으로 게시한다. `qazcde.kr`의 소유는 Google Search Console에서 DNS TXT 레코드로 이미 확인했다.
-- 게시한 뒤 로컬에서 드라이브를 다시 연결하고, `jjabtero --print-drive-token`으로 꺼낸 새 갱신 토큰을 서버 환경 변수에 넣는다. 테스트 상태에서 받은 토큰은 게시한 뒤에도 7일이 지나면 만료되기 때문이다.
+- 동의 화면은 2026-11-14에 "프로덕션"으로 게시했다(M2-T7). 그 전의 "테스트" 상태에서는 갱신 토큰이 7일 뒤 만료되어 그때마다 드라이브를 다시 연결해야 했다.
+- 게시할 때 홈페이지 주소 `https://jjabtero.qazcde.kr/about`, 개인정보처리방침 주소 `https://jjabtero.qazcde.kr/privacy`([공개 페이지 설계](PublicPages.md), M2-T5), 승인된 도메인 `qazcde.kr`을 브랜딩에 넣었다. 로고는 넣지 않는다. 로고를 넣으면 브랜드 심사가 필요하기 때문이다. 범위(`openid email`, `drive.file`)가 민감하지 않아 앱 심사 없이 게시된다. `qazcde.kr`의 소유는 Google Search Console에서 DNS TXT 레코드로 이미 확인했다.
+- 게시한 뒤 로컬에서 드라이브를 다시 연결하고, `jjabtero --print-drive-token`으로 꺼낸 새 갱신 토큰을 서버 환경 변수에 넣는다. 테스트 상태에서 받은 토큰은 게시한 뒤에도 7일이 지나면 만료되기 때문이다. 다시 연결해야 할 때도 같은 순서를 밟는다. 로컬의 연결 해제는 로컬 토큰 파일만 지우고 구글에 토큰 취소를 요청하지 않으므로 서버의 토큰에는 영향이 없다.
 
 ## 5. 빌드와 실행
 
