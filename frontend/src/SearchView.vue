@@ -8,13 +8,15 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
+import SelectButton from 'primevue/selectbutton'
 import Tag from 'primevue/tag'
 import { computed } from 'vue'
 import type { SearchResult } from './api'
-import { SEARCH_SOURCES, createSearchState, sourceLabel } from './searchState'
+import { SEARCH_MODES, SEARCH_SOURCES, createSearchState, sourceLabel } from './searchState'
 
 const props = defineProps<{ search: ReturnType<typeof createSearchState> }>()
 const state = props.search.state
+const placeholder = computed(() => SEARCH_MODES.find((mode) => mode.value === state.mode)?.placeholder ?? '')
 
 const selection = computed({
   get: () => props.search.rows.value.find((row) => row.key === state.selectedKey) ?? null,
@@ -27,8 +29,17 @@ const selection = computed({
     <form class="flex flex-wrap items-center gap-3" @submit.prevent="search.run()">
       <IconField class="min-w-64 flex-1">
         <InputIcon class="pi pi-search" />
-        <InputText v-model="state.query" placeholder="논문 제목, 저자, 주제로 검색" fluid />
+        <InputText v-model="state.query" :placeholder="placeholder" fluid />
       </IconField>
+      <SelectButton
+        v-model="state.mode"
+        :options="[...SEARCH_MODES]"
+        option-label="label"
+        option-value="value"
+        :allow-empty="false"
+        size="small"
+        aria-label="검색 방식"
+      />
       <div class="flex items-center gap-3">
         <label v-for="source in SEARCH_SOURCES" :key="source.name" class="flex items-center gap-1 text-sm">
           <Checkbox v-model="state.sources" :value="source.name" />

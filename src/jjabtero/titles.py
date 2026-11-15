@@ -14,6 +14,7 @@ def normalize(text: str) -> str:
 
     @doc: docs/design/ReaderCitations.md#4-논문-찾기
     @doc: docs/design/Citations.md#9-semantic-scholar-참고문헌
+    @doc: docs/design/PaperSearch.md#2-검색-결과
     """
     plain = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower()
     return _NOT_WORD.sub(" ", plain).strip()

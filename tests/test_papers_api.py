@@ -60,10 +60,10 @@ def test_search_marks_papers_in_library(client: TestClient) -> None:
 
 
 @pytest.mark.parametrize(
-    "params", [{"q": "   "}, {"q": "x", "sources": "scholar"}, {"q": "x", "limit": 0}]
+    "params", [{"q": "   "}, {"q": "x", "sources": "scholar"}, {"q": "x", "limit": 0}, {"q": "x", "mode": "venue"}]
 )
 def test_search_rejects_invalid_query(client: TestClient, params: dict[str, str]) -> None:
-    """빈 검색어, 모르는 검색원, 범위 밖 결과 수는 422다.
+    """빈 검색어, 모르는 검색원, 범위 밖 결과 수, 모르는 검색 방식은 422다.
 
     @doc: docs/design/PaperSearch.md#5-테스트
     """
