@@ -1,5 +1,6 @@
 <!-- @doc: docs/design/Reader.md#6-화면 -->
 <!-- @doc: docs/design/Reader.md#1-뷰어-라이브러리 -->
+<!-- @doc: docs/design/ReaderCitations.md#2-인용-표시-찾기 -->
 <script setup lang="ts">
 import 'pdfjs-dist/web/pdf_viewer.css'
 import {
@@ -36,6 +37,17 @@ import {
   type Rect,
 } from './annotations'
 import {
+  anchorFromDest,
+  isCitationDest,
+  linkRect,
+  referenceEntryText,
+  type Anchor,
+  type CitationLink,
+  type TextPiece,
+} from './citationLinks'
+import { createReferencePreview } from './referencePreview'
+import ReferencePreview from './ReferencePreview.vue'
+import {
   clampPage,
   createPositionSaver,
   fitWidthScale,
@@ -52,7 +64,7 @@ import {
 GlobalWorkerOptions.workerSrc = workerUrl
 
 const props = defineProps<{ paperId: number; title: string }>()
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; added: [] }>()
 
 const scroller = ref<HTMLElement | null>(null)
 const pageElements = ref<HTMLElement[]>([])
@@ -81,6 +93,117 @@ const drafting = ref<{ page: number; rect: Rect; note: string; left: number; top
 const listOpen = ref(false)
 const dragPreview = computed(() => (dragging.value ? dragRect(dragging.value.start, dragging.value.current) : null))
 
+// 인용 링크(쪽마다)와 참고문헌 목적지. 링크 위에 요소를 겹치지 않고 마우스 위치로 확인한다.
+const citationLinks = new Map<number, CitationLink[]>()
+const pageTexts = new Map<number, Promise<{ pieces: TextPiece[]; right: number }>>()
+let anchorsPromise: Promise<Map<string, Anchor>> | null = null
+const hoveredLink = ref<CitationLink | null>(null)
+const preview = createReferencePreview(props.paperId, entryText, () => emit('added'))
+
+async function readCitationLinks(page: number): Promise<void> {
+  const pdf = doc.value
+  if (!pdf || citationLinks.has(page)) return
+  citationLinks.set(page, [])
+  const pdfPage = await pdf.getPage(page)
+  const viewport = pdfPage.getViewport({ scale: 1 })
+  const found: CitationLink[] = []
+  for (const annotation of await pdfPage.getAnnotations()) {
+    if (annotation.subtype !== 'Link' || !isCitationDest(annotation.dest)) continue
+    const [x1, y1, x2, y2] = annotation.rect as number[]
+    const corners = [...viewport.convertToViewportPoint(x1, y1), ...viewport.convertToViewportPoint(x2, y2)] as number[]
+    const rect = linkRect(corners, viewport.width, viewport.height)
+    found.push({ page, dest: annotation.dest, rects: [rect] })
+  }
+  citationLinks.set(page, found)
+}
+
+function readAnchors(): Promise<Map<string, Anchor>> {
+  anchorsPromise ??= (async () => {
+    const pdf = doc.value!
+    const anchors = new Map<string, Anchor>()
+    const pages = new Map<string, number>()
+    const destinations = (await pdf.getDestinations()) as unknown as Map<string, unknown[]> | Record<string, unknown[]>
+    const entries = destinations instanceof Map ? [...destinations.entries()] : Object.entries(destinations)
+    for (const [name, dest] of entries) {
+      if (!isCitationDest(name) || !Array.isArray(dest) || !dest[0] || typeof dest[0] !== 'object') continue
+      const ref = dest[0] as { num: number; gen: number }
+      const key = `${ref.num}R${ref.gen}`
+      if (!pages.has(key)) pages.set(key, (await pdf.getPageIndex(ref)) + 1)
+      anchors.set(name, anchorFromDest(name, pages.get(key)!, dest))
+    }
+    return anchors
+  })()
+  return anchorsPromise
+}
+
+function readPageText(page: number) {
+  let found = pageTexts.get(page)
+  if (!found) {
+    found = (async () => {
+      const pdfPage = await doc.value!.getPage(page)
+      const content = await pdfPage.getTextContent()
+      const pieces = content.items.flatMap((item) =>
+        'str' in item
+          ? [{ str: item.str, x: item.transform[4] as number, y: item.transform[5] as number, width: item.width }]
+          : [],
+      )
+      return { pieces, right: pdfPage.view[2] }
+    })()
+    pageTexts.set(page, found)
+  }
+  return found
+}
+
+async function entryText(dest: string): Promise<string> {
+  const anchors = await readAnchors()
+  const anchor = anchors.get(dest)
+  if (!anchor) return ''
+  const { pieces, right } = await readPageText(anchor.page)
+  return referenceEntryText(anchor, [...anchors.values()], pieces, right)
+}
+
+async function goToDest(dest: string) {
+  const element = scroller.value
+  const anchor = (await readAnchors()).get(dest)
+  if (!element || !anchor) return
+  const pdfPage = await doc.value!.getPage(anchor.page)
+  const [, bottom, , top] = pdfPage.view
+  const offset = anchor.y === null ? 0 : (top - anchor.y) / (top - bottom || 1)
+  element.scrollTop = Math.max(tops.value[anchor.page - 1] + offset * heights.value[anchor.page - 1] - 40, 0)
+  update()
+}
+
+function checkCitationHover(event: MouseEvent) {
+  const target = event.target as HTMLElement
+  if (target.closest('.reader-popup')) return
+  const pageElement = noteMode.value ? null : pageOf(target)
+  const page = pageElement ? Number(pageElement.dataset.page) : 0
+  const hit = pageElement ? hitTest(page, pagePoint(pageElement, event), citationLinks.get(page) ?? []) : null
+  if (!hit) {
+    if (hoveredLink.value) {
+      hoveredLink.value = null
+      preview.leave()
+    }
+    return
+  }
+  hoveredLink.value = hit
+  const rect = hit.rects[0]
+  const element = scroller.value!
+  const linkTop = tops.value[page - 1] + rect.y * heights.value[page - 1]
+  const linkBottom = linkTop + rect.h * heights.value[page - 1]
+  // 아래 공간이 모자라면 위에 띄운다.
+  const above = linkBottom + 260 > element.scrollTop + element.clientHeight
+  preview.hover(hit.dest, {
+    // 상자(너비 384px)가 오른쪽으로 넘치지 않게 한다.
+    left: Math.max(
+      Math.min(pageElement!.offsetLeft + rect.x * pageElement!.offsetWidth, element.scrollLeft + element.clientWidth - 392),
+      8,
+    ),
+    top: above ? linkTop - 6 : linkBottom + 6,
+    above,
+  })
+}
+
 function pagePoint(pageElement: HTMLElement, event: MouseEvent) {
   const box = pageElement.getBoundingClientRect()
   return { x: (event.clientX - box.left) / box.width, y: (event.clientY - box.top) / box.height }
@@ -100,7 +223,10 @@ function onMouseDown(event: MouseEvent) {
 
 function onMouseMove(event: MouseEvent) {
   const drag = dragging.value
-  if (!drag) return
+  if (!drag) {
+    checkCitationHover(event)
+    return
+  }
   const pageElement = pageElements.value[drag.page - 1]
   if (pageElement) drag.current = pagePoint(pageElement, event)
 }
@@ -201,6 +327,13 @@ function onMouseUp(event: MouseEvent) {
     return
   }
   pending.value = null
+  if (hoveredLink.value) {
+    // 글을 고르지 않고 인용 링크를 누르면 참고문헌 쪽으로 간다.
+    void goToDest(hoveredLink.value.dest)
+    preview.close()
+    editing.value = null
+    return
+  }
   const pageElement = pageOf(event.target as Node)
   if (!pageElement) {
     editing.value = null
@@ -272,6 +405,7 @@ async function removeAnnotation() {
 
 function onKeyDown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
+    preview.close()
     pending.value = null
     editing.value = null
     drafting.value = null
@@ -330,6 +464,7 @@ async function renderPage(page: number) {
   } catch {
     // 다시 그리느라 취소된 경우다.
   }
+  void readCitationLinks(page)
 }
 
 function update() {
@@ -402,6 +537,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
+  preview.close()
   void saver.flush()
   for (const page of [...rendered.keys()]) clearPage(page)
   void loadingTask?.destroy()
@@ -463,7 +599,7 @@ onUnmounted(() => {
     <div
       ref="scroller"
       class="relative min-h-0 flex-1 overflow-auto"
-      :class="{ 'reader-note-mode': noteMode }"
+      :class="{ 'reader-note-mode': noteMode, 'cursor-pointer': hoveredLink }"
       @scroll.passive="update"
       @mousedown="onMouseDown"
       @mousemove="onMouseMove"
@@ -594,6 +730,7 @@ onUnmounted(() => {
           <Button label="저장" size="small" @click="saveDraft" />
         </div>
       </div>
+      <ReferencePreview :preview="preview" />
     </div>
 
     <aside

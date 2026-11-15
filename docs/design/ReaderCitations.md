@@ -20,10 +20,11 @@
 **링크가 있는 PDF**(M6-T3)
 
 - LaTeX의 `hyperref`로 만든 PDF(arXiv 논문 대부분)는 인용 표시마다 링크 주석이 있고, 목적지 이름이 `cite.`로 시작한다. 'Attention Is All You Need'는 링크 113개 가운데 76개가 `cite.` 목적지였다(예: `cite.hochreiter1997`, 2026-11-15 확인).
-- 쪽을 그릴 때 pdf.js의 `page.getAnnotations()`로 링크 주석을 읽고, 목적지 이름이 `cite.`로 시작하는 것을 인용 링크로 삼는다. 목적지는 `pdf.getDestination(이름)`으로 [쪽 참조, `XYZ`, 왼쪽, 위, 배율]을 얻고 `pdf.getPageIndex`로 쪽 번호를 얻는다. 저자-연도 인용(`Zhang et al., 2025b, Wang et al., 2025`)은 저자마다 링크가 따로 있으므로 각각 따로 미리 본다.
-- 링크 영역은 쪽 크기에 대한 비율(0~1)로 바꿔 둔다. 하이라이트와 같은 좌표계다([PDF 리더 설계](Reader.md#4-데이터)).
+- 쪽을 그릴 때 pdf.js의 `page.getAnnotations()`로 링크 주석을 읽고, 목적지 이름이 `cite.`로 시작하는 것([isCitationDest](../../frontend/src/citationLinks.ts#isCitationDest))을 인용 링크([CitationLink](../../frontend/src/citationLinks.ts#CitationLink))로 삼는다. 쪽마다 한 번만 읽어 둔다. 목적지는 `pdf.getDestination(이름)`으로 [쪽 참조, `XYZ`, 왼쪽, 위, 배율]을 얻고 `pdf.getPageIndex`로 쪽 번호를 얻는다. 저자-연도 인용(`Zhang et al., 2025b, Wang et al., 2025`)은 저자마다 링크가 따로 있으므로 각각 따로 미리 본다.
+- 링크 영역은 쪽 크기에 대한 비율(0~1)로 바꿔 둔다([linkRect](../../frontend/src/citationLinks.ts#linkRect), 꼭짓점은 pdf.js `PageViewport.convertToViewportPoint`로 화면 좌표로 바꾼다). 하이라이트와 같은 좌표계다([PDF 리더 설계](Reader.md#4-데이터)).
 - 링크 위에 요소를 겹쳐 두지 않는다. 겹치면 그 아래 글을 고를 수 없어 하이라이트가 끊기기 때문이다. 대신 리더의 마우스 이동에서 마우스 위치가 인용 링크 영역 안인지 확인한다(하이라이트를 누를 때 쓰는 `hitTest`와 같은 방식). 안이면 마우스 모양을 손가락으로 바꾼다.
-- 인용 링크를 누르면(글을 고르지 않았을 때) 목적지 쪽으로 이동한다.
+- 인용 링크를 누르면(글을 고르지 않았을 때) 목적지 쪽의 그 위치로 이동하고 상자를 닫는다.
+- 이 일은 리더 화면([ReaderView](../../frontend/src/ReaderView.vue))이 한다.
 
 **링크가 없는 PDF**(M6-T4)
 
@@ -31,13 +32,14 @@
 
 ## 3. 참고문헌 항목 읽기
 
-- 목적지 쪽의 글(`page.getTextContent()`)을 PDF 좌표(아래가 0인 y, 글자의 기준선)로 읽는다.
+- 인용 목적지는 처음 필요할 때 `pdf.getDestinations()`로 한 번에 읽어 [Anchor](../../frontend/src/citationLinks.ts#Anchor)로 바꿔 둔다([anchorFromDest](../../frontend/src/citationLinks.ts#anchorFromDest)). 목적지 쪽의 글(`page.getTextContent()`)을 PDF 좌표(아래가 0인 y, 글자의 기준선, 너비)로 읽어 [TextPiece](../../frontend/src/citationLinks.ts#TextPiece)로 둔다. 쪽마다 한 번만 읽는다.
+- 데모 PDF에서 `cite.hochreiter1997`의 위 좌표는 453.4, 항목 첫 줄 기준선은 442.5, 앞 항목의 마지막 줄은 462.3이었다(2026-11-15 확인). 목적지의 위 좌표가 첫 줄보다 약 11pt 위에 있으므로 아래 경계 규칙으로 앞 항목이 섞이지 않는다.
 - 같은 쪽의 모든 인용 목적지를 모아 항목의 경계를 정한다. 참고문헌 목록에서 각 항목의 머리가 곧 다른 인용의 목적지이기 때문이다.
-  - 단(column): 이 목적지보다 왼쪽 좌표가 50pt 넘게 큰 목적지가 있으면 그 왼쪽 좌표를 이 단의 오른쪽 끝으로 본다. 없으면 쪽의 오른쪽 끝이다.
-  - 아래 끝: 같은 단(왼쪽 좌표 차이 50pt 이하)에서 이 목적지 바로 아래 목적지의 위 좌표다. 없으면 위 좌표에서 80pt(약 6줄) 아래까지다.
-  - 글 조각 가운데 왼쪽 좌표가 단 안에 있고 기준선이 위 좌표 + 2pt 이하이며 아래 끝 + 2pt보다 위인 것을 위에서 아래, 왼쪽에서 오른쪽 순서로 잇는다. 줄 끝 하이픈으로 끊긴 낱말은 붙이고, 빈칸은 하나로 줄이며, 600자에서 자른다.
+  - 단(column): 이 목적지보다 왼쪽 좌표가 50pt([COLUMN_GAP](../../frontend/src/citationLinks.ts#COLUMN_GAP)) 넘게 큰 목적지가 있으면 그 왼쪽 좌표를 이 단의 오른쪽 끝으로 본다. 없으면 쪽의 오른쪽 끝이다.
+  - 아래 끝: 같은 단(왼쪽 좌표 차이 50pt 이하)에서 이 목적지 바로 아래 목적지의 위 좌표다. 없으면 위 좌표에서 80pt([ENTRY_MAX_DROP](../../frontend/src/citationLinks.ts#ENTRY_MAX_DROP), 약 6줄) 아래까지다.
+  - 글 조각 가운데 왼쪽 좌표가 단 안에 있고 기준선이 위 좌표 + 2pt 이하이며 아래 끝 + 2pt보다 위인 것을 위에서 아래, 왼쪽에서 오른쪽 순서로 잇는다. 같은 줄(기준선 차이 2pt 이하)의 조각 사이가 0.5pt 넘게 떨어져 있으면 빈칸을 넣는다. pdf.js 조각에는 빈칸이 빠져 있기도 해서, 빈칸 없이 이으면 `translate.CoRR`처럼 붙어 제목 후보 고르기와 검색이 틀렸다(2026-11-15 확인). 줄 끝 하이픈으로 끊긴 낱말은 붙이고, 빈칸은 하나로 줄이며, 600자([ENTRY_MAX_CHARS](../../frontend/src/citationLinks.ts#ENTRY_MAX_CHARS))에서 자른다.
 - 목적지가 `XYZ`가 아니어서 왼쪽 좌표가 없으면 단을 쪽 전체로 본다.
-- 이 계산은 순수 함수(예정 이름 `referenceEntryText`, 모듈 `frontend/src/citationLinks.ts`)로 두어 Vitest로 확인한다.
+- 이 계산은 순수 함수 [referenceEntryText](../../frontend/src/citationLinks.ts#referenceEntryText)로 두어 Vitest로 확인한다.
 
 ## 4. 논문 찾기
 
@@ -70,18 +72,21 @@
 
 ## 5. 상자
 
-- 인용 링크 위에 마우스를 **1초** 올려 두면 상자를 띄운다. 1초 전에 벗어나면 띄우지 않는다. 지나가다 스치는 것까지 띄우면 읽기를 방해하기 때문이다.
-- 상자는 인용 표시 바로 아래(아래 공간이 모자라면 위)에 띄운다. 마우스가 인용 표시에서 상자로 옮겨 가도 닫히지 않고, 둘 다에서 벗어나 0.3초가 지나면 닫힌다. `Esc`로도 닫힌다.
-- 찾는 동안에는 항목 글과 "찾는 중…"을 보여 준다.
+- 상태(1초 기다림, 열고 닫기, 찾기, 담기)는 [createReferencePreview](../../frontend/src/referencePreview.ts#createReferencePreview)가, 상자 화면은 [ReferencePreview](../../frontend/src/ReferencePreview.vue)가 맡는다. API 호출은 [resolveReference](../../frontend/src/api.ts#resolveReference)(타입 [ReferenceMatch](../../frontend/src/api.ts#ReferenceMatch))다.
+- 인용 링크 위에 마우스를 **1초**([HOVER_DELAY_MS](../../frontend/src/referencePreview.ts#HOVER_DELAY_MS)) 올려 두면 상자를 띄운다. 1초 전에 벗어나면 띄우지 않는다. 지나가다 스치는 것까지 띄우면 읽기를 방해하기 때문이다.
+- 상자는 인용 표시 바로 아래(아래 공간이 모자라면 위)에 띄운다. 마우스가 인용 표시에서 상자로 옮겨 가도 닫히지 않고, 둘 다에서 벗어나 0.3초([CLOSE_DELAY_MS](../../frontend/src/referencePreview.ts#CLOSE_DELAY_MS))가 지나면 닫힌다. 상자의 위치([PreviewPlace](../../frontend/src/referencePreview.ts#PreviewPlace))는 링크 왼쪽에 맞추되, 상자가 리더 오른쪽으로 넘치지 않게 한다. 링크 아래 260px 안에 공간이 없으면 위에 띄운다. `Esc`로도 닫힌다.
+- 찾는 동안에는 "찾는 중…"을 보여 준다. 링크마다 찾은 결과를 리더를 연 동안 기억하고, 실패(오류)는 기억하지 않아 다시 올리면 다시 찾는다. 항목 글은 상자 아래에 작게 보여 준다.
 - 찾으면 제목(DOI 또는 OpenAlex로 이어지는 링크), 저자·연도·게재처, 피인용 수, 서재 상태("서재에 있음", "PDF 있음")를 보여 주고, 아래 두 버튼을 둔다.
-  - **서재에 담고 PDF 받기**: 서재에 없으면 담고([citedWorkInput](../../frontend/src/citationListState.ts#citedWorkInput)), PDF가 없으면 공개 PDF를 받는다(`POST /api/papers/{id}/pdf/fetch`). 끝나면 "서재에 담고 PDF를 받았습니다" 또는 "공개 PDF가 없어 서재에만 담았습니다"를 알리고 서재 목록을 다시 읽는다. 이미 서재에 있고 PDF도 있으면 이 버튼 대신 "서재에 있음 · PDF 있음"을 보인다.
-  - **새 탭에서 읽기**: 서재 논문에 PDF가 있으면 그 PDF(`/api/papers/{id}/pdf`), 없으면 공개 PDF 주소를 새 탭에서 연다. 공개 PDF도 없으면 이름을 "원문 페이지 열기"로 바꾸고 DOI(없으면 OpenAlex) 페이지를 연다.
+  - **서재에 담고 PDF 받기**: 서재에 없으면 담고([citedWorkInput](../../frontend/src/citationListState.ts#citedWorkInput)), PDF가 없으면 공개 PDF를 받는다(`POST /api/papers/{id}/pdf/fetch`). 끝나면 "서재에 담고 PDF를 받았습니다." 또는 "서재에 담았습니다. PDF는 받지 못했습니다: <까닭>"을 알리고 서재 목록을 다시 읽는다(리더의 `added` 알림을 `App.vue`가 받는다). 이미 서재에 있는 DOI면 그 논문에 PDF만 받는다. 이미 서재에 있고 PDF도 있으면 이 버튼 대신 "서재에 있음 · PDF 있음"을 보인다.
+  - **새 탭에서 읽기**([readTarget](../../frontend/src/referencePreview.ts#readTarget)): 서재 논문에 PDF가 있으면 그 PDF(`/api/papers/{id}/pdf`), 없으면 공개 PDF 주소를 새 탭에서 연다. 공개 PDF도 없으면 이름을 "원문 페이지 열기"로 바꾸고 DOI(없으면 OpenAlex) 페이지를 연다.
 - 못 찾으면 항목 글과 "이 참고문헌을 찾지 못했습니다"를 보여 준다.
 
-## 6. 미결정 사항
-
-- 링크가 없는 PDF의 인용 표시 모양과 참고문헌 절 찾기 규칙(M6-T4에서 정한다).
-
-## 7. 테스트
+## 6. 테스트
 
 - [test_references](../../tests/test_references.py)는 글 다듬기, 제목 후보 고르기(번호 표시, 이름 머리글자, `et al.`, APA 형식), 맞추기 규칙(제목 그대로, 낱말 비율, 짧은 제목 빼기, 비슷한 낱말 빼기, 연도), API(참고문헌에서 찾기와 공개 PDF 주소, arXiv DOI, 서재에 담은 뒤의 서재 논문 ID, 검색으로 찾기, 같은 글은 다시 검색하지 않기, 찾지 못함, 없는 논문, 빈 글)를 가짜 OpenAlex로 확인한다.
+- [citationLinks.test](../../frontend/src/citationLinks.test.ts)는 인용 목적지 고르기, 링크 영역 비율, 목적지 좌표 읽기(`XYZ`, `FitH`, 그 밖), 항목 글 읽기(같은 단, 오른쪽 단, 아래 목적지가 없을 때, 좌표가 없을 때, 떨어진 조각 사이 빈칸, 하이픈, 600자)를 확인한다.
+- [referencePreview.test](../../frontend/src/referencePreview.test.ts)는 새 탭 주소 고르기, 1초 기다림과 스치기, 링크에서 상자로 옮겨 가기와 0.3초 뒤 닫기, 같은 링크를 다시 찾지 않기, 실패 표시와 다시 시도, 서재에 담고 PDF 받기, 이미 있는 논문, PDF를 못 받았을 때의 알림을 가짜 타이머로 확인한다.
+
+## 7. 미결정 사항
+
+- 링크가 없는 PDF의 인용 표시 모양과 참고문헌 절 찾기 규칙(M6-T4에서 정한다).
