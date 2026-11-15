@@ -9,15 +9,16 @@
 """
 
 import os
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx2
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 from starlette.types import Scope
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel
 
@@ -34,7 +35,7 @@ from jjabtero.citation_graph import router as citation_graph_router
 from jjabtero.citations import CACHE_FILE, CitationSync
 from jjabtero.citations import paper_router as paper_citations_router
 from jjabtero.citations import router as citations_router
-from jjabtero.db import create_db_engine, default_db_path, upgrade_database
+from jjabtero.db import create_db_engine, default_db_path
 from jjabtero.drive_api import router as drive_router
 from jjabtero.drive_sync import (
     DrivePaths,
@@ -42,6 +43,7 @@ from jjabtero.drive_sync import (
     FilesLike,
     default_drive_paths,
     seed_token_from_env,
+    upgrade_keeping_sync,
 )
 from jjabtero.papers_api import router as papers_router
 from jjabtero.pdfs import PdfStore
@@ -95,6 +97,23 @@ def health() -> Health:
     return Health(status="ok", version=__version__)
 
 
+_WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+_NO_FRESH_PREFIXES = ("/api/drive/", "/api/auth/")
+
+
+async def _fresh_before_write(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    """서재를 바꾸는 요청 앞에서, 마지막 확인이 30초보다 오래되었으면 드라이브를 먼저 확인한다.
+
+    다른 곳이 올린 변경을 받지 않은 채 쓰면 둘 다 바뀌어 충돌이 되기 때문이다.
+
+    @doc: docs/design/DriveSync.md#5-동기화
+    """
+    path = request.url.path
+    if request.method in _WRITE_METHODS and path.startswith("/api/") and not path.startswith(_NO_FRESH_PREFIXES):
+        await run_in_threadpool(request.app.state.drive.ensure_fresh)
+    return await call_next(request)
+
+
 def _default_http_client() -> httpx2.Client:
     return httpx2.Client(timeout=10, headers={"User-Agent": f"Jjabtero/{__version__}"})
 
@@ -127,10 +146,13 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
         app.state.citations.stop()
+        app.state.drive.stop()
         app.state.drive.flush()
 
     app = FastAPI(title="Jjabtero", version=__version__, lifespan=lifespan)
     app.state.auth = settings
+    # 로그인 검사보다 먼저 더해 안쪽에 둔다. 로그인한 요청만 드라이브를 확인한다.
+    app.middleware("http")(_fresh_before_write)
     if settings.enabled:
         # 나중에 더한 미들웨어가 바깥을 감싸므로, 세션을 로그인 검사보다 뒤에 더해 먼저 풀리게 한다.
         app.middleware("http")(require_login)
@@ -144,15 +166,15 @@ def create_app(
         )
     path = db_path or default_db_path()
     app.state.engine = create_db_engine(path)
-    upgrade_database(app.state.engine)
+    paths = drive_paths or default_drive_paths(path)
+    # 스키마만 올린 것을 이 컴퓨터의 변경으로 세지 않도록 동기화 상태를 이어받는다.
+    upgrade_keeping_sync(app.state.engine, paths.state)
     app.state.http_client = http_client or _default_http_client()
-    drive_options = {"files_factory": drive_files} if drive_files else {}
-    app.state.drive = DriveSync(
-        app.state.engine,
-        drive_paths or default_drive_paths(path),
-        app.state.http_client,
-        **drive_options,
-    )
+    drive_options: dict = {"files_factory": drive_files} if drive_files else {}
+    watch = os.environ.get("JJABTERO_DRIVE_WATCH_SECONDS")
+    if watch is not None:
+        drive_options["watch_interval"] = float(watch)
+    app.state.drive = DriveSync(app.state.engine, paths, app.state.http_client, **drive_options)
     seed_token_from_env(app.state.drive.tokens)
     if wait_initial_sync is None:
         wait_initial_sync = os.environ.get("JJABTERO_INITIAL_SYNC") == "wait"

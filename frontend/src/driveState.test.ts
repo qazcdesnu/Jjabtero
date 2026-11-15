@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DriveStatus } from './api'
-import { createDriveState, syncedLabel } from './driveState'
+import { CHECK_GAP_MS, createDriveState, syncedLabel } from './driveState'
 
 function status(fields: Partial<DriveStatus> = {}): DriveStatus {
   return { state: 'idle', message: '', last_synced_at: null, pending: false, data_version: 0, ...fields }
@@ -13,6 +13,7 @@ function setup(responses: DriveStatus[] = [status()]) {
   const deps = {
     fetchDriveStatus: vi.fn(async () => responses.shift() ?? status()),
     syncDrive: vi.fn(async () => status({ data_version: 1 })),
+    checkDrive: vi.fn(async () => status({ data_version: 2 })),
     resolveDrive: vi.fn(async () => status()),
     disconnectDrive: vi.fn(async () => status({ state: 'disconnected' })),
   }
@@ -68,5 +69,28 @@ describe('syncedLabel', () => {
     expect(syncedLabel(status({ last_synced_at: '2026-11-01T07:05:00+00:00' }))).toMatch(
       /^드라이브 동기화됨 · 11-01 \d\d:05$/,
     )
+  })
+
+  it('창으로 돌아오면 드라이브를 확인하되, 15초 안에는 다시 하지 않고 충돌 중에는 하지 않는다', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', new EventTarget())
+    vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' }))
+    const { drive, deps, onDataChanged } = setup([status()])
+    await drive.start()
+    window.dispatchEvent(new Event('focus'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(deps.checkDrive).toHaveBeenCalledTimes(1)
+    expect(onDataChanged).toHaveBeenCalledTimes(1)
+    window.dispatchEvent(new Event('focus'))
+    expect(deps.checkDrive).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(CHECK_GAP_MS)
+    drive.state.status = status({ state: 'conflict' })
+    drive.checkNow()
+    expect(deps.checkDrive).toHaveBeenCalledTimes(1)
+    drive.state.status = status()
+    drive.checkNow()
+    expect(deps.checkDrive).toHaveBeenCalledTimes(2)
+    drive.stop()
+    vi.unstubAllGlobals()
   })
 })

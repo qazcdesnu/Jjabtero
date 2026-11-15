@@ -12,6 +12,7 @@ import secrets
 import sqlite3
 import tempfile
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -21,7 +22,7 @@ from typing import Literal, Protocol
 import httpx2
 import platformdirs
 from pydantic import BaseModel
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, create_engine, text
 
 from jjabtero.db import upgrade_database
 from jjabtero.drive import DriveApiError, DriveFiles, RemoteFile
@@ -42,6 +43,10 @@ from jjabtero.google_auth import (
 FOLDER_NAME = "Jjabtero"
 FILE_NAME = "library.db"
 PUSH_DELAY_SECONDS = 5.0
+# @doc: docs/design/DriveSync.md#5-동기화
+WATCH_SECONDS = 60.0
+# @doc: docs/design/DriveSync.md#5-동기화
+FRESH_SECONDS = 30.0
 
 
 @dataclass(frozen=True)
@@ -97,8 +102,18 @@ def seed_token_from_env(store: TokenStore) -> bool:
     return True
 
 
-def snapshot_db(engine: Engine) -> bytes:
-    """실행 중인 데이터베이스의 일관된 사본을 만든다.
+def _dump_hash(connection: sqlite3.Connection) -> str:
+    digest = hashlib.sha256()
+    for line in connection.iterdump():
+        digest.update(line.encode())
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def snapshot_with_hash(engine: Engine) -> tuple[bytes, str]:
+    """실행 중인 데이터베이스의 일관된 사본과 그 사본의 내용 해시를 만든다.
+
+    해시를 사본에서 계산해야, 사본을 만든 뒤에 들어온 쓰기를 "올렸음"으로 잘못 적지 않는다.
 
     @doc: docs/design/DriveSync.md#5-동기화
     """
@@ -108,14 +123,23 @@ def snapshot_db(engine: Engine) -> bytes:
         try:
             copy = sqlite3.connect(copy_path)
             raw.driver_connection.backup(copy)
+            digest = _dump_hash(copy)
             copy.close()
         finally:
             raw.close()
-        return copy_path.read_bytes()
+        return copy_path.read_bytes(), digest
 
 
-def restore_db(engine: Engine, data: bytes) -> None:
-    """받은 사본을 검사한 뒤 실행 중인 데이터베이스에 덮어쓴다.
+def snapshot_db(engine: Engine) -> bytes:
+    """실행 중인 데이터베이스의 일관된 사본을 만든다.
+
+    @doc: docs/design/DriveSync.md#5-동기화
+    """
+    return snapshot_with_hash(engine)[0]
+
+
+def restore_db(engine: Engine, data: bytes) -> str:
+    """받은 사본을 검사하고 스키마를 올린 뒤 실행 중인 데이터베이스에 덮어쓴다. 덮어쓴 내용의 해시를 돌려준다.
 
     @doc: docs/design/DriveSync.md#5-동기화
     """
@@ -127,17 +151,25 @@ def restore_db(engine: Engine, data: bytes) -> None:
             result = source.execute("PRAGMA integrity_check").fetchone()
         except sqlite3.DatabaseError as error:
             raise ValueError(f"받은 서재 파일이 SQLite 데이터베이스가 아닙니다: {error}") from error
+        source.close()
         if result != ("ok",):
-            source.close()
             raise ValueError(f"받은 서재 파일이 깨졌습니다: {result}")
+        # 다른 컴퓨터의 사본이 옛 스키마일 수 있어, 덮어쓰기 전에 사본에서 스키마를 올린다.
+        incoming = create_engine(f"sqlite:///{copy_path}")
+        try:
+            upgrade_database(incoming)
+        finally:
+            incoming.dispose()
+        source = sqlite3.connect(copy_path)
         raw = engine.raw_connection()
         try:
+            digest = _dump_hash(source)
             source.backup(raw.driver_connection)
         finally:
             raw.close()
             source.close()
     engine.dispose()
-    upgrade_database(engine)
+    return digest
 
 
 def content_hash(engine: Engine) -> str:
@@ -147,13 +179,32 @@ def content_hash(engine: Engine) -> str:
     """
     raw = engine.raw_connection()
     try:
-        digest = hashlib.sha256()
-        for line in raw.driver_connection.iterdump():
-            digest.update(line.encode())
-            digest.update(b"\n")
-        return digest.hexdigest()
+        return _dump_hash(raw.driver_connection)
     finally:
         raw.close()
+
+
+def upgrade_keeping_sync(engine: Engine, state_path: Path) -> bool:
+    """스키마를 올린다. 올리기 전 서재가 마지막 동기화 때와 같았으면 올린 뒤의 해시를 동기화 상태로 이어받는다.
+
+    스키마만 바뀐 것을 "이 컴퓨터가 바뀌었다"로 세면, 그새 드라이브도 바뀐 경우 충돌이 되기 때문이다.
+    이어받았으면 참이다.
+
+    @doc: docs/design/DriveSync.md#5-동기화
+    """
+    try:
+        saved = json.loads(state_path.read_text())
+    except (FileNotFoundError, ValueError):
+        saved = None
+    before = content_hash(engine) if isinstance(saved, dict) and "local_hash" in saved else None
+    upgrade_database(engine)
+    if before is None or before != saved["local_hash"]:
+        return False
+    after = content_hash(engine)
+    if after != before:
+        saved["local_hash"] = after
+        write_private(state_path, json.dumps(saved))
+    return True
 
 
 def _library_is_empty(engine: Engine) -> bool:
@@ -215,6 +266,8 @@ class DriveSync:
         http: httpx2.Client,
         files_factory: Callable[[httpx2.Client, Callable[[], str]], FilesLike] = DriveFiles,
         push_delay: float = PUSH_DELAY_SECONDS,
+        watch_interval: float = WATCH_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.engine = engine
         self.paths = paths
@@ -229,6 +282,11 @@ class DriveSync:
         self._busy = False
         self._error = ""
         self._data_version = 0
+        self.watch_interval = watch_interval
+        self.clock = clock
+        self._checked_at: float | None = None
+        self._stop = threading.Event()
+        self._watcher: threading.Thread | None = None
 
     # 인증
 
@@ -279,8 +337,8 @@ class DriveSync:
         except (FileNotFoundError, TypeError, ValueError):
             return None
 
-    def _save_state(self, folder_id: str, remote: RemoteFile) -> None:
-        state = _State(folder_id, remote.id, remote.checksum, content_hash(self.engine), _now())
+    def _save_state(self, folder_id: str, remote: RemoteFile, local_hash: str) -> None:
+        state = _State(folder_id, remote.id, remote.checksum, local_hash, _now())
         write_private(self.paths.state, json.dumps(asdict(state)))
 
     def status(self) -> SyncStatus:
@@ -351,8 +409,7 @@ class DriveSync:
         return folder.id
 
     def _download(self, files: FilesLike, folder_id: str, remote: RemoteFile) -> None:
-        restore_db(self.engine, files.download(remote.id))
-        self._save_state(folder_id, remote)
+        self._save_state(folder_id, remote, restore_db(self.engine, files.download(remote.id)))
         self._data_version += 1
 
     def _backup(self, data: bytes, side: str) -> None:
@@ -367,7 +424,8 @@ class DriveSync:
         if remote is None:
             remote = files.find_file(folder_id, FILE_NAME)
         if remote is None:
-            self._save_state(folder_id, files.create(folder_id, FILE_NAME, snapshot_db(self.engine)))
+            data, digest = snapshot_with_hash(self.engine)
+            self._save_state(folder_id, files.create(folder_id, FILE_NAME, data), digest)
             return
         if saved is None or saved.file_id != remote.id:
             if _library_is_empty(self.engine):
@@ -384,7 +442,8 @@ class DriveSync:
             if current is None or current.checksum != remote.checksum:
                 self._conflict = (folder_id, current or remote)
                 return
-            self._save_state(folder_id, files.update(remote.id, snapshot_db(self.engine)))
+            data, digest = snapshot_with_hash(self.engine)
+            self._save_state(folder_id, files.update(remote.id, data), digest)
         elif remote_changed:
             self._download(files, folder_id, remote)
 
@@ -396,7 +455,52 @@ class DriveSync:
         self._cancel_timer()
         if self._conflict is not None:
             return self.status()
-        return self._run(self._sync_with)
+        status = self._run(self._sync_with)
+        self._checked_at = self.clock()
+        return status
+
+    def _check_with(self, files: FilesLike) -> None:
+        saved = self._load_state()
+        remote = files.get(saved.file_id) if saved is not None else None
+        if remote is not None and saved is not None and remote.checksum == saved.remote_checksum:
+            return
+        self._sync_with(files)
+
+    def check(self) -> SyncStatus:
+        """드라이브 파일 정보만 읽어 바뀌었을 때만 맞춘다. 이쪽의 변경은 자동 올리기가 맡으므로 올리지 않는다.
+
+        충돌 중이거나 다른 동기화가 돌고 있으면 아무것도 하지 않는다.
+
+        @doc: docs/design/DriveSync.md#5-동기화
+        """
+        if self._conflict is not None or self._busy:
+            return self.status()
+        status = self._run(self._check_with)
+        self._checked_at = self.clock()
+        return status
+
+    def ensure_fresh(self, max_age: float = FRESH_SECONDS) -> None:
+        """마지막 확인이 `max_age`초보다 오래되었으면 드라이브를 확인한다. 쓰기 요청 앞에서 부른다.
+
+        @doc: docs/design/DriveSync.md#5-동기화
+        """
+        if not self.is_connected() or self._conflict is not None:
+            return
+        if self._checked_at is not None and self.clock() - self._checked_at < max_age:
+            return
+        self.check()
+
+    def _watch(self) -> None:
+        while not self._stop.wait(self.watch_interval):
+            if self.is_connected():
+                self.check()
+
+    def stop(self) -> None:
+        """드라이브 확인 스레드를 멈춘다.
+
+        @doc: docs/design/DriveSync.md#5-동기화
+        """
+        self._stop.set()
 
     def resolve(self, choice: Literal["remote", "local"]) -> SyncStatus:
         """충돌을 고른 쪽으로 푼다. 버린 쪽은 백업한다.
@@ -415,7 +519,8 @@ class DriveSync:
                 self._download(files, folder_id, current)
             else:
                 self._backup(files.download(current.id), "remote")
-                self._save_state(folder_id, files.update(current.id, snapshot_db(self.engine)))
+                data, digest = snapshot_with_hash(self.engine)
+                self._save_state(folder_id, files.update(current.id, data), digest)
             self._conflict = None
 
         return self._run(apply)
@@ -518,6 +623,10 @@ class DriveSync:
         @doc: docs/design/DriveSync.md#5-동기화
         @doc: docs/design/DriveSync.md#8-서버-환경
         """
+        if self.watch_interval > 0 and self._watcher is None:
+            # 다른 곳(서버나 다른 컴퓨터)이 올린 변경을 앱을 켤 때만이 아니라 주기적으로 받아 온다.
+            self._watcher = threading.Thread(target=self._watch, daemon=True)
+            self._watcher.start()
         if not self.is_connected():
             return
         if wait:

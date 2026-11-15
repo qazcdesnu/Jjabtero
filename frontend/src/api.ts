@@ -199,6 +199,11 @@ export function syncDrive(): Promise<DriveStatus> {
 }
 
 // @doc: docs/design/DriveSync.md#7-화면
+export function checkDrive(): Promise<DriveStatus> {
+  return driveRequest('check', { method: 'POST' })
+}
+
+// @doc: docs/design/DriveSync.md#7-화면
 export function resolveDrive(choice: 'remote' | 'local'): Promise<DriveStatus> {
   return driveRequest('resolve', {
     method: 'POST',

@@ -164,3 +164,45 @@ def test_create_app_waits_for_initial_sync_and_flushes_on_shutdown(
         drive.calls.clear()
     assert drive.calls == ["update"]
 
+
+
+def test_write_request_fetches_remote_change_first(tmp_path: Path) -> None:
+    """쓰기 요청 앞에서 드라이브를 먼저 확인해, 다른 곳이 올린 변경을 받은 뒤 쓴다. 충돌이 나지 않는다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    drive = FakeDrive()
+    computer, _ = make_app(tmp_path / "computer", drive, connected=True)
+    computer.app.state.drive.schedule_push = lambda: None
+    paper_id = computer.post("/api/papers", json={"title": "First"}).json()["id"]
+    assert computer.app.state.drive.sync().state == "idle"
+    server, _ = make_app(tmp_path / "server", drive, connected=True)
+    server.app.state.drive.schedule_push = lambda: None
+    server.app.state.drive.sync()
+    server.post("/api/papers", json={"title": "Added on web"})
+    assert server.app.state.drive.sync().state == "idle"
+
+    # 마지막 확인에서 30초가 지난 것으로 한다.
+    computer.app.state.drive._checked_at = -1000.0
+    saved = computer.put(f"/api/papers/{paper_id}/position", json={"page": 3, "offset": 0.2, "zoom": 1.0})
+    assert saved.status_code == 200
+    assert computer.app.state.drive.sync().state == "idle"
+    assert sorted(paper["title"] for paper in computer.get("/api/papers").json()) == ["Added on web", "First"]
+
+
+def test_check_endpoint(tmp_path: Path) -> None:
+    """`POST /api/drive/check`는 드라이브가 바뀌었을 때만 받아 상태를 돌려준다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    drive = FakeDrive()
+    a, _ = make_app(tmp_path / "a", drive, connected=True)
+    a.app.state.drive.schedule_push = lambda: None
+    a.post("/api/papers", json={"title": "A1"})
+    a.app.state.drive.sync()
+    b, _ = make_app(tmp_path / "b", drive, connected=True)
+    b.app.state.drive.sync()
+    version = b.post("/api/drive/check").json()["data_version"]
+    a.post("/api/papers", json={"title": "A2"})
+    a.app.state.drive.sync()
+    assert b.post("/api/drive/check").json()["data_version"] == version + 1

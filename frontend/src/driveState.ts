@@ -2,6 +2,7 @@
 
 import { reactive } from 'vue'
 import {
+  checkDrive,
   disconnectDrive,
   fetchDriveStatus,
   resolveDrive,
@@ -11,6 +12,8 @@ import {
 
 const FAST_POLL_MS = 2000
 const SLOW_POLL_MS = 10000
+// @doc: docs/design/DriveSync.md#7-화면
+export const CHECK_GAP_MS = 15000
 
 // @doc: docs/design/DriveSync.md#7-화면
 export function syncedLabel(status: DriveStatus): string {
@@ -24,7 +27,7 @@ export function syncedLabel(status: DriveStatus): string {
 // @doc: docs/design/DriveSync.md#7-화면
 export function createDriveState(
   onDataChanged: () => void,
-  deps = { fetchDriveStatus, syncDrive, resolveDrive, disconnectDrive },
+  deps = { fetchDriveStatus, syncDrive, checkDrive, resolveDrive, disconnectDrive },
 ) {
   const state = reactive({
     status: null as DriveStatus | null,
@@ -73,17 +76,35 @@ export function createDriveState(
     }
   }
 
+  // 앱 창으로 돌아오면 드라이브를 확인한다. 다른 곳(서버, 다른 컴퓨터)이 그새 올린 변경을 바로 받기 위해서다.
+  let lastCheck = 0
+  function onVisible(): void {
+    if (typeof document === 'undefined' || document.visibilityState !== 'visible' || !state.status) return
+    if (!['idle', 'error'].includes(state.status.state) || Date.now() - lastCheck < CHECK_GAP_MS) return
+    lastCheck = Date.now()
+    void call(deps.checkDrive)
+  }
+
   return {
     state,
     start: async () => {
       running = true
+      if (typeof window !== 'undefined') {
+        document.addEventListener('visibilitychange', onVisible)
+        window.addEventListener('focus', onVisible)
+      }
       await poll()
     },
     stop: () => {
       running = false
+      if (typeof window !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisible)
+        window.removeEventListener('focus', onVisible)
+      }
       if (timer !== null) clearTimeout(timer)
       timer = null
     },
+    checkNow: onVisible,
     refresh: () => call(deps.fetchDriveStatus),
     syncNow: () => act(deps.syncDrive),
     resolve: (choice: 'remote' | 'local') => act(() => deps.resolveDrive(choice)),
