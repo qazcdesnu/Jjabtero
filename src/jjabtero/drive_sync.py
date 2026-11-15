@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from sqlalchemy import Engine, create_engine, text
 
 from jjabtero.db import upgrade_database
+from jjabtero.drive_merge import MergeConflict, merge_libraries
 from jjabtero.drive import DriveApiError, DriveFiles, RemoteFile
 from jjabtero.google_auth import (
     DriveAuthError,
@@ -47,6 +48,8 @@ PUSH_DELAY_SECONDS = 5.0
 WATCH_SECONDS = 60.0
 # @doc: docs/design/DriveSync.md#5-동기화
 FRESH_SECONDS = 30.0
+# @doc: docs/design/DriveSync.md#10-자동-합치기
+MERGE_BACKUPS_KEPT = 20
 
 
 @dataclass(frozen=True)
@@ -60,6 +63,14 @@ class DrivePaths:
     token: Path
     state: Path
     backups: Path
+
+    @property
+    def base(self) -> Path:
+        """마지막으로 맞춘 서재 사본(기준 사본). 자동 합치기의 기준이다.
+
+        @doc: docs/design/DriveSync.md#10-자동-합치기
+        """
+        return self.state.with_name("drive_sync_base.db")
 
 
 def user_data_dir() -> Path:
@@ -282,6 +293,8 @@ class DriveSync:
         self._busy = False
         self._error = ""
         self._data_version = 0
+        self._merge_note = ""
+        self.merged_at: str | None = None
         self.watch_interval = watch_interval
         self.clock = clock
         self._checked_at: float | None = None
@@ -337,7 +350,12 @@ class DriveSync:
         except (FileNotFoundError, TypeError, ValueError):
             return None
 
-    def _save_state(self, folder_id: str, remote: RemoteFile, local_hash: str) -> None:
+    def _save_state(self, folder_id: str, remote: RemoteFile, local_hash: str, data: bytes) -> None:
+        # 맞춘 사본을 기준 사본으로 남긴다. 나중에 양쪽이 다 바뀌면 이것을 기준으로 합친다.
+        self.paths.base.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.paths.base.with_suffix(".part")
+        temporary.write_bytes(data)
+        temporary.replace(self.paths.base)
         state = _State(folder_id, remote.id, remote.checksum, local_hash, _now())
         write_private(self.paths.state, json.dumps(asdict(state)))
 
@@ -365,7 +383,11 @@ class DriveSync:
         if self._conflict is not None:
             return SyncStatus(
                 state="conflict",
-                message="이 컴퓨터와 드라이브의 서재가 둘 다 바뀌었습니다. 쓸 쪽을 고르세요.",
+                message=" ".join(
+                    part
+                    for part in ("이 컴퓨터와 드라이브의 서재가 둘 다 바뀌었습니다.", self._merge_note, "쓸 쪽을 고르세요.")
+                    if part
+                ),
                 **common,
             )
         if self._error:
@@ -409,7 +431,8 @@ class DriveSync:
         return folder.id
 
     def _download(self, files: FilesLike, folder_id: str, remote: RemoteFile) -> None:
-        self._save_state(folder_id, remote, restore_db(self.engine, files.download(remote.id)))
+        data = files.download(remote.id)
+        self._save_state(folder_id, remote, restore_db(self.engine, data), data)
         self._data_version += 1
 
     def _backup(self, data: bytes, side: str) -> None:
@@ -425,7 +448,7 @@ class DriveSync:
             remote = files.find_file(folder_id, FILE_NAME)
         if remote is None:
             data, digest = snapshot_with_hash(self.engine)
-            self._save_state(folder_id, files.create(folder_id, FILE_NAME, data), digest)
+            self._save_state(folder_id, files.create(folder_id, FILE_NAME, data), digest, data)
             return
         if saved is None or saved.file_id != remote.id:
             if _library_is_empty(self.engine):
@@ -436,16 +459,57 @@ class DriveSync:
         local_changed = content_hash(self.engine) != saved.local_hash
         remote_changed = remote.checksum != saved.remote_checksum
         if local_changed and remote_changed:
-            self._conflict = (folder_id, remote)
+            self._merge_or_conflict(files, folder_id, remote)
         elif local_changed:
             current = files.get(remote.id)
-            if current is None or current.checksum != remote.checksum:
-                self._conflict = (folder_id, current or remote)
+            if current is None:
+                self._conflict = (folder_id, remote)
+                return
+            if current.checksum != remote.checksum:
+                self._merge_or_conflict(files, folder_id, current)
                 return
             data, digest = snapshot_with_hash(self.engine)
-            self._save_state(folder_id, files.update(remote.id, data), digest)
+            self._save_state(folder_id, files.update(remote.id, data), digest, data)
         elif remote_changed:
             self._download(files, folder_id, remote)
+
+    def _merge_or_conflict(self, files: FilesLike, folder_id: str, remote: RemoteFile) -> None:
+        """양쪽이 다 바뀌었을 때 기준 사본으로 합친다. 합칠 수 없으면 충돌로 둔다.
+
+        합치는 사이 이쪽이나 드라이브가 또 바뀌었으면 아무것도 덮어쓰지 않는다. 다음 동기화에서 다시 합친다.
+
+        @doc: docs/design/DriveSync.md#10-자동-합치기
+        """
+        try:
+            base = self.paths.base.read_bytes()
+        except FileNotFoundError:
+            self._merge_note = "기준 사본이 없어 자동으로 합치지 못했습니다."
+            self._conflict = (folder_id, remote)
+            return
+        local, local_hash = snapshot_with_hash(self.engine)
+        incoming = files.download(remote.id)
+        try:
+            merged = merge_libraries(base, local, incoming)
+        except MergeConflict as error:
+            self._merge_note = f"자동으로 합치지 못했습니다: {error}"
+            self._conflict = (folder_id, remote)
+            return
+        self._backup(local, "merge-local")
+        self._backup(incoming, "merge-remote")
+        self._prune_merge_backups()
+        current = files.get(remote.id)
+        if content_hash(self.engine) != local_hash or current is None or current.checksum != remote.checksum:
+            return
+        digest = restore_db(self.engine, merged)
+        self._save_state(folder_id, files.update(remote.id, merged), digest, merged)
+        self._data_version += 1
+        self._merge_note = ""
+        self.merged_at = _now()
+
+    def _prune_merge_backups(self) -> None:
+        backups = sorted(self.paths.backups.glob("library-*-merge-*.db"))
+        for old in backups[: max(len(backups) - MERGE_BACKUPS_KEPT, 0)]:
+            old.unlink(missing_ok=True)
 
     def sync(self) -> SyncStatus:
         """로컬과 드라이브를 맞춘다. 충돌 중이면 아무것도 하지 않는다.
@@ -520,7 +584,7 @@ class DriveSync:
             else:
                 self._backup(files.download(current.id), "remote")
                 data, digest = snapshot_with_hash(self.engine)
-                self._save_state(folder_id, files.update(current.id, data), digest)
+                self._save_state(folder_id, files.update(current.id, data), digest, data)
             self._conflict = None
 
         return self._run(apply)
