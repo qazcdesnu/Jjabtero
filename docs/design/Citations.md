@@ -54,7 +54,7 @@
 | `references` | A → A가 인용한 논문 |
 | `citations` | A를 인용한 논문 → A, 그 논문의 출판일, A와 공유하는 참고문헌 수(서지 결합) |
 | `cocitations` | A와 함께 인용된 논문, 함께 인용된 횟수. 2회 이상인 것 가운데 많은 순으로 A마다 최대 100건 |
-| `works` | 참고문헌과 피인용 논문의 제목, 저자(앞 10명), 연도, 공개일, 게재처, DOI, 피인용 수 |
+| `works` | 참고문헌과 피인용 논문의 제목, 저자(앞 10명), 연도, 공개일, 게재처, DOI, 피인용 수, 항목 종류(검색과 같은 규칙으로 OpenAlex `type`을 바꾼 값). 항목 종류는 캐시 버전 2에서 더했다 |
 | `link_misses` | OpenAlex에서 찾지 못한 DOI와 시도한 시각 |
 
 - 피인용 논문의 참고문헌 목록 자체는 저장하지 않는다. N이 크면(예: 200) A마다 1만 건쯤이 되어 파일이 커지기 때문이다. 가져올 때 서지 결합과 공동 인용 수로 줄여 저장한다.
@@ -89,6 +89,12 @@
 
 - `GET /api/citations/status`는 [citation_status](../../src/jjabtero/citations.py#citation_status)가 처리하며 [CitationStatus](../../src/jjabtero/citations.py#CitationStatus)를 돌려준다. 서재 논문 수, OpenAlex에 연결된 수, 찾지 못한 수, 인용 데이터를 가져온 수, 갱신 중인지, 마지막 갱신 시각, 마지막 오류다.
 - `POST /api/citations/refresh`는 [refresh_citations](../../src/jjabtero/citations.py#refresh_citations)가 처리한다. 모든 논문을 가져올 대상으로 표시하고 갱신을 깨운 뒤 상태를 돌려준다.
+- `GET /api/papers/{id}/citations`는 [paper_citations](../../src/jjabtero/citations.py#paper_citations)가 처리하며([paper_router](../../src/jjabtero/citations.py#paper_router)) 논문 하나의 인용 목록 [PaperCitations](../../src/jjabtero/citations.py#PaperCitations)을 돌려준다.
+  - `state`: `no_doi`(DOI가 없어 연결할 수 없음), `not_found`(7일 안에 찾지 못함), `pending`(연결 전이거나 아직 가져오지 않음), `ready`.
+  - `ready`면 피인용 기간(시작·끝), 기간 안 피인용 전체 건수, 그때의 `citing_limit`, 가져온 시각과 함께 참고문헌과 피인용 목록을 준다. 둘 다 피인용 많은 순이다([CitationStore.paper_lists](../../src/jjabtero/citations.py#CitationStore.paper_lists)).
+  - 목록의 항목은 [CitedWork](../../src/jjabtero/citations.py#CitedWork)(OpenAlex ID, 제목, 저자, 항목 종류, 연도, 게재처, DOI, 피인용 수, 피인용 항목은 공유 참고문헌 수)이고, OpenAlex ID나 DOI가 같은 서재 논문이 있으면 그 ID(`library_paper_id`)를 담는다.
+- 논문 상세에 "인용" 칸([CitationLists](../../frontend/src/CitationLists.vue))을 둔다. "피인용 n"과 "참고문헌 n"을 바꿔 보고, 피인용은 기간과 "n편 가운데 피인용 많은 순 m편"을 알린다. 항목마다 제목(DOI 또는 OpenAlex로 이어지는 링크), 저자·연도·게재처, 피인용 수, 공유 참고문헌 수를 보여 주고, 서재에 있으면 "서재에 있음", 없으면 "서재에 담기"를 둔다. 상태가 `ready`가 아니면 그 까닭을 한 줄로 알린다.
+  - "서재에 담기"는 항목을 서재 입력으로 바꿔([citedWorkInput](../../frontend/src/citationListState.ts#citedWorkInput): 원문 주소는 DOI, 없으면 OpenAlex 주소, OpenAlex ID 포함) 논문을 추가하고, 그 항목을 "서재에 있음"으로 바꾼 뒤 서재 목록을 다시 읽는다. DOI가 이미 있으면 그 논문으로 표시한다. 상태는 [createCitationListState](../../frontend/src/citationListState.ts#createCitationListState)가 가지며, 다른 논문을 고른 뒤 늦게 온 응답은 버린다. API 호출은 [fetchPaperCitations](../../frontend/src/api.ts#fetchPaperCitations)(타입 [PaperCitations](../../frontend/src/api.ts#PaperCitations), [CitedWork](../../frontend/src/api.ts#CitedWork))다.
 - 설정 페이지([사용자 설정 설계](Settings.md#4-화면))에 "인용 데이터" 칸을 두어 상태를 보여 주고 "인용 데이터 새로 받기" 버튼을 둔다. 화면은 [CitationStatusPanel](../../frontend/src/CitationStatusPanel.vue)이고, 응답 타입은 [CitationStatus](../../frontend/src/api.ts#CitationStatus), API 호출은 [fetchCitationStatus](../../frontend/src/api.ts#fetchCitationStatus)와 [refreshCitations](../../frontend/src/api.ts#refreshCitations)다.
 
 ## 7. 테스트
@@ -102,6 +108,9 @@
 - 7일 지난 논문만 다시 가져옴, 지운 논문의 데이터 정리, 429에서 멈춤.
 - 캐시 버전이 다르면 다시 만듦, 드라이브에 올리고 받기.
 - API 상태와 새로 받기.
+- 논문의 인용 목록 API: 가져오기 전 `pending`, 가져온 뒤 기간·건수·한도, 피인용 많은 순 목록과 서지 정보, 서재에 있는 논문 표시, DOI 없음·찾지 못함·없는 논문.
+
+[citationListState.test](../../frontend/src/citationListState.test.ts)는 인용 논문의 서재 입력 변환, 목록 읽기, 담기와 표시, 이미 있는 DOI, 실패 메시지, 늦게 온 응답 버리기를 확인한다.
 
 [api.test](../../frontend/src/api.test.ts)는 `toPaperInput`의 OpenAlex ID와 인용 데이터 API 호출을 확인한다.
 

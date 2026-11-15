@@ -14,10 +14,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import httpx2
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import (
     Column,
@@ -36,13 +36,15 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
+from jjabtero.library import normalize_doi
 from jjabtero.models import Paper
+from jjabtero.search import _openalex_item_type
 from jjabtero.settings import read_settings
 
 OPENALEX_WORKS_URL = "https://api.openalex.org/works"
 CACHE_FILE = "citations.db"
 # @doc: docs/design/Citations.md#4-저장
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 REFRESH_AFTER = timedelta(days=7)
 MISS_RETRY_AFTER = timedelta(days=7)
 RUN_INTERVAL_SECONDS = 3600
@@ -50,7 +52,7 @@ PAGE_SIZE = 200
 LOOKUP_BATCH = 100
 COCITATION_LIMIT = 100
 MAX_AUTHORS = 10
-_WORK_FIELDS = "id,doi,display_name,publication_year,publication_date,cited_by_count,authorships,primary_location"
+_WORK_FIELDS = "id,doi,display_name,type,publication_year,publication_date,cited_by_count,authorships,primary_location"
 _WORK_ID = re.compile(r"W\d+")
 
 _metadata = MetaData()
@@ -96,6 +98,7 @@ _works = Table(
     Column("venue", String),
     Column("doi", String),
     Column("cited_by_count", Integer),
+    Column("item_type", String),
     Column("updated_at", String),
 )
 _link_misses = Table(
@@ -165,6 +168,7 @@ def _work_row(work: dict[str, Any], now: str) -> dict[str, Any]:
         "venue": source.get("display_name"),
         "doi": work.get("doi"),
         "cited_by_count": work.get("cited_by_count"),
+        "item_type": _openalex_item_type(work),
         "updated_at": now,
     }
 
@@ -385,6 +389,29 @@ class CitationStore:
         """
         with self.engine.connect() as connection:
             return len({row.doi for row in connection.execute(select(_link_misses.c.doi))} & dois)
+
+    def paper_lists(self, work_id: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[dict[str, Any]]]:
+        """논문 하나의 가져온 정보, 참고문헌, 피인용(피인용 많은 순)을 서지 정보와 함께 돌려준다.
+
+        @doc: docs/design/Citations.md#6-api와-화면
+        """
+        with self.engine.connect() as connection:
+            fetch = connection.execute(select(_fetches).where(_fetches.c.paper == work_id)).first()
+            references = connection.execute(
+                select(_references.c.work, _works)
+                .select_from(_references.outerjoin(_works, _works.c.id == _references.c.work))
+                .where(_references.c.paper == work_id)
+            ).all()
+            citations = connection.execute(
+                select(_citations.c.work, _citations.c.shared_refs, _works)
+                .select_from(_citations.outerjoin(_works, _works.c.id == _citations.c.work))
+                .where(_citations.c.paper == work_id)
+            ).all()
+        refs = [dict(row._mapping) for row in references]
+        cites = [dict(row._mapping) for row in citations]
+        refs.sort(key=lambda row: (-(row["cited_by_count"] or 0), row["work"]))
+        cites.sort(key=lambda row: (-(row["cited_by_count"] or 0), row["work"]))
+        return (dict(fetch._mapping) if fetch else None), refs, cites
 
     def rows(self, table: str) -> list[dict[str, Any]]:
         """표 하나의 모든 행. 테스트와 진단에 쓴다.
@@ -633,3 +660,103 @@ def refresh_citations(request: Request) -> CitationStatus:
     """
     request.app.state.citations.refresh()
     return request.app.state.citations.status()
+
+
+class CitedWork(BaseModel):
+    """인용 목록에 보일 논문 하나. 서재에 있으면 그 논문 ID를 가진다.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+
+    openalex_id: str
+    title: str | None
+    authors: list[str]
+    item_type: str
+    year: int | None
+    venue: str | None
+    doi: str | None
+    cited_by_count: int | None
+    shared_refs: int | None = None
+    library_paper_id: int | None = None
+
+
+class PaperCitations(BaseModel):
+    """논문 하나의 인용 목록.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+
+    state: Literal["no_doi", "not_found", "pending", "ready"]
+    openalex_id: str | None
+    fetched_at: datetime | None = None
+    window_start: str | None = None
+    window_end: str | None = None
+    citing_total: int = 0
+    citing_limit: int | None = None
+    references: list[CitedWork] = []
+    citations: list[CitedWork] = []
+
+
+def _cited_work(row: dict[str, Any], owners: dict[str, int]) -> CitedWork:
+    doi = None
+    if row.get("doi"):
+        try:
+            doi = normalize_doi(row["doi"])
+        except ValueError:
+            doi = None
+    return CitedWork(
+        openalex_id=row["work"],
+        title=row.get("title") or None,
+        authors=json.loads(row["authors"]) if row.get("authors") else [],
+        item_type=row.get("item_type") or "other",
+        year=row.get("year"),
+        venue=row.get("venue"),
+        doi=doi,
+        cited_by_count=row.get("cited_by_count"),
+        shared_refs=row.get("shared_refs"),
+        library_paper_id=owners.get(row["work"]) or (owners.get(doi) if doi else None),
+    )
+
+
+# @doc: docs/design/Citations.md#6-api와-화면
+paper_router = APIRouter(prefix="/api/papers")
+
+
+@paper_router.get("/{paper_id}/citations")
+def paper_citations(paper_id: int, request: Request) -> PaperCitations:
+    """`GET /api/papers/{paper_id}/citations`를 처리한다.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+    sync: CitationSync = request.app.state.citations
+    with Session(sync.library_engine) as session:
+        paper = session.get(Paper, paper_id)
+        if paper is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"논문이 없습니다: {paper_id}")
+        owners: dict[str, int] = {}
+        for other in session.scalars(select(Paper)):
+            if other.openalex_id:
+                owners[other.openalex_id] = other.id
+            if other.doi:
+                owners[other.doi] = other.id
+        work_id, doi = paper.openalex_id, paper.doi
+    if work_id is None:
+        if not doi:
+            return PaperCitations(state="no_doi", openalex_id=None)
+        state = "not_found" if sync.store.missed_recently(doi, sync.clock()) else "pending"
+        return PaperCitations(state=state, openalex_id=None)
+    fetch, references, citations = sync.store.paper_lists(work_id)
+    if fetch is None:
+        return PaperCitations(state="pending", openalex_id=work_id)
+    return PaperCitations(
+        state="ready",
+        openalex_id=work_id,
+        fetched_at=datetime.fromisoformat(fetch["fetched_at"]) if fetch["fetched_at"] else None,
+        window_start=fetch["publication_date"],
+        window_end=fetch["window_end"],
+        citing_total=fetch["citing_total"] or 0,
+        citing_limit=fetch["citing_limit"],
+        references=[_cited_work(row, owners) for row in references],
+        citations=[_cited_work(row, owners) for row in citations],
+    )
+

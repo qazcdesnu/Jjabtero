@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from jjabtero.app import create_app
 from jjabtero.citations import (
     CACHE_FILE,
+    CACHE_VERSION,
     CitationStore,
     CitationSync,
     citing_window,
@@ -37,6 +38,7 @@ def work(work_id: str, cited_by: int = 0, refs: list[str] | None = None, publish
         "id": f"https://openalex.org/{work_id}",
         "doi": f"https://doi.org/10.1/{work_id.lower()}",
         "display_name": f"Paper {work_id}",
+        "type": "article",
         "publication_year": int(published[:4]),
         "publication_date": published,
         "cited_by_count": cited_by,
@@ -338,7 +340,7 @@ def test_cache_version_mismatch_recreates(tmp_path: Path) -> None:
     connection.close()
     store = CitationStore(path)
     assert store.rows("works") == []
-    assert sqlite3.connect(path).execute("pragma user_version").fetchone() == (1,)
+    assert sqlite3.connect(path).execute("pragma user_version").fetchone() == (CACHE_VERSION,)
 
 
 def test_restore_from_drive_when_local_missing(engine, tmp_path: Path) -> None:
@@ -373,3 +375,49 @@ def test_api_status_and_refresh(tmp_path: Path) -> None:
     status = client.get("/api/citations/status").json()
     assert (status["papers"], status["linked"], status["fetched"]) == (1, 1, 1)
     assert client.post("/api/citations/refresh").json()["fetched"] == 0
+
+
+def test_paper_citations_api_lists_and_marks_library(tmp_path: Path) -> None:
+    """논문의 인용 목록은 참고문헌과 피인용을 피인용 많은 순으로 주고, 서재에 있는 논문을 표시한다.
+
+    @doc: docs/design/Citations.md#7-테스트
+    """
+    openalex = FakeOpenAlex()
+    app = create_app(
+        frontend_dist=tmp_path / "missing",
+        db_path=tmp_path / "library.db",
+        http_client=httpx2.Client(transport=httpx2.MockTransport(openalex)),
+    )
+    client = TestClient(app)
+    paper_id = client.post("/api/papers", json={"title": "T", "openalex_id": A}).json()["id"]
+    assert client.get(f"/api/papers/{paper_id}/citations").json()["state"] == "pending"
+    app.state.citations.run_once()
+    owned = client.post("/api/papers", json={"title": "Owned", "doi": "10.1/w11"}).json()["id"]
+
+    body = client.get(f"/api/papers/{paper_id}/citations").json()
+    assert body["state"] == "ready"
+    assert (body["window_start"], body["window_end"], body["citing_total"], body["citing_limit"]) == ("2017-06-12", "2018-06-12", 3, 10)
+    assert [item["openalex_id"] for item in body["citations"]] == ["W10", "W11", "W12"]
+    first = body["citations"][0]
+    assert (first["title"], first["authors"], first["doi"], first["shared_refs"], first["cited_by_count"]) == ("Paper W10", ["Kim"], "10.1/w10", 2, 500)
+    assert body["citations"][1]["library_paper_id"] == owned
+    assert {item["openalex_id"] for item in body["references"]} == {"W1", "W2"}
+
+
+def test_paper_citations_states_without_link(tmp_path: Path) -> None:
+    """DOI가 없으면 no_doi, 찾지 못했으면 not_found, 없는 논문은 404다.
+
+    @doc: docs/design/Citations.md#7-테스트
+    """
+    app = create_app(
+        frontend_dist=tmp_path / "missing",
+        db_path=tmp_path / "library.db",
+        http_client=httpx2.Client(transport=httpx2.MockTransport(FakeOpenAlex())),
+    )
+    client = TestClient(app)
+    no_doi = client.post("/api/papers", json={"title": "T"}).json()["id"]
+    missing = client.post("/api/papers", json={"title": "M", "doi": "10.1/missing"}).json()["id"]
+    app.state.citations.run_once()
+    assert client.get(f"/api/papers/{no_doi}/citations").json()["state"] == "no_doi"
+    assert client.get(f"/api/papers/{missing}/citations").json()["state"] == "not_found"
+    assert client.get("/api/papers/99/citations").status_code == 404

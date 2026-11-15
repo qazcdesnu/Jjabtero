@@ -1,5 +1,6 @@
 <!-- @doc: docs/design/LibraryView.md#3-화면 -->
 <!-- @doc: docs/design/Reader.md#6-화면 -->
+<!-- @doc: docs/design/Citations.md#6-api와-화면 -->
 <!-- @doc: docs/design/ReadingStatus.md#3-화면 -->
 <script setup lang="ts">
 import Button from 'primevue/button'
@@ -12,6 +13,7 @@ import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref, watch } from 'vue'
 import { ITEM_TYPE_LABELS, READ_STATUSES, formatDate } from './labels'
 import { createLibraryState } from './libraryState'
+import CitationLists from './CitationLists.vue'
 import PdfPanel from './PdfPanel.vue'
 
 const props = defineProps<{ library: ReturnType<typeof createLibraryState> }>()
@@ -135,6 +137,10 @@ function askRemove(event: Event) {
         <span v-if="noteSaved" class="text-sm text-primary"><i class="pi pi-check" /> 저장됨</span>
       </div>
       <Message v-if="library.state.readingError" severity="error">{{ library.state.readingError }}</Message>
+    </div>
+
+    <div class="border-t border-surface-200 pt-4 dark:border-surface-700">
+      <CitationLists :paper-id="paper.id" @added="library.load()" />
     </div>
 
     <div class="flex flex-col gap-2 border-t border-surface-200 pt-4 dark:border-surface-700">
