@@ -18,11 +18,13 @@ from jjabtero.google_auth import Token, TokenStore
 
 @pytest.fixture
 def uvicorn_calls(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[dict[str, Any]]:
-    """실제 서버 대신 uvicorn.run 호출 인자를 모은다. 데이터베이스는 임시 파일을 쓴다.
+    """실제 서버 대신 uvicorn.run 호출 인자를 모은다. 데이터베이스와 현재 디렉터리는 임시 경로를 쓴다.
 
     @doc: docs/design/AppSkeleton.md#4-테스트
     """
     monkeypatch.setenv("JJABTERO_DB", str(tmp_path / "library.db"))
+    # 개발자의 저장소 루트 .env를 읽지 않도록 임시 디렉터리에서 실행한다.
+    monkeypatch.chdir(tmp_path)
     calls: list[dict[str, Any]] = []
     monkeypatch.setattr(cli.uvicorn, "run", lambda app, **kwargs: calls.append(kwargs))
     return calls
@@ -111,3 +113,18 @@ def test_print_drive_token_without_connection_fails(uvicorn_calls: list[dict[str
     with pytest.raises(SystemExit):
         cli.main(["--print-drive-token"])
 
+
+
+def test_main_reads_env_file_without_overriding(
+    uvicorn_calls: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """현재 디렉터리의 `.env`를 읽되, 이미 있는 환경 변수는 덮어쓰지 않는다.
+
+    @doc: docs/design/AppSkeleton.md#4-테스트
+    """
+    (tmp_path / ".env").write_text("OPENALEX_API_KEY=from-file\nJJABTERO_FORWARDED_ALLOW_IPS=from-file\n")
+    monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+    monkeypatch.setenv("JJABTERO_FORWARDED_ALLOW_IPS", "from-shell")
+    cli.main([])
+    assert cli.os.environ["OPENALEX_API_KEY"] == "from-file"
+    assert uvicorn_calls[0]["forwarded_allow_ips"] == "from-shell"

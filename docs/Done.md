@@ -2,6 +2,46 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## I12 실행 명령이 `.env` 파일에서 환경 변수 읽기
+
+- 시작일: 2026-11-15
+- 완료일: 2026-11-15
+- 근거 문서: [앱 골격 설계의 실행 명령](design/AppSkeleton.md#2-실행-명령)
+- 참고 자료: 없음
+
+### 계획
+- 실행 명령이 현재 디렉터리의 `.env`를 읽게 하고, 배포 환경은 그대로 Render 환경 변수를 쓴다.
+- `.env`를 Git과 Docker 이미지에서 빼고, 넣을 이름은 `.env.example`로 알린다.
+
+### 진행 기록
+- 2026-11-15: OpenAlex 키를 로컬에 넣는 방법으로 `~/.zshrc`에 넣는 방법을 안내했으나, 사용자가 앱이 `.env`를 읽게 하고 Render에는 환경 변수로 넣으라고 했다. PR #26(M3-T2)이 아직 병합되지 않아 그 브랜치에서 작업 브랜치를 만들었다.
+- 2026-11-15: 실행 명령이 시작할 때 현재 디렉터리의 `.env`를 python-dotenv로 읽게 했다. 앱을 만드는 `create_app`은 읽지 않아 테스트가 개발자의 `.env`에 영향받지 않는다. 실행 명령 테스트는 임시 디렉터리에서 돌게 했다. `.env`를 `.gitignore`와 `.dockerignore`에 넣고 `.env.example`과 README에 사용법을 적었다.
+
+### 결정 사항
+- `.env`는 실행한 현재 디렉터리(보통 저장소 루트)에서 찾는다. 가장 흔한 관례라 따로 경로 설정이 필요 없기 때문이다.
+- 이미 있는 환경 변수가 `.env`보다 우선한다. Render처럼 대시보드에서 넣은 값을 `.env`가 덮지 않게 하기 위해서다.
+- 저장소 안에 비밀 값을 담는 파일을 두는 것은 사용자가 정했다. Git과 Docker 이미지에는 들어가지 않는다.
+
+### 변경 파일
+- `src/jjabtero/cli.py`
+- `tests/test_cli.py`
+- `pyproject.toml`
+- `uv.lock`
+- `.env.example`
+- `.gitignore`
+- `.dockerignore`
+- `README.md`
+- `docs/design/AppSkeleton.md`
+- `docs/Architecture.md`
+- `docs/Issue.md`
+- `docs/Done.md`
+
+### 결과
+- 내 컴퓨터에서는 저장소 루트의 `.env`에 `OPENALEX_API_KEY` 등을 두면 `uv run jjabtero`가 읽는다. 배포 환경은 Render 환경 변수를 그대로 쓴다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과(새 테스트 `test_main_reads_env_file_without_overriding` 포함).
+
 ## M3-T2 OpenAlex 인용 데이터 조사와 인용 저장 설계(서재 논문의 OpenAlex ID 연결, 데이터 모델, 가져오는 범위)
 
 - 시작일: 2026-11-15

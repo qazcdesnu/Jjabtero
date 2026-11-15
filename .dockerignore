@@ -6,6 +6,7 @@
 frontend/node_modules
 frontend/dist
 *.db
+.env
 client_secret*.json
 *token*.json
 private

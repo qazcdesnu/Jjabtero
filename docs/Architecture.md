@@ -59,6 +59,7 @@
 | 데이터베이스 | SQLite, SQLAlchemy |
 | 스키마 변경 | Alembic |
 | 데이터 폴더 찾기 | platformdirs |
+| `.env` 읽기 | python-dotenv ([앱 골격 설계](design/AppSkeleton.md#2-실행-명령)) |
 | HTTP 클라이언트 | httpx2 (외부 API 호출과 FastAPI 테스트 클라이언트) |
 | 외부 API | OpenAlex, arXiv ([논문 검색과 추가 설계](design/PaperSearch.md#1-검색원)). 인용 데이터도 OpenAlex에서 얻는다([제품 비전](ProductVision.md#6-인용-기반-연결추천)). |
 | 테스트 | pytest (개발 의존성 그룹 `dev`) |
