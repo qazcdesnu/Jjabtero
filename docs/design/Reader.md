@@ -20,7 +20,7 @@
 
 **자동: 공개 PDF 받기**
 
-- [open_pdf_url](../../src/jjabtero/pdfs.py#open_pdf_url)이 주소를 찾는다. 서재 논문의 OpenAlex 작업([인용 데이터 설계](Citations.md#2-서재-논문과-openalex-연결))에서 `best_oa_location.pdf_url`, 없으면 `open_access.oa_url`을 쓴다. 'Attention Is All You Need'는 `https://arxiv.org/pdf/1706.03762`였다(2026-11-15 확인).
+- [open_pdf_url](../../src/jjabtero/pdfs.py#open_pdf_url)이 주소를 찾는다. 서재 논문의 OpenAlex 작업([인용 데이터 설계](Citations.md#2-서재-논문과-openalex-연결))에서 `best_oa_location.pdf_url`, 없으면 `open_access.oa_url`을 쓴다. 주소가 arXiv 소개 페이지(`arxiv.org/abs/<ID>`)이면 PDF 주소(`arxiv.org/pdf/<ID>`)로 바꾼다. Adam 논문은 소개 페이지 주소가 왔다(2026-11-15 확인). 찾는 일은 [open_access_pdf_url](../../src/jjabtero/pdfs.py#open_access_pdf_url)이 하며, 인용 미리보기도 같이 쓴다([리더 인용 미리보기 설계](ReaderCitations.md#4-논문-찾기)). 'Attention Is All You Need'는 `https://arxiv.org/pdf/1706.03762`였다(2026-11-15 확인).
 - OpenAlex에 연결되지 않았어도 DOI가 `10.48550/arxiv.<ID>`이면 `https://arxiv.org/pdf/<ID>`를 쓴다.
 - [download_pdf](../../src/jjabtero/pdfs.py#download_pdf)가 넘겨주기(redirect)를 따라가며 받는다. 받은 내용이 PDF(`%PDF-`로 시작)가 아니면 버린다([check_pdf](../../src/jjabtero/pdfs.py#check_pdf), [NotPdfError](../../src/jjabtero/pdfs.py#NotPdfError)). 출판사 페이지가 PDF 대신 HTML을 주는 경우가 있기 때문이다.
 - 자동 받기는 사용자가 논문 상세에서 "PDF 받기"를 누를 때 한다. 서재에 담을 때마다 자동으로 받으면 쓰지 않을 PDF까지 드라이브를 채우기 때문이다.

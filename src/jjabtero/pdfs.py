@@ -25,6 +25,7 @@ MAX_PDF_BYTES = 100 * 1024 * 1024
 PDF_FOLDER = "pdfs"
 _PDF_MAGIC = b"%PDF-"
 _ARXIV_DOI = re.compile(r"^10\.48550/arxiv\.(.+)$", re.IGNORECASE)
+_ARXIV_ABS = re.compile(r"^https?://(?:www\.)?arxiv\.org/abs/(.+?)/?$", re.IGNORECASE)
 
 
 class NotPdfError(ValueError):
@@ -63,26 +64,37 @@ def check_pdf(data: bytes) -> None:
         raise NotPdfError("PDF 파일이 아닙니다.")
 
 
+def open_access_pdf_url(http: httpx2.Client, openalex_id: str | None, doi: str | None) -> tuple[str, str] | None:
+    """OpenAlex ID와 DOI로 공개 PDF 주소와 출처(`openalex`, `arxiv`)를 찾는다. 없으면 `None`이다.
+
+    @doc: docs/design/Reader.md#2-pdf-가져오기
+    @doc: docs/design/ReaderCitations.md#4-논문-찾기
+    """
+    if openalex_id:
+        params = {"select": "best_oa_location,open_access"}
+        api_key = os.environ.get("OPENALEX_API_KEY")
+        if api_key:
+            params["api_key"] = api_key
+        response = http.get(f"{OPENALEX_WORKS_URL}/{openalex_id}", params=params)
+        if response.status_code == 200:
+            body = response.json()
+            url = (body.get("best_oa_location") or {}).get("pdf_url") or (body.get("open_access") or {}).get("oa_url")
+            if url:
+                # OpenAlex가 arXiv 소개 페이지를 주는 경우가 있어 PDF 주소로 바꾼다.
+                abstract = _ARXIV_ABS.match(url)
+                return (f"https://arxiv.org/pdf/{abstract.group(1)}" if abstract else url), "openalex"
+    match = _ARXIV_DOI.match(doi or "")
+    if match:
+        return f"https://arxiv.org/pdf/{match.group(1)}", "arxiv"
+    return None
+
+
 def open_pdf_url(http: httpx2.Client, paper: Paper) -> tuple[str, str] | None:
     """논문의 공개 PDF 주소와 출처(`openalex`, `arxiv`)를 찾는다. 없으면 `None`이다.
 
     @doc: docs/design/Reader.md#2-pdf-가져오기
     """
-    if paper.openalex_id:
-        params = {"select": "best_oa_location,open_access"}
-        api_key = os.environ.get("OPENALEX_API_KEY")
-        if api_key:
-            params["api_key"] = api_key
-        response = http.get(f"{OPENALEX_WORKS_URL}/{paper.openalex_id}", params=params)
-        if response.status_code == 200:
-            body = response.json()
-            url = (body.get("best_oa_location") or {}).get("pdf_url") or (body.get("open_access") or {}).get("oa_url")
-            if url:
-                return url, "openalex"
-    match = _ARXIV_DOI.match(paper.doi or "")
-    if match:
-        return f"https://arxiv.org/pdf/{match.group(1)}", "arxiv"
-    return None
+    return open_access_pdf_url(http, paper.openalex_id, paper.doi)
 
 
 def download_pdf(http: httpx2.Client, url: str) -> bytes:
