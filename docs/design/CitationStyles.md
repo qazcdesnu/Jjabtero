@@ -10,7 +10,7 @@
 
 ## 2. 양식
 
-[CITATION_STYLES](../../frontend/src/citationStyles.ts#CITATION_STYLES)가 아래 순서로 여덟 양식을 가진다. CS 논문에서 많이 쓰는 BibTeX, IEEE, ACM을 앞에 두고, 구글 스칼라가 주는 다섯 양식(APA, MLA, Chicago, Harvard, Vancouver)을 뒤에 둔다. 양식마다 일반 글과 기울임(`<i>`)이 있는 HTML을 함께 만든다([FormattedCitation](../../frontend/src/citationStyles.ts#FormattedCitation)).
+[CITATION_STYLES](../../frontend/src/citationStyles.ts#CITATION_STYLES)가 아래 순서로 여덟 양식을 가진다. CS 논문에서 많이 쓰는 BibTeX, IEEE, ACM을 앞에 두고, 구글 스칼라가 주는 다섯 양식(APA, MLA, Chicago, Harvard, Vancouver)을 뒤에 둔다. 양식마다 일반 글, 기울임(`<i>`)이 있는 HTML, LaTeX 글을 함께 만든다([FormattedCitation](../../frontend/src/citationStyles.ts#FormattedCitation)). LaTeX 글의 규칙은 [5절](#5-복사)에 있다.
 
 | 양식 | 함수 | 저자 | 모양(예: 학회 논문) |
 | --- | --- | --- | --- |
@@ -41,17 +41,20 @@
 - 항목 종류에 따라 형식과 게재처 필드를 고른다: 저널 논문 `@article`(journal), 학회 논문 `@inproceedings`(booktitle), 책의 장 `@incollection`(booktitle), 책 `@book`(publisher), 학위논문 `@phdthesis`(school), 보고서 `@techreport`(institution). 그 밖은 `@misc`(howpublished)이고, 게재처가 없는 arXiv 논문은 `@article`(journal = `arXiv preprint arXiv:<ID>`)이다.
 - 키([bibtexKey](../../frontend/src/citationStyles.ts#bibtexKey))는 첫 저자 성(악센트와 기호를 뗀 소문자) + 연도 + 제목에서 네 글자 넘는 첫 낱말이다(예: `vaswani2017attention`). 구글 스칼라와 같은 모양이다.
 - 제목은 이중 중괄호로 감싸 대소문자를 지킨다. arXiv 논문은 `eprint`와 `archivePrefix = {arXiv}`를 넣는다. DOI가 있으면 `doi`, 없으면 `url`을 넣는다. 값 안의 중괄호는 뗀다.
-- BibTeX는 서식 없이 글로만 복사하므로 HTML을 만들지 않는다.
+- BibTeX는 서식 없이 글로만 복사하므로 HTML을 만들지 않는다. LaTeX 글은 일반 글과 같다(그대로 `.bib` 파일에 붙여 넣는다).
 
 ## 5. 복사
 
 - 논문 상세([PaperDetail](../../frontend/src/PaperDetail.vue)) 맨 위 오른쪽의 "인용" 버튼이 창([CiteDialog](../../frontend/src/CiteDialog.vue))을 연다. 창은 여덟 양식을 위 순서로 한 줄씩 보여 주고, 줄마다 미리보기와 "복사" 버튼을 둔다. 구글 스칼라의 인용 창과 같은 모양이다. BibTeX는 고정폭 글꼴 상자로 보여 준다.
-- "복사"를 누르면 [copyCitation](../../frontend/src/citationStyles.ts#copyCitation)이 일반 글과 HTML을 함께 클립보드에 넣는다(`ClipboardItem`). 워드나 구글 문서에 붙여 넣으면 기울임이 남고, 글만 받는 곳에는 일반 글이 들어간다. 브라우저가 `ClipboardItem`을 지원하지 않거나 막으면 일반 글만 넣는다. 버튼은 2초 동안 "복사됨"으로 바뀐다.
+- 창 위쪽에서 복사 모드([CopyMode](../../frontend/src/citationStyles.ts#CopyMode)) 두 가지 가운데 하나를 고른다. 사용자가 워드·구글 문서용과 LaTeX용을 나눠 달라고 했다([이슈 I19](../Issue.md)). 고른 모드는 이 브라우저의 `localStorage`(`jjabtero:cite-mode`)에 기억하고, 쓸 수 없으면 문서용으로 시작한다.
+  - **문서용(워드·구글 문서)**: 미리보기는 기울임이 보이는 글이다. "복사"를 누르면 [copyCitation](../../frontend/src/citationStyles.ts#copyCitation)이 일반 글과 HTML을 함께 클립보드에 넣는다(`ClipboardItem`). 워드나 구글 문서에 붙여 넣으면 기울임이 남고, 글만 받는 곳에는 일반 글이 들어간다. 브라우저가 `ClipboardItem`을 지원하지 않거나 막으면 일반 글만 넣는다.
+  - **LaTeX**: 미리보기와 복사 모두 LaTeX 글이다(고정폭 글꼴, 줄바꿈). 기울임은 `\textit{…}`, 큰따옴표는 ``` ``…'' ```, 작은따옴표(Harvard)는 `` `…' ``, 주소는 `\url{…}`(`url` 또는 `hyperref` 패키지)로 쓴다. 그 밖의 글에서 LaTeX 특수 문자(`\ & % $ # _ { } ~ ^`)를 이스케이프한다([escapeLatex](../../frontend/src/citationStyles.ts#escapeLatex)). 주소 안은 이스케이프하지 않는다(`\url`이 그대로 받는다). 악센트 글자(`ü`, `Ł` 등)는 UTF-8 그대로 둔다. 요즘 LaTeX(2018년 이후)는 UTF-8을 기본으로 읽기 때문이다.
+- 버튼은 2초 동안 "복사됨"으로 바뀐다. 모드를 바꾸면 "복사됨" 표시를 지운다.
 - HTML 미리보기는 `v-html`로 그린다. 서재 정보는 모두 HTML 특수 문자를 바꾼 뒤 `<i>`로만 감싸므로 다른 태그가 들어가지 않는다.
 
 ## 6. 테스트
 
-- [citationStyles.test](../../frontend/src/citationStyles.test.ts)는 이름 나누기(머리글자, 이음말, Jr., 쉼표, 한 낱말), 여덟 양식의 글(저자 수에 따른 et al., 학회·저널·arXiv, 연도 없음), 기울임 HTML과 특수 문자, BibTeX 형식·키·arXiv 저장소 게재처, 복사(HTML과 함께, 글만, 실패하면 글만)를 확인한다.
+- [citationStyles.test](../../frontend/src/citationStyles.test.ts)는 이름 나누기(머리글자, 이음말, Jr., 쉼표, 한 낱말), 여덟 양식의 글(저자 수에 따른 et al., 학회·저널·arXiv, 연도 없음), 기울임 HTML과 특수 문자, BibTeX 형식·키·arXiv 저장소 게재처, LaTeX 글(특수 문자 이스케이프, `\textit`, 따옴표, `\url`, BibTeX는 같은 글), 복사(문서용은 HTML과 함께, 글만, 실패하면 글만, LaTeX용은 LaTeX 글만)를 확인한다.
 
 ## 7. 미결정 사항
 
