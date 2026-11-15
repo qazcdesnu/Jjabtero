@@ -2,6 +2,7 @@
 <!-- @doc: docs/design/Reader.md#6-화면 -->
 <!-- @doc: docs/design/Citations.md#6-api와-화면 -->
 <!-- @doc: docs/design/ReadingStatus.md#3-화면 -->
+<!-- @doc: docs/design/CitationStyles.md#5-복사 -->
 <script setup lang="ts">
 import Button from 'primevue/button'
 import ConfirmPopup from 'primevue/confirmpopup'
@@ -14,12 +15,14 @@ import { computed, ref, watch } from 'vue'
 import { ITEM_TYPE_LABELS, READ_STATUSES, formatDate } from './labels'
 import { createLibraryState } from './libraryState'
 import CitationLists from './CitationLists.vue'
+import CiteDialog from './CiteDialog.vue'
 import PdfPanel from './PdfPanel.vue'
 
 const props = defineProps<{ library: ReturnType<typeof createLibraryState> }>()
 const emit = defineEmits<{ read: [paper: { id: number; title: string }] }>()
 const paper = computed(() => props.library.selected.value)
 const removing = ref(false)
+const citing = ref(false)
 const confirm = useConfirm()
 
 const note = ref('')
@@ -83,8 +86,9 @@ function askRemove(event: Event) {
 <template>
   <div v-if="paper" class="flex flex-col gap-4 p-4">
     <div class="flex flex-col gap-1">
-      <div>
+      <div class="flex items-center justify-between gap-2">
         <Tag :value="ITEM_TYPE_LABELS[paper.item_type] ?? paper.item_type" severity="secondary" />
+        <Button icon="pi pi-copy" label="인용" size="small" text @click="citing = true" />
       </div>
       <h2 class="text-lg leading-snug font-semibold">{{ paper.title }}</h2>
       <p class="text-sm text-surface-600 dark:text-surface-300">
@@ -126,6 +130,8 @@ function askRemove(event: Event) {
       <dt class="text-surface-500">추가일</dt>
       <dd class="tabular-nums">{{ formatDate(paper.created_at) }}</dd>
     </dl>
+
+    <CiteDialog v-model:visible="citing" :work="paper" />
 
     <PdfPanel :paper="paper" @changed="library.load()" @read="openPdf" />
 
