@@ -2,6 +2,52 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md), [M3 인용 기반 연결·추천](Done-M3.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M6-T2 참고문헌 항목 글로 논문을 찾는 API
+
+- 시작일: 2026-11-15
+- 완료일: 2026-11-15
+- 근거 문서: [리더 인용 미리보기 설계](design/ReaderCitations.md#4-논문-찾기)
+- 참고 자료: 없음
+
+### 계획
+- 항목 글과 후보 논문 제목을 맞추는 함수를 만든다.
+- 이 논문의 OpenAlex 참고문헌과 먼저 맞추고, 없으면 OpenAlex를 검색하는 API를 만든다. 찾은 논문의 서재 상태와 공개 PDF 주소를 함께 준다.
+- 공개 PDF 주소를 찾는 코드를 PDF 받기와 함께 쓰도록 나눈다.
+- 테스트를 더하고 실제 PDF의 참고문헌 항목으로 확인한다.
+
+### 진행 기록
+- 2026-11-15: 병합되지 않은 가장 최근 브랜치 `m6-t1-reader-citations-design`에서 작업 브랜치를 만들었다.
+- 2026-11-15: `references` 모듈(맞추기, API, 결과 기억)을 만들고, 공개 PDF 주소 찾기를 `open_access_pdf_url`로 나눴다.
+- 2026-11-15: 시연 서버에서 SE Networks 논문으로 실제 OpenAlex를 불러 확인했다. LSTM과 ResNet 항목은 참고문헌에서 찾았다. 참고문헌에 없는 Sennrich 항목은 항목 글 전체로 검색하자 관계없는 결과만 나와 찾지 못했다. OpenAlex 검색은 낱말을 모두 맞추려 해서 저자·학회 낱말이 방해가 됐다. 제목일 만한 조각을 골라 검색하도록 바꾸자 Sennrich와 Adam 항목을 찾았다. 꾸며 낸 항목은 찾지 못함이었다.
+- 2026-11-15: OpenAlex가 Adam 논문의 공개 주소를 arXiv 소개 페이지(`arxiv.org/abs/...`)로 주었다. 이 주소로는 PDF 받기도 실패하므로 PDF 주소로 바꾸게 했다.
+- 2026-11-15: 확인하던 중 `curl` 오류 메시지에 `.env`의 OpenAlex 키가 이 세션의 명령 출력에 한 번 찍혔다. 저장소나 외부로 나가지는 않았다. 이후에는 키를 출력하지 않는 방법으로만 확인했고, 사용자에게 알렸다.
+
+### 결정 사항
+- 결과 기억은 서버 메모리에 둔다. 인용 캐시 파일에 표를 더하면 캐시 버전을 올려 모든 인용 데이터를 다시 받아야 하기 때문이다. 서버가 다시 시작하면 사라져도 다시 찾으면 된다.
+- 서재 상태는 기억하지 않고 매번 읽는다. 상자에서 서재에 담은 뒤 다시 마우스를 올리면 "서재에 있음"이 보여야 하기 때문이다.
+- 검색은 제목 후보 두 개까지만 한다. 마우스를 올릴 때마다 OpenAlex를 여러 번 부르지 않게 하기 위해서다.
+
+### 변경 파일
+- `docs/Roadmap.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+- `docs/design/ReaderCitations.md`
+- `docs/design/Reader.md`
+- `src/jjabtero/references.py`
+- `src/jjabtero/pdfs.py`
+- `src/jjabtero/citations.py`
+- `src/jjabtero/app.py`
+- `tests/test_references.py`
+- `tests/test_pdfs.py`
+
+### 결과
+- `POST /api/papers/{id}/references/resolve`에 참고문헌 항목 글을 보내면 그 논문(서지 정보, 서재 상태, 공개 PDF 주소)을 돌려준다. 이 논문의 참고문헌에서 먼저 찾고, 없으면 제목일 만한 조각으로 OpenAlex를 검색한다.
+- PDF 받기에서 OpenAlex가 arXiv 소개 페이지를 주는 경우에도 PDF를 받는다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+- 시연 서버와 실제 OpenAlex로 참고문헌에서 찾기(LSTM, ResNet), 검색으로 찾기(Sennrich, Adam), 찾지 못함(꾸며 낸 항목)을 확인했다.
+
 ## M6-T1 인용 미리보기 설계(인용 표시 찾기, 참고문헌 항목 읽기, 논문 찾기, 상자와 동작)
 
 - 시작일: 2026-11-15

@@ -555,6 +555,7 @@ class CitationStore:
         """서지 정보를 저장한다. 같은 ID는 바꾼다.
 
         @doc: docs/design/Citations.md#4-저장
+        @doc: docs/design/ReaderCitations.md#4-논문-찾기
         """
         with self.engine.begin() as connection:
             for row in {row["id"]: row for row in rows}.values():
@@ -814,6 +815,7 @@ class CitedWork(BaseModel):
     """인용 목록에 보일 논문 하나. 서재에 있으면 그 논문 ID를 가진다.
 
     @doc: docs/design/Citations.md#6-api와-화면
+    @doc: docs/design/ReaderCitations.md#4-논문-찾기
     """
 
     openalex_id: str

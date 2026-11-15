@@ -41,26 +41,31 @@
 
 ## 4. 논문 찾기
 
-`POST /api/papers/{id}/references/resolve`(본문 `{"text": 항목 글}`)가 찾는다. 모듈은 `src/jjabtero/references.py`(예정)다.
+`POST /api/papers/{id}/references/resolve`(본문 [ResolveIn](../../src/jjabtero/references.py#ResolveIn) `{"text": 항목 글}`, 2,000자까지)를 [resolve_reference](../../src/jjabtero/references.py#resolve_reference)가 처리한다([router](../../src/jjabtero/references.py#router)). 찾는 일은 [_find](../../src/jjabtero/references.py#_find)가 한다. 로그인이 켜져 있으면 로그인해야 쓴다.
 
 **1단계: 이 논문의 참고문헌과 맞추기**
 
 - 리더로 읽는 논문이 OpenAlex에 연결되어 인용 데이터가 있으면, 그 참고문헌 목록([인용 데이터 설계](Citations.md#4-저장)의 `references`와 `works`)의 제목과 항목 글을 맞춘다. 대부분 여기서 찾으므로 OpenAlex를 검색하지 않아도 된다.
-- 맞추기(예정 이름 `match_reference`):
-  - 둘 다 소문자로 바꾸고 악센트를 떼고, 글자·숫자가 아닌 것은 빈칸으로 바꾼다.
+- 맞추기([match_reference](../../src/jjabtero/references.py#match_reference)):
+  - 둘 다 소문자로 바꾸고 악센트를 떼고, 글자·숫자가 아닌 것은 빈칸으로 바꾼다([normalize](../../src/jjabtero/references.py#normalize)).
   - 제목이 항목 글 안에 그대로 있으면 점수 1이다.
-  - 아니면 제목 낱말 가운데 항목 글에 있는 낱말의 비율이 점수다. 제목 낱말이 3개 이상이고 점수가 0.85 이상이어야 맞은 것으로 본다. 짧은 제목은 우연히 맞기 쉽기 때문이다.
-  - 후보의 연도가 항목 글에 있으면 0.05를 더한다. 가장 높은 후보를 고른다.
+  - 아니면 제목 낱말 가운데 항목 글에 있는 낱말의 비율이 점수다. 제목 낱말이 3개([MIN_TITLE_WORDS](../../src/jjabtero/references.py#MIN_TITLE_WORDS)) 이상이고 점수가 0.85([MATCH_MIN](../../src/jjabtero/references.py#MATCH_MIN)) 이상이어야 맞은 것으로 본다. 제목이 그대로 있는 경우에도 제목 낱말이 3개 이상이어야 한다. 짧은 제목은 우연히 맞기 쉽기 때문이다.
+  - 후보의 연도가 항목 글에 있으면 0.05([YEAR_BONUS](../../src/jjabtero/references.py#YEAR_BONUS))를 더한다. 가장 높은 후보를 고른다.
 
 **2단계: OpenAlex 검색**
 
-- 1단계에서 못 찾으면 항목 글(앞 250자)로 OpenAlex 작업을 검색해(`search`, 5건) 같은 방법으로 맞춘다. 맞는 것이 없으면 "찾지 못함"이다.
+- 1단계에서 못 찾으면 OpenAlex 작업을 검색해(`search`, 5건 [SEARCH_LIMIT](../../src/jjabtero/references.py#SEARCH_LIMIT)) 같은 방법으로 맞춘다. 맞는 것이 없으면 "찾지 못함"이다.
+- 항목 글 전체로 검색하면 저자·학회·쪽 번호 낱말까지 모두 맞아야 해서 엉뚱한 결과가 나온다. Sennrich 외 'Neural machine translation of rare words with subword units' 항목 글 전체로는 관계없는 논문 4건이 나왔고, 제목만으로는 그 논문이 첫 번째였다(2026-11-15 확인). 그래서 항목 글에서 제목일 만한 조각을 골라([title_candidates](../../src/jjabtero/references.py#title_candidates)) 앞의 두 조각([SEARCH_TRIES](../../src/jjabtero/references.py#SEARCH_TRIES))까지 차례로 검색한다. 검색어는 [normalize](../../src/jjabtero/references.py#normalize)한 글의 앞 250자([SEARCH_CHARS](../../src/jjabtero/references.py#SEARCH_CHARS))다.
+  - 앞의 번호 표시(`[12]`, `12.`)를 떼고, 마침표 뒤 빈칸에서 조각으로 나눈다. 이름 머리글자(대문자 한 글자, 예: `J.`)와 흔한 줄임말(`vol.`, `pp.`, `Proc.`, `Conf.` 등) 뒤에서는 나누지 않는다. `et al.`은 대개 저자 목록의 끝이므로 나눈다.
+  - 낱말이 3개 이상인 조각만 후보다. 저자처럼 보이는 정도(대문자로 시작하는 낱말, 쉼표와 `and`의 비율, 첫 조각이면 1.5배), 게재처 낱말(proceedings, conference, journal, arxiv 등)의 비율 두 배, 숫자 낱말의 비율 두 배를 더한 값이 작은 순서다.
+- 검색으로 찾은 논문의 서지 정보는 인용 캐시의 `works`에 저장한다([CitationStore.save_works](../../src/jjabtero/citations.py#CitationStore.save_works)).
+- OpenAlex가 하루 사용량 초과(429)나 연결 오류를 주면 502와 까닭을 돌려준다.
 
 **응답**
 
-- 상태(`found`, `not_found`), 찾은 경로(`references`, `search`), 논문 정보(인용 목록과 같은 모양: OpenAlex ID, 제목, 저자, 항목 종류, 연도, 게재처, DOI, 피인용 수, 서재에 있으면 그 논문 ID), 서재 논문에 PDF가 있는지, 공개 PDF 주소다.
-- 공개 PDF 주소는 PDF 받기와 같은 규칙이다([PDF 리더 설계](Reader.md#2-pdf-가져오기): OpenAlex의 오픈 액세스 주소, 없으면 arXiv DOI). 찾은 논문마다 OpenAlex를 한 번 더 부른다.
-- 같은 논문과 같은 항목 글의 결과는 서버 메모리에 1,000건까지 기억한다. 같은 인용에 여러 번 마우스를 올려도 OpenAlex를 다시 부르지 않게 하기 위해서다. 브라우저도 리더를 연 동안 결과를 기억한다.
+- [ReferenceMatch](../../src/jjabtero/references.py#ReferenceMatch): 상태(`found`, `not_found`), 찾은 경로(`references`, `search`), 논문 정보(인용 목록의 [CitedWork](../../src/jjabtero/citations.py#CitedWork)와 같은 모양: OpenAlex ID, 제목, 저자, 항목 종류, 연도, 게재처, DOI, 피인용 수, 서재에 있으면 그 논문 ID), 서재 논문에 PDF가 있는지, 공개 PDF 주소다.
+- 공개 PDF 주소는 PDF 받기와 같은 규칙이다([open_access_pdf_url](../../src/jjabtero/pdfs.py#open_access_pdf_url), [PDF 리더 설계](Reader.md#2-pdf-가져오기): OpenAlex의 오픈 액세스 주소, 없으면 arXiv DOI). 찾은 논문마다 OpenAlex를 한 번 더 부른다.
+- 같은 논문과 같은 항목 글로 찾은 결과(찾은 논문, 경로, 공개 PDF 주소)는 서버 메모리에 1,000건([CACHE_SIZE](../../src/jjabtero/references.py#CACHE_SIZE))까지 기억한다. 서재 상태(서재 논문 ID, PDF 있음)는 바뀌므로 기억하지 않고 매번 서재에서 읽는다. 찾지 못함도 기억하지만 OpenAlex 오류는 기억하지 않는다. 같은 인용에 여러 번 마우스를 올려도 OpenAlex를 다시 부르지 않게 하기 위해서다. 브라우저도 리더를 연 동안 결과를 기억한다.
 - 이 API는 서재를 바꾸지 않는다. 서재에 담는 것은 사용자가 상자에서 누를 때뿐이다([제품 비전](../ProductVision.md#6-인용-기반-연결추천)).
 
 ## 5. 상자
@@ -76,3 +81,7 @@
 ## 6. 미결정 사항
 
 - 링크가 없는 PDF의 인용 표시 모양과 참고문헌 절 찾기 규칙(M6-T4에서 정한다).
+
+## 7. 테스트
+
+- [test_references](../../tests/test_references.py)는 글 다듬기, 제목 후보 고르기(번호 표시, 이름 머리글자, `et al.`, APA 형식), 맞추기 규칙(제목 그대로, 낱말 비율, 짧은 제목 빼기, 비슷한 낱말 빼기, 연도), API(참고문헌에서 찾기와 공개 PDF 주소, arXiv DOI, 서재에 담은 뒤의 서재 논문 ID, 검색으로 찾기, 같은 글은 다시 검색하지 않기, 찾지 못함, 없는 논문, 빈 글)를 가짜 OpenAlex로 확인한다.

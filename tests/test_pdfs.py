@@ -206,3 +206,16 @@ def test_deleting_paper_removes_pdf_link(tmp_path: Path) -> None:
     with app.state.engine.connect() as connection:
         assert connection.execute(text("select count(*) from paper_pdfs")).scalar() == 0
     assert any(item["name"].endswith(".pdf") for item in drive.files.values())
+
+
+def test_arxiv_abstract_page_becomes_pdf_url(tmp_path: Path) -> None:
+    """OpenAlex가 arXiv 소개 페이지를 주면 PDF 주소로 바꿔 받는다.
+
+    @doc: docs/design/Reader.md#8-테스트
+    """
+    web = FakeWeb(oa_url="https://arxiv.org/abs/1412.6980v5")
+    app, _ = make_app(tmp_path, web)
+    client = TestClient(app)
+    paper_id = add_paper(client, openalex_id="W1")
+    body = client.post(f"/api/papers/{paper_id}/pdf/fetch").json()
+    assert body["source_url"] == "https://arxiv.org/pdf/1412.6980v5"
