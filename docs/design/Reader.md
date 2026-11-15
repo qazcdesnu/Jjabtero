@@ -48,13 +48,13 @@
 | 표 | 열 | 내용 |
 | --- | --- | --- |
 | `paper_pdfs`([PaperPdf](../../src/jjabtero/models.py#PaperPdf), 마이그레이션 0005) | `paper_id`(기본 키, 논문 지우면 함께 지움), `sha256`, `size`, `source`(`openalex`, `arxiv`, `upload`), `source_url`, `drive_file_id`, `page_count`, `added_at` | 논문의 PDF |
-| `reading_positions` | `paper_id`(기본 키), `page`(1부터), `offset`(그 쪽 안의 세로 위치 0~1), `zoom`, `updated_at` | 읽던 위치 |
+| `reading_positions`([ReadingPosition](../../src/jjabtero/models.py#ReadingPosition), 마이그레이션 0006) | `paper_id`(기본 키, 논문 지우면 함께 지움), `page`(1부터), `offset`(그 쪽 안의 세로 위치 0~1), `zoom`, `updated_at` | 읽던 위치 |
 | `annotations` | `id`, `paper_id`, `kind`(`highlight`, `note`), `page`, `rects`(JSON), `text`, `color`, `note`, `created_at`, `updated_at` | 하이라이트와 영역 메모 |
 
 - 좌표는 쪽 크기에 대한 비율(0~1)로 저장한다. 확대·축소와 화면 크기에 상관없이 같은 자리에 그리기 위해서다. `rects`는 `[{"x":…, "y":…, "w":…, "h":…}]` 목록이다. 하이라이트는 여러 줄에 걸치므로 사각형이 여럿이고, 영역 메모는 하나다.
 - 하이라이트는 고른 글(`text`)과 색(`color`)을, 영역 메모는 메모(`note`)를 가진다. 하이라이트에도 메모를 달 수 있다.
 - 주석은 PDF가 아니라 논문에 묶는다. PDF를 다른 판으로 바꿔도 주석이 남는다. 쪽 구성이 다르면 자리가 어긋날 수 있으므로, PDF를 바꿀 때 화면에서 알린다.
-- 읽던 위치는 스크롤이 멈춘 뒤 2초가 지나면 저장한다. 저장할 때마다 서재 자동 올리기가 예약되지만, 자동 올리기 자체가 5초 동안 모아서 하므로 드라이브 요청이 많아지지 않는다.
+- 읽던 위치는 스크롤이 멈춘 뒤 2초가 지나면 저장하고([createPositionSaver](../../frontend/src/readerState.ts#createPositionSaver), [POSITION_SAVE_DELAY_MS](../../frontend/src/readerState.ts#POSITION_SAVE_DELAY_MS)), 리더를 닫을 때 남은 것을 바로 저장한다. 저장 실패는 리더를 멈추지 않는다. 쪽은 화면 위 끝에서 쪽 간격만큼 아래를 기준으로 센다. 다시 열면 저장한 확대 배율로 그 자리를 보여 주고, 저장한 위치가 없으면 너비에 맞춰 첫 쪽부터 보여 준다. 저장할 때마다 서재 자동 올리기가 예약되지만, 자동 올리기 자체가 5초 동안 모아서 하므로 드라이브 요청이 많아지지 않는다.
 
 ## 5. API
 
@@ -65,12 +65,12 @@ PDF API는 [pdfs 모듈](../../src/jjabtero/pdfs.py)의 [router](../../src/jjabt
 | `GET /api/papers/{id}/pdf`([read_pdf](../../src/jjabtero/pdfs.py#read_pdf)) | PDF 내용(`application/pdf`). 로컬 사본이 없으면 드라이브에서 받아 둔다. 없으면 404 |
 | `POST /api/papers/{id}/pdf/fetch`([fetch_pdf](../../src/jjabtero/pdfs.py#fetch_pdf)) | 공개 PDF를 받아 보관하고 `paper_pdfs` 정보를 돌려준다. 공개 PDF가 없으면 404, PDF가 아니거나 받지 못하면 502 |
 | `PUT /api/papers/{id}/pdf`([upload_pdf](../../src/jjabtero/pdfs.py#upload_pdf)) | 올린 PDF(본문이 PDF 내용)를 보관하고 정보를 돌려준다. PDF가 아니면 415, 너무 크면 413 |
-| `GET`, `PUT /api/papers/{id}/position` | 읽던 위치를 읽고 쓴다 |
+| `GET`, `PUT /api/papers/{id}/position`([read_position](../../src/jjabtero/reading.py#read_position), [save_position](../../src/jjabtero/reading.py#save_position)) | 읽던 위치를 읽고 쓴다. 저장한 위치가 없으면 204다. 입력은 [PositionIn](../../src/jjabtero/reading.py#PositionIn)(쪽 1 이상, 쪽 안 위치 0~1, 확대 0.25~5, 벗어나면 422), 응답은 [PositionOut](../../src/jjabtero/reading.py#PositionOut)이다. 저장하면 드라이브 자동 올리기를 예약한다. [reading 모듈](../../src/jjabtero/reading.py)의 [router](../../src/jjabtero/reading.py#router)가 처리한다 |
 | `GET /api/papers/{id}/annotations` | 주석 목록 |
 | `POST /api/papers/{id}/annotations`, `PATCH`·`DELETE /api/annotations/{id}` | 주석을 만들고 고치고 지운다 |
 
 - 모두 로그인이 켜져 있으면 로그인해야 쓴다. PDF도 `/api` 아래라 공개되지 않는다.
-- 논문 목록 응답에 PDF가 있는지(`has_pdf`, 화면 타입 [Paper.has_pdf](../../frontend/src/api.ts#Paper.has_pdf))를 더해, 목록과 상세에서 표시한다. 화면의 API 호출은 [fetchOpenPdf](../../frontend/src/api.ts#fetchOpenPdf), [uploadPdf](../../frontend/src/api.ts#uploadPdf), [pdfUrl](../../frontend/src/api.ts#pdfUrl)이고 응답 타입은 [PaperPdf](../../frontend/src/api.ts#PaperPdf)다.
+- 논문 목록 응답에 PDF가 있는지(`has_pdf`, 화면 타입 [Paper.has_pdf](../../frontend/src/api.ts#Paper.has_pdf))를 더해, 목록과 상세에서 표시한다. 화면의 API 호출은 [fetchPosition](../../frontend/src/api.ts#fetchPosition), [savePosition](../../frontend/src/api.ts#savePosition)(타입 [ReadingPosition](../../frontend/src/api.ts#ReadingPosition)), [fetchOpenPdf](../../frontend/src/api.ts#fetchOpenPdf), [uploadPdf](../../frontend/src/api.ts#uploadPdf), [pdfUrl](../../frontend/src/api.ts#pdfUrl)이고 응답 타입은 [PaperPdf](../../frontend/src/api.ts#PaperPdf)다.
 
 ## 6. 화면
 
@@ -94,8 +94,9 @@ PDF API는 [pdfs 모듈](../../src/jjabtero/pdfs.py)의 [router](../../src/jjabt
 ## 8. 테스트
 
 - [test_pdfs](../../tests/test_pdfs.py): 공개 PDF 받기(OpenAlex, arXiv DOI, 없음, PDF가 아님), 로컬 사본과 드라이브 `pdfs/` 폴더 보관, 올리기(바꾸기, PDF 아님 415, 너무 큼 413), 로컬 사본이 없을 때 드라이브에서 받기, 드라이브 없이 로컬만, 없는 논문 404, 논문을 지우면 연결만 지우기.
+- [test_reading](../../tests/test_reading.py): 읽던 위치가 없을 때 204, 저장과 바꾸기, 범위 밖 422, 없는 논문 404, 논문을 지우면 함께 지우기, 저장마다 드라이브 올리기 예약.
 - [pdfState.test](../../frontend/src/pdfState.test.ts): 받기·올리기 성공과 실패.
-- [readerState.test](../../frontend/src/readerState.test.ts): 확대 단계, 너비 맞춤, 쪽 위치, 보이는 쪽, 쪽 번호 범위, 읽던 위치와 스크롤 위치 변환.
+- [readerState.test](../../frontend/src/readerState.test.ts): 확대 단계, 너비 맞춤, 쪽 위치, 보이는 쪽, 쪽 번호 범위, 읽던 위치와 스크롤 위치 변환, 위치 저장 지연(2초, 마지막 값만, 닫을 때 바로, 실패 무시).
 - 리더 화면 자체(pdf.js 그리기)는 단위 테스트 대신 브라우저에서 실제 PDF로 확인한다.
 - [api.test](../../frontend/src/api.test.ts): PDF API 호출과 오류 메시지.
 

@@ -2,6 +2,49 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M4-T4 읽던 위치 저장과 이어 읽기
+
+- 시작일: 2026-11-15
+- 완료일: 2026-11-15
+- 근거 문서: [PDF 리더 설계](design/Reader.md#4-데이터)
+- 참고 자료: 없음
+
+### 계획
+- `reading_positions`(마이그레이션 0006)와 위치 API를 만들고, 리더가 스크롤이 멈추면 위치를 저장하고 다시 열면 그 자리를 보여 주게 한다.
+
+### 진행 기록
+- 2026-11-15: M4-T3을 마치고 권장 순서대로 시작했다. PR #34(M4-T3)가 아직 병합되지 않아 그 브랜치에서 작업 브랜치를 만들었다.
+- 2026-11-15: 모델, 마이그레이션 0006, 위치 API(읽기 204/쓰기, 범위 검사, 드라이브 올리기 예약)를 구현하고 테스트를 더했다. 화면에 위치 API 함수와 2초 지연 저장기를 더하고, 리더가 열 때 위치를 되살리고 스크롤·확대 때 저장하며 닫을 때 남은 것을 저장하게 했다.
+- 2026-11-15: 임시 서버의 브라우저 시험에서 5쪽으로 가서 닫았다 다시 열면 5쪽이 보였다. 다만 저장값이 "4쪽 끝"(offset 1.0)이었다. 쪽 머리 바로 위로 이동한 위치를 스크롤 위치 그대로 셌기 때문이다. 쪽 번호와 같은 기준(쪽 간격만큼 아래)으로 세도록 고쳐 "5쪽, 0.007"로 저장되는 것을 확인했다.
+- 2026-11-15: PDF 리더 설계와 서재 데이터 설계에 위치 데이터, API, 마이그레이션, 테스트를 더했다.
+
+### 결정 사항
+- 저장한 위치가 없으면 `GET`이 204를 돌려준다. 없음이 오류가 아니기 때문이다.
+- 위치 저장 실패는 화면에 알리지 않고 다음 저장 때 다시 보낸다. 읽기를 방해하지 않기 위해서다.
+
+### 변경 파일
+- `src/jjabtero/reading.py`
+- `src/jjabtero/models.py`
+- `src/jjabtero/migrations/versions/0006_reading_positions.py`
+- `src/jjabtero/app.py`
+- `tests/test_reading.py`
+- `frontend/src/api.ts`
+- `frontend/src/api.test.ts`
+- `frontend/src/readerState.ts`
+- `frontend/src/readerState.test.ts`
+- `frontend/src/ReaderView.vue`
+- `docs/design/Reader.md`
+- `docs/design/Library.md`
+- `docs/Roadmap.md`
+- `docs/Done.md`
+
+### 결과
+- 리더를 닫았다 다시 열면, 다른 컴퓨터에서 열어도(서재 동기화 뒤) 읽던 쪽과 확대 배율로 이어 읽는다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과(백엔드 새 테스트 5개, 프론트엔드 새 테스트 4개 포함).
+- `vue-tsc` 타입 검사와 `npm run build` 통과. 브라우저에서 이어 읽기를 확인했다.
+
 ## M4-T3 리더 화면(서재 논문의 PDF 열람) 구현
 
 - 시작일: 2026-11-15

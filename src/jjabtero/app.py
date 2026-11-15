@@ -43,6 +43,7 @@ from jjabtero.papers_api import router as papers_router
 from jjabtero.pdfs import PdfStore
 from jjabtero.pdfs import router as pdfs_router
 from jjabtero.public_pages import router as public_pages_router
+from jjabtero.reading import router as reading_router
 from jjabtero.settings import router as settings_router
 
 # @doc: docs/design/AppSkeleton.md#1-백엔드-앱
@@ -146,6 +147,7 @@ def create_app(
     app.include_router(settings_router)
     app.include_router(citations_router)
     app.include_router(pdfs_router)
+    app.include_router(reading_router)
     # 정적 파일 마운트는 "/" 전체를 차지하므로 API 라우터 다음에 둔다.
     if frontend_dist.is_dir():
         app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")

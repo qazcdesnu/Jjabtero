@@ -14,6 +14,7 @@
 | `tags` | [Tag](../../src/jjabtero/models.py#Tag) | 사용자가 붙이는 태그. 이름이 같으면 같은 태그다. |
 | `paper_tags` | 연결 테이블 | 논문과 태그의 다대다 연결 |
 | `paper_pdfs` | [PaperPdf](../../src/jjabtero/models.py#PaperPdf) | 논문의 PDF 연결([PDF 리더 설계](Reader.md#4-데이터)). 논문을 지우면 함께 지운다. |
+| `reading_positions` | [ReadingPosition](../../src/jjabtero/models.py#ReadingPosition) | 논문을 읽던 위치([PDF 리더 설계](Reader.md#4-데이터)). 논문을 지우면 함께 지운다. |
 
 **`papers`의 열**
 
@@ -62,6 +63,7 @@
 | [0003](../../src/jjabtero/migrations/versions/0003_settings.py) | 사용자 설정 `settings`(`key`, `value`) 테이블을 만든다([사용자 설정 설계](Settings.md#2-저장)). |
 | [0004](../../src/jjabtero/migrations/versions/0004_openalex_id.py) | `papers`에 `openalex_id`를 더한다([인용 데이터 설계](Citations.md#2-서재-논문과-openalex-연결)). |
 | [0005](../../src/jjabtero/migrations/versions/0005_paper_pdfs.py) | 논문의 PDF 연결 `paper_pdfs` 테이블을 만든다([PDF 리더 설계](Reader.md#4-데이터)). |
+| [0006](../../src/jjabtero/migrations/versions/0006_reading_positions.py) | 읽던 위치 `reading_positions` 테이블을 만든다([PDF 리더 설계](Reader.md#4-데이터)). |
 
 ## 4. 저장 함수
 

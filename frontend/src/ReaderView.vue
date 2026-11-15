@@ -15,14 +15,16 @@ import Button from 'primevue/button'
 import InputNumber from 'primevue/inputnumber'
 import Message from 'primevue/message'
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef } from 'vue'
-import { pdfUrl } from './api'
+import { fetchPosition, pdfUrl, savePosition } from './api'
 import {
   clampPage,
+  createPositionSaver,
   fitWidthScale,
   nextZoom,
   PAGE_GAP,
   pageAt,
   pageTops,
+  positionAt,
   scrollTopFor,
   visiblePages,
   type PageSize,
@@ -45,6 +47,10 @@ let loadingTask: PDFDocumentLoadingTask | null = null
 const rendered = new Map<number, number>()
 const tasks = new Map<number, RenderTask>()
 const textLayers = new Map<number, TextLayer>()
+const saver = createPositionSaver((position: { page: number; offset: number; zoom: number }) =>
+  savePosition(props.paperId, position),
+)
+let restored = false
 
 const tops = computed(() => pageTops(sizes.value, scale.value))
 const heights = computed(() => sizes.value.map((size) => size.height * scale.value))
@@ -108,6 +114,8 @@ function update() {
     if (!wanted.some((near) => Math.abs(near - page) <= 2)) clearPage(page)
   }
   for (const page of wanted) void renderPage(page)
+  if (restored)
+    saver.schedule({ ...positionAt(element.scrollTop + PAGE_GAP, tops.value, heights.value), zoom: scale.value })
 }
 
 async function setScale(next: number) {
@@ -145,8 +153,13 @@ onMounted(async () => {
     sizes.value = found
     loading.value = false
     await nextTick()
-    if (scroller.value) scale.value = Math.min(fitWidthScale(found, scroller.value.clientWidth), 1.5)
+    const saved = await fetchPosition(props.paperId).catch(() => null)
+    if (saved) scale.value = saved.zoom
+    else if (scroller.value) scale.value = Math.min(fitWidthScale(found, scroller.value.clientWidth), 1.5)
     await nextTick()
+    if (saved && scroller.value)
+      scroller.value.scrollTop = scrollTopFor(saved.page, saved.offset, tops.value, heights.value) - PAGE_GAP
+    restored = true
     update()
   } catch (error) {
     loading.value = false
@@ -155,6 +168,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  void saver.flush()
   for (const page of [...rendered.keys()]) clearPage(page)
   void loadingTask?.destroy()
 })
