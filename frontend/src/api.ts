@@ -258,6 +258,7 @@ export interface CitationStatus {
   linked: number
   not_found: number
   fetched: number
+  s2_checked: number
   running: boolean
   last_run: string | null
   error: string

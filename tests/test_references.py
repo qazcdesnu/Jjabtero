@@ -55,6 +55,8 @@ class FakeOpenAlex:
         self.oa = {"W1": "https://example.org/lstm.pdf"}
 
     def __call__(self, request: httpx2.Request) -> httpx2.Response:
+        if request.url.host == "api.semanticscholar.org":
+            return httpx2.Response(404, json={"error": "not found"})
         params = request.url.params
         path = request.url.path
         if path == f"/works/{A}":

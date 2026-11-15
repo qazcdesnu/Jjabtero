@@ -49,7 +49,7 @@
 
 - 리더로 읽는 논문이 OpenAlex에 연결되어 인용 데이터가 있으면, 그 참고문헌 목록([인용 데이터 설계](Citations.md#4-저장)의 `references`와 `works`)의 제목과 항목 글을 맞춘다. 대부분 여기서 찾으므로 OpenAlex를 검색하지 않아도 된다.
 - 맞추기([match_reference](../../src/jjabtero/references.py#match_reference)):
-  - 둘 다 소문자로 바꾸고 악센트를 떼고, 글자·숫자가 아닌 것은 빈칸으로 바꾼다([normalize](../../src/jjabtero/references.py#normalize)).
+  - 둘 다 소문자로 바꾸고 악센트를 떼고, 글자·숫자가 아닌 것은 빈칸으로 바꾼다([normalize](../../src/jjabtero/titles.py#normalize)).
   - 제목이 항목 글 안에 그대로 있으면 점수 1이다.
   - 아니면 제목 낱말 가운데 항목 글에 있는 낱말의 비율이 점수다. 제목 낱말이 3개([MIN_TITLE_WORDS](../../src/jjabtero/references.py#MIN_TITLE_WORDS)) 이상이고 점수가 0.85([MATCH_MIN](../../src/jjabtero/references.py#MATCH_MIN)) 이상이어야 맞은 것으로 본다. 제목이 그대로 있는 경우에도 제목 낱말이 3개 이상이어야 한다. 짧은 제목은 우연히 맞기 쉽기 때문이다.
   - 후보의 연도가 항목 글에 있으면 0.05([YEAR_BONUS](../../src/jjabtero/references.py#YEAR_BONUS))를 더한다. 가장 높은 후보를 고른다.
@@ -57,7 +57,7 @@
 **2단계: OpenAlex 검색**
 
 - 1단계에서 못 찾으면 OpenAlex 작업을 검색해(`search`, 5건 [SEARCH_LIMIT](../../src/jjabtero/references.py#SEARCH_LIMIT)) 같은 방법으로 맞춘다. 맞는 것이 없으면 "찾지 못함"이다.
-- 항목 글 전체로 검색하면 저자·학회·쪽 번호 낱말까지 모두 맞아야 해서 엉뚱한 결과가 나온다. Sennrich 외 'Neural machine translation of rare words with subword units' 항목 글 전체로는 관계없는 논문 4건이 나왔고, 제목만으로는 그 논문이 첫 번째였다(2026-11-15 확인). 그래서 항목 글에서 제목일 만한 조각을 골라([title_candidates](../../src/jjabtero/references.py#title_candidates)) 앞의 두 조각([SEARCH_TRIES](../../src/jjabtero/references.py#SEARCH_TRIES))까지 차례로 검색한다. 검색어는 [normalize](../../src/jjabtero/references.py#normalize)한 글의 앞 250자([SEARCH_CHARS](../../src/jjabtero/references.py#SEARCH_CHARS))다.
+- 항목 글 전체로 검색하면 저자·학회·쪽 번호 낱말까지 모두 맞아야 해서 엉뚱한 결과가 나온다. Sennrich 외 'Neural machine translation of rare words with subword units' 항목 글 전체로는 관계없는 논문 4건이 나왔고, 제목만으로는 그 논문이 첫 번째였다(2026-11-15 확인). 그래서 항목 글에서 제목일 만한 조각을 골라([title_candidates](../../src/jjabtero/references.py#title_candidates)) 앞의 두 조각([SEARCH_TRIES](../../src/jjabtero/references.py#SEARCH_TRIES))까지 차례로 검색한다. 검색어는 [normalize](../../src/jjabtero/titles.py#normalize)한 글의 앞 250자([SEARCH_CHARS](../../src/jjabtero/references.py#SEARCH_CHARS))다.
   - 앞의 번호 표시(`[12]`, `12.`)를 떼고, 마침표 뒤 빈칸에서 조각으로 나눈다. 이름 머리글자(대문자 한 글자, 예: `J.`)와 흔한 줄임말(`vol.`, `pp.`, `Proc.`, `Conf.` 등) 뒤에서는 나누지 않는다. `et al.`은 대개 저자 목록의 끝이므로 나눈다.
   - 낱말이 3개 이상인 조각만 후보다. 저자처럼 보이는 정도(대문자로 시작하는 낱말, 쉼표와 `and`의 비율, 첫 조각이면 1.5배), 게재처 낱말(proceedings, conference, journal, arxiv 등)의 비율 두 배, 숫자 낱말의 비율 두 배를 더한 값이 작은 순서다.
 - 검색으로 찾은 논문의 서지 정보는 인용 캐시의 `works`에 저장한다([CitationStore.save_works](../../src/jjabtero/citations.py#CitationStore.save_works)).

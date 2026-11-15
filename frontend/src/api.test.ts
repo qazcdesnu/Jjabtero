@@ -281,7 +281,7 @@ describe('toPaperInput의 OpenAlex ID', () => {
 
 describe('인용 데이터 API', () => {
   it('상태를 읽고 새로 받기를 POST로 보낸다', async () => {
-    const status = { papers: 1, linked: 1, not_found: 0, fetched: 1, running: false, last_run: null, error: '' }
+    const status = { papers: 1, linked: 1, not_found: 0, fetched: 1, s2_checked: 1, running: false, last_run: null, error: '' }
     const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify(status)))
     vi.stubGlobal('fetch', fetchMock)
 

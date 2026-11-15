@@ -4,7 +4,6 @@
 """
 
 import re
-import unicodedata
 from collections import OrderedDict
 from typing import Any, Literal
 
@@ -26,6 +25,7 @@ from jjabtero.citations import (
 )
 from jjabtero.models import Paper
 from jjabtero.pdfs import open_access_pdf_url
+from jjabtero.titles import normalize
 
 # @doc: docs/design/ReaderCitations.md#4-논문-찾기
 MATCH_MIN = 0.85
@@ -42,7 +42,6 @@ SEARCH_TRIES = 2
 # @doc: docs/design/ReaderCitations.md#4-논문-찾기
 CACHE_SIZE = 1000
 
-_NOT_WORD = re.compile(r"[^0-9a-z]+")
 _MARKER = re.compile(r"^\s*(\[[^\]]{1,12}\]|\(?\d{1,4}[.)])\s*")
 _SPLIT = re.compile(r"(?<=[.?!])\s+")
 # 마침표로 끝나도 문장 끝이 아닌 것: 이름 머리글자(대문자 한 글자), 흔한 줄임말.
@@ -54,15 +53,6 @@ _VENUE_WORDS = {
     "pages", "pp", "vol", "volume", "workshop", "symposium", "press", "springer", "ieee", "acm", "advances",
     "international", "annual", "meeting", "neurips", "nips", "icml", "iclr", "cvpr", "iccv", "eccv", "acl", "emnlp",
 }
-
-
-def normalize(text: str) -> str:
-    """소문자로 바꾸고 악센트를 떼고, 글자·숫자가 아닌 것을 빈칸 하나로 바꾼다.
-
-    @doc: docs/design/ReaderCitations.md#4-논문-찾기
-    """
-    plain = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower()
-    return _NOT_WORD.sub(" ", plain).strip()
 
 
 def title_candidates(text: str) -> list[str]:

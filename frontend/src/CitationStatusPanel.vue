@@ -54,11 +54,17 @@ onUnmounted(() => clearInterval(timer))
     <p class="text-sm text-surface-500">
       서재 논문을 OpenAlex와 연결하고 참고문헌과 피인용을 받아 둡니다. 논문을 담으면 곧 받고, 7일마다 다시 받습니다. 받은 논문은 서재에 추가되지 않습니다.
     </p>
-    <dl v-if="status" class="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
+    <dl v-if="status" class="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-5">
       <div><dt class="text-surface-500">서재 논문</dt><dd class="tabular-nums">{{ status.papers }}</dd></div>
       <div><dt class="text-surface-500">OpenAlex 연결</dt><dd class="tabular-nums">{{ status.linked }}</dd></div>
       <div><dt class="text-surface-500">찾지 못함</dt><dd class="tabular-nums">{{ status.not_found }}</dd></div>
       <div><dt class="text-surface-500">받은 논문</dt><dd class="tabular-nums">{{ status.fetched }}</dd></div>
+      <div>
+        <dt class="text-surface-500" title="OpenAlex에 빠진 참고문헌을 Semantic Scholar로 보완해 서재 논문 사이 인용을 확인합니다">
+          Semantic Scholar 확인
+        </dt>
+        <dd class="tabular-nums">{{ status.s2_checked }}</dd>
+      </div>
     </dl>
     <p v-if="status" class="text-xs text-surface-500">
       {{ status.running ? '받는 중…' : status.last_run ? `마지막 갱신 ${new Date(status.last_run).toLocaleString()}` : '아직 갱신하지 않음' }}

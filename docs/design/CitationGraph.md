@@ -29,7 +29,7 @@
 
 **선**
 
-- `cites`: 인용. 방향이 있다(인용한 논문 → 인용된 논문). 서재 논문 A의 참고문헌에 B가 있거나, B의 가져온 피인용에 A가 있으면 A → B다. 선행·후행([인용 데이터 설계](Citations.md#6-api와-화면))이 화살표 방향으로 보인다.
+- `cites`: 인용. 방향이 있다(인용한 논문 → 인용된 논문). 서재 논문 A의 OpenAlex 참고문헌에 B가 있거나, B의 가져온 피인용에 A가 있거나, A의 Semantic Scholar 참고문헌에 B가 있으면([인용 데이터 설계](Citations.md#9-semantic-scholar-참고문헌)) A → B다. OpenAlex 참고문헌에는 빠진 것이 많아 Semantic Scholar를 함께 본다. 선행·후행([인용 데이터 설계](Citations.md#6-api와-화면))이 화살표 방향으로 보인다.
 - `related`: 직접 인용은 없지만 가까움. 방향이 없다. 두 서재 논문이 참고문헌을 2개 이상 공유하거나([COUPLING_MIN](../../src/jjabtero/citation_graph.py#COUPLING_MIN)) 함께 2번 이상 인용되면 잇고, 공유 참고문헌 수와 함께 인용된 횟수를 담는다. 같은 두 점 사이에 인용 선이 있으면 그리지 않는다. 그림이 복잡해지지 않게 하기 위해서다.
 - 서재 밖 논문은 이어진 서재 논문마다 선 하나를 둔다. 서재 논문이 인용했으면 서재 논문 → 그 논문, 그 논문이 서재 논문을 인용했으면 그 논문 → 서재 논문의 `cites`, 그 밖에는 `related`다.
 - 서재 논문 사이의 선은 [library_edges](../../src/jjabtero/citation_graph.py#library_edges)가, 서재 밖 논문의 선은 [outside_edges](../../src/jjabtero/citation_graph.py#outside_edges)가 만든다.

@@ -2,6 +2,61 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md), [M3 인용 기반 연결·추천](Done-M3.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## I16 서재에 논문을 담으면 서재의 다른 논문들과의 인용·피인용 관계를 확인해 그래프에 정확히 보여 주기
+
+- 시작일: 2026-11-15
+- 완료일: 2026-11-15
+- 근거 문서: [인용 데이터 설계](design/Citations.md#9-semantic-scholar-참고문헌)
+- 참고 자료: 없음
+
+### 계획
+- 서재 그래프에서 인용 선이 빠지는 경우를 실제 데이터로 찾는다.
+- 원인에 맞게 서재 논문 사이 인용을 확인하는 방법을 정하고 만든다.
+- 테스트를 더하고 시연 서재로 확인한다.
+
+### 진행 기록
+- 2026-11-15: M6-T3 작업 중에 사용자가 요청했다. 병합되지 않은 가장 최근 브랜치 `m6-t3-citation-preview`에서 작업 브랜치를 만들었다. 같은 때 받은 인용 양식 복사 요청은 I17로 등록했다.
+- 2026-11-15: 시연 서재에 BERT, RoBERTa, GPT-3을 더해 그래프를 보았다. 서로의 인용은 잡혔지만 'Attention Is All You Need'가 실제로 인용하는 Bahdanau, GRU 논문으로 가는 인용 선이 없었다. OpenAlex에 있는 이 논문의 참고문헌은 35개(실제 40개)였고 LSTM, Bahdanau, GRU, Dropout이 빠져 있었다. 서재 논문의 참고문헌을 모두 보는 지금 계산은 맞았고, 데이터가 빠진 것이 원인이었다.
+- 2026-11-15: 다른 출처를 비교했다. Semantic Scholar는 41개를 모두 주었고, Crossref는 arXiv 논문을 몰랐다. 사용자에게 물어 Semantic Scholar를 함께 쓰기로 했다.
+- 2026-11-15: `semantic_scholar` 모듈(받기, 저장, 맞추기)을 만들고 인용 데이터 갱신과 그래프에 붙였다. `citations`와 `references`가 서로 불러오지 않게 제목 다듬기 함수를 `titles` 모듈로 옮겼다.
+- 2026-11-15: 시연 서재에서 확인했다. 'Attention Is All You Need' → Bahdanau, → GRU 인용 선이 생겼다. SE Networks의 CVPR DOI는 Semantic Scholar에 없어 7편 가운데 6편만 확인되었다. 제목 맞추기로 찾는 단계를 더하자 84개를 받아 7편 모두 확인되었다. 손으로 보낸 요청에 429(공용 한도)를 한 번 받았다.
+- 2026-11-15: Semantic Scholar 키를 넣는 일을 선택 사항인 사용자 할 일 I18로 등록했다.
+
+### 결정 사항
+- 서재 논문마다 Semantic Scholar 참고문헌을 받아 두고, 그래프를 그릴 때 서재 논문끼리 맞춘다. 새 논문을 담을 때 그 논문 하나만 받으면 양쪽 방향이 모두 확인되기 때문이다.
+- 맞추기는 DOI, arXiv ID, 다듬은 제목(3낱말 이상) 가운데 하나라도 같으면 같은 논문으로 본다. 같은 논문이 arXiv판과 학회판으로 DOI가 다른 경우가 많기 때문이다.
+- 키 없이 쓰되 요청 사이를 1.1초 띄우고 429에서 멈춘다. 키가 있으면 쓴다. 키를 받는 일은 사용자가 할 수 있는 선택 사항으로 남긴다.
+- 표는 기존 인용 캐시 파일에 더하고 캐시 버전은 올리지 않는다. 버전을 올리면 OpenAlex 인용 데이터를 모두 다시 받아야 하기 때문이다.
+
+### 변경 파일
+- `docs/Issue.md`
+- `docs/Done.md`
+- `docs/ProductVision.md`
+- `docs/Architecture.md`
+- `docs/design/Citations.md`
+- `docs/design/CitationGraph.md`
+- `docs/design/ReaderCitations.md`
+- `src/jjabtero/semantic_scholar.py`
+- `src/jjabtero/titles.py`
+- `src/jjabtero/references.py`
+- `src/jjabtero/citations.py`
+- `src/jjabtero/citation_graph.py`
+- `tests/test_semantic_scholar.py`
+- `tests/test_citations.py`
+- `tests/test_references.py`
+- `tests/conftest.py`
+- `frontend/src/api.ts`
+- `frontend/src/api.test.ts`
+- `frontend/src/CitationStatusPanel.vue`
+
+### 결과
+- 서재에 논문을 담으면 Semantic Scholar 참고문헌으로 서재의 다른 논문들과의 인용·피인용을 확인해 그래프에 인용 선을 긋는다. OpenAlex 참고문헌에 빠진 인용도 보인다. 설정 페이지에서 Semantic Scholar로 확인한 논문 수를 본다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+- `npx vue-tsc --noEmit -p tsconfig.app.json`, `npm run build`: 통과.
+- 시연 서재(7편, 실제 OpenAlex·Semantic Scholar)에서 7편 모두 확인되고, OpenAlex에 빠졌던 'Attention Is All You Need' → Bahdanau, → GRU 인용 선이 그래프 API에 나오는 것을 확인했다.
+
 ## M6-T3 리더의 인용 링크 미리보기 상자와 서재에 담기·PDF 받기·새 탭에서 읽기
 
 - 시작일: 2026-11-15

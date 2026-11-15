@@ -22,6 +22,7 @@ from jjabtero.citations import (
 )
 from jjabtero.library import normalize_doi
 from jjabtero.models import Paper
+from jjabtero.semantic_scholar import PaperKeys, library_cites, paper_keys
 
 # @doc: docs/design/CitationGraph.md#2-그래프-데이터
 OUTSIDE_LIMIT = 30
@@ -72,27 +73,32 @@ class CitationGraph(BaseModel):
     edges: list[GraphEdge]
 
 
-def library_edges(node_ids: dict[str, str], rows_by_paper: dict[str, dict[str, Any]]) -> list[GraphEdge]:
+def library_edges(
+    node_ids: dict[str, str],
+    rows_by_paper: dict[str, dict[str, Any]],
+    extra_cites: set[tuple[str, str]] | None = None,
+) -> list[GraphEdge]:
     """서재 논문 사이의 인용 선과 가까움 선을 만든다.
 
     `node_ids`는 OpenAlex ID에서 점 ID로, `rows_by_paper`는 OpenAlex ID에서 `relation_rows` 결과로 간다.
+    `extra_cites`는 다른 출처(Semantic Scholar)로 찾은 인용(인용한 점 ID, 인용된 점 ID)이다.
 
     @doc: docs/design/CitationGraph.md#2-그래프-데이터
     """
-    cites: set[tuple[str, str]] = set()
+    cites: set[tuple[str, str]] = set(extra_cites or ())
     for work, rows in rows_by_paper.items():
         for ref in rows["references"]:
             if ref in node_ids and ref != work:
-                cites.add((work, ref))
+                cites.add((node_ids[work], node_ids[ref]))
         for citer in rows["citations"]:
             if citer in node_ids and citer != work:
-                cites.add((citer, work))
-    edges = [GraphEdge(source=node_ids[a], target=node_ids[b], kind="cites") for a, b in sorted(cites)]
+                cites.add((node_ids[citer], node_ids[work]))
+    edges = [GraphEdge(source=a, target=b, kind="cites") for a, b in sorted(cites)]
     linked = {frozenset(pair) for pair in cites}
     works = sorted(rows_by_paper)
     for i, a in enumerate(works):
         for b in works[i + 1 :]:
-            if frozenset((a, b)) in linked:
+            if frozenset((node_ids[a], node_ids[b])) in linked:
                 continue
             shared = len(rows_by_paper[a]["references"] & rows_by_paper[b]["references"])
             cocited = max(rows_by_paper[a]["cocitations"].get(b, 0), rows_by_paper[b]["cocitations"].get(a, 0))
@@ -143,6 +149,7 @@ def build_graph(
     known: dict[str, dict[str, Any]],
     dates: dict[str, str | None],
     outside: list[Recommendation],
+    s2_references: dict[str, list[PaperKeys]] | None = None,
 ) -> CitationGraph:
     """서재 논문, 인용 데이터, 서지 정보, 서재 밖 추천으로 그래프를 만든다.
 
@@ -172,7 +179,8 @@ def build_graph(
                 has_data=paper.openalex_id in rows_by_paper,
             )
         )
-    edges = library_edges(node_ids, rows_by_paper)
+    library = [(f"p{paper.id}", paper.doi, paper_keys(paper.doi, paper.title)) for paper in papers]
+    edges = library_edges(node_ids, rows_by_paper, library_cites(library, s2_references or {}))
     for item in outside:
         row = known.get(item.work, {})
         nodes.append(
@@ -228,4 +236,11 @@ def citation_graph(
             except (OpenAlexBudgetError, httpx2.HTTPError, ValueError):
                 pass
         chosen = [item for item in ranked if _doi(known.get(item.work, {}).get("doi")) not in library_dois]
-        return build_graph(papers, rows_by_paper, known, store.publication_dates(by_work), chosen[:outside])
+        return build_graph(
+            papers,
+            rows_by_paper,
+            known,
+            store.publication_dates(by_work),
+            chosen[:outside],
+            sync.s2_store.references(),
+        )
