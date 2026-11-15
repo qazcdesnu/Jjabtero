@@ -9,6 +9,7 @@ import {
   bibtexKey,
   chicago,
   copyCitation,
+  escapeLatex,
   harvard,
   ieee,
   initials,
@@ -137,6 +138,13 @@ describe('양식', () => {
 })
 
 describe('copyCitation', () => {
+  it('LaTeX 모드는 LaTeX 글만 복사한다', async () => {
+    const clipboard = { write: vi.fn(), writeText: vi.fn().mockResolvedValue(undefined) }
+    await copyCitation({ text: 'a', html: '<i>a</i>', latex: '\\textit{a}' }, 'latex', clipboard as unknown as Clipboard)
+    expect(clipboard.writeText).toHaveBeenCalledWith('\\textit{a}')
+    expect(clipboard.write).not.toHaveBeenCalled()
+  })
+
   it('HTML이 있으면 글과 HTML을 함께, 없으면 글만 복사한다', async () => {
     const clipboard = { write: vi.fn().mockResolvedValue(undefined), writeText: vi.fn().mockResolvedValue(undefined) }
     vi.stubGlobal('ClipboardItem', class {
@@ -145,13 +153,37 @@ describe('copyCitation', () => {
         this.items = items
       }
     })
-    await copyCitation({ text: 'a', html: '<i>a</i>' }, clipboard as unknown as Clipboard)
+    const board = clipboard as unknown as Clipboard
+    await copyCitation({ text: 'a', html: '<i>a</i>', latex: '\\textit{a}' }, 'document', board)
     expect(clipboard.write).toHaveBeenCalledTimes(1)
-    await copyCitation({ text: '@misc{x}', html: '' }, clipboard as unknown as Clipboard)
+    await copyCitation({ text: '@misc{x}', html: '', latex: '@misc{x}' }, 'document', board)
     expect(clipboard.writeText).toHaveBeenCalledWith('@misc{x}')
     clipboard.write.mockRejectedValueOnce(new Error('막힘'))
-    await copyCitation({ text: 'b', html: '<i>b</i>' }, clipboard as unknown as Clipboard)
+    await copyCitation({ text: 'b', html: '<i>b</i>', latex: '\\textit{b}' }, 'document', board)
     expect(clipboard.writeText).toHaveBeenLastCalledWith('b')
     vi.unstubAllGlobals()
   })
 })
+
+describe('LaTeX', () => {
+  it('특수 문자를 이스케이프한다', () => {
+    expect(escapeLatex('A_b & 50% #1 $x$ {y} ~^\\')).toBe(
+      'A\\_b \\& 50\\% \\#1 \\$x\\$ \\{y\\} \\textasciitilde{}\\textasciicircum{}\\textbackslash{}',
+    )
+  })
+
+  it('기울임은 \\textit, 따옴표는 ``…\'\', 주소는 \\url로 쓴다', () => {
+    expect(apa(lstm).latex).toBe(
+      'Hochreiter, S., \\& Schmidhuber, J. (1997). Long Short-Term Memory. \\textit{Neural Computation}. \\url{https://doi.org/10.1162/neco.1997.9.8.1735}',
+    )
+    expect(mla(attention).latex).toContain("``Attention Is All You Need.'' \\textit{Advances in Neural Information Processing Systems}, 2017,")
+    expect(ieee(attention).latex.startsWith("A. Vaswani \\textit{et al.}, ``Attention Is All You Need,'' in")).toBe(true)
+    expect(harvard(lstm).latex).toContain("(1997) `Long Short-Term Memory', \\textit{Neural Computation}. Available at: \\url{")
+    expect(vancouver({ ...lstm, title: 'A_b & 50%' }).latex).toContain('A\\_b \\& 50\\%.')
+  })
+
+  it('BibTeX는 LaTeX 모드에서도 같은 글이다', () => {
+    expect(bibtex(lstm).latex).toBe(bibtex(lstm).text)
+  })
+})
+

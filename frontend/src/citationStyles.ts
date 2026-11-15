@@ -9,6 +9,28 @@ export type CitableWork = Pick<PaperInput, 'title' | 'authors' | 'item_type' | '
 export interface FormattedCitation {
   text: string
   html: string
+  latex: string
+}
+
+// @doc: docs/design/CitationStyles.md#5-복사
+export type CopyMode = 'document' | 'latex'
+
+const LATEX_SPECIALS: Record<string, string> = {
+  '\\': '\\textbackslash{}',
+  '&': '\\&',
+  '%': '\\%',
+  '$': '\\$',
+  '#': '\\#',
+  '_': '\\_',
+  '{': '\\{',
+  '}': '\\}',
+  '~': '\\textasciitilde{}',
+  '^': '\\textasciicircum{}',
+}
+
+// @doc: docs/design/CitationStyles.md#5-복사
+export function escapeLatex(text: string): string {
+  return text.replace(/[\\&%$#_{}~^]/g, (char) => LATEX_SPECIALS[char])
 }
 
 // @doc: docs/design/CitationStyles.md#3-저자-이름
@@ -55,22 +77,38 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]!)
 }
 
-// 글 조각을 이어 일반 글과 HTML을 함께 만든다. 기울일 조각은 `italic`으로 표시한다.
-type Piece = string | { italic: string }
+// 글 조각을 이어 일반 글, HTML, LaTeX를 함께 만든다.
+// 기울일 조각은 `italic`, 주소는 `url`, 따옴표로 감쌀 조각은 `quote`(작은따옴표면 `single`)로 표시한다.
+type Piece = string | { italic: string } | { url: string } | { quote: string; single?: boolean }
 
 function build(pieces: Piece[]): FormattedCitation {
   let text = ''
   let html = ''
+  let latex = ''
   for (const piece of pieces) {
     if (typeof piece === 'string') {
       text += piece
       html += escapeHtml(piece)
-    } else if (piece.italic) {
+      latex += escapeLatex(piece)
+    } else if ('italic' in piece) {
+      if (!piece.italic) continue
       text += piece.italic
       html += `<i>${escapeHtml(piece.italic)}</i>`
+      latex += `\\textit{${escapeLatex(piece.italic)}}`
+    } else if ('url' in piece) {
+      if (!piece.url) continue
+      text += piece.url
+      html += escapeHtml(piece.url)
+      latex += `\\url{${piece.url.replace(/[{}\\]/g, '')}}`
+    } else {
+      const [open, close, texOpen, texClose] = piece.single ? ["'", "'", '`', "'"] : ['"', '"', '``', "''"]
+      text += `${open}${piece.quote}${close}`
+      html += escapeHtml(`${open}${piece.quote}${close}`)
+      latex += `${texOpen}${escapeLatex(piece.quote)}${texClose}`
     }
   }
-  return { text: text.replace(/\s+/g, ' ').trim(), html: html.replace(/\s+/g, ' ').trim() }
+  const tidy = (value: string) => value.replace(/\s+/g, ' ').trim()
+  return { text: tidy(text), html: tidy(html), latex: tidy(latex) }
 }
 
 function joinList(items: string[], conjunction: string, serialComma = true): string {
@@ -89,9 +127,13 @@ export function arxivId(work: CitableWork): string | null {
   return match ? match[1] : null
 }
 
-function link(work: CitableWork): string {
-  if (work.doi) return `https://doi.org/${work.doi}`
-  return work.url ?? ''
+function link(work: CitableWork): Piece {
+  if (work.doi) return { url: `https://doi.org/${work.doi}` }
+  return work.url ? { url: work.url } : ''
+}
+
+function hasLink(work: CitableWork): boolean {
+  return Boolean(work.doi || work.url)
 }
 
 // OpenAlex는 arXiv 논문의 게재처를 "arXiv (Cornell University)"처럼 준다. 이런 게재처는 없는 것으로 본다.
@@ -149,13 +191,18 @@ export function mla(work: CitableWork): FormattedCitation {
   else if (people.length === 2) authors = `${inverted(people[0])}, and ${full(people[1])}`
   else if (people.length > 2) authors = `${inverted(people[0])}, et al`
   const venue = venueOf(work)
-  const tail = [work.year ? String(work.year) : '', link(work)].filter(Boolean).join(', ')
+  const year = work.year ? String(work.year) : ''
+  const tail = Boolean(year || hasLink(work))
   return build([
     authors ? `${endWith(authors)} ` : '',
-    `"${endWith(work.title)}" `,
+    { quote: endWith(work.title) },
+    ' ',
     venue ? { italic: venue } : '',
     venue && tail ? ', ' : venue ? '.' : '',
-    tail ? `${endWith(tail)}` : '',
+    year,
+    year && hasLink(work) ? ', ' : '',
+    link(work),
+    tail ? '.' : '',
   ])
 }
 
@@ -170,7 +217,8 @@ export function chicago(work: CitableWork): FormattedCitation {
   const venue = venueOf(work)
   return build([
     authors ? `${endWith(authors)} ` : '',
-    `"${endWith(work.title)}" `,
+    { quote: endWith(work.title) },
+    ' ',
     venue ? { italic: venue } : '',
     work.year ? ` (${work.year})` : '',
     venue || work.year ? '. ' : '',
@@ -183,15 +231,16 @@ export function harvard(work: CitableWork): FormattedCitation {
   const people = names(work).map((name) => (name.given ? `${name.family}, ${initials(name.given)}` : name.family))
   const authors = people.length > 3 ? `${people[0]} et al.` : joinList(people, 'and', false)
   const venue = venueOf(work)
-  const url = link(work)
   return build([
     authors ? `${authors} ` : '',
     `(${work.year ?? 'n.d.'}) `,
-    `'${work.title}'`,
+    { quote: work.title, single: true },
     venue ? ', ' : '. ',
     venue ? { italic: venue } : '',
     venue ? '. ' : '',
-    url ? `Available at: ${url}.` : '',
+    hasLink(work) ? 'Available at: ' : '',
+    link(work),
+    hasLink(work) ? '.' : '',
   ])
 }
 
@@ -205,7 +254,7 @@ export function vancouver(work: CitableWork): FormattedCitation {
     `${endWith(work.title)} `,
     venue ? `${endWith(venue)} ` : '',
     work.year ? `${work.year}. ` : '',
-    work.doi ? `doi:${work.doi}` : work.url ?? '',
+    work.doi ? `doi:${work.doi}` : work.url ? { url: work.url } : '',
   ])
 }
 
@@ -216,11 +265,12 @@ export function ieee(work: CitableWork): FormattedCitation {
   const pieces: Piece[] = []
   if (people.length > 6) pieces.push(`${people[0]} `, { italic: 'et al.' }, ', ')
   else if (people.length) pieces.push(`${joinList(people, 'and')}, `)
-  pieces.push(`"${work.title}," `)
+  pieces.push({ quote: `${work.title},` }, ' ')
   const arxiv = arxivId(work)
+  const placed = Boolean((!publishedVenue(work) && arxiv) || venue)
   if (!publishedVenue(work) && arxiv) pieces.push(`arXiv:${arxiv}`)
   else if (venue) pieces.push(isProceedings(work) ? 'in ' : '', { italic: venue })
-  if (work.year) pieces.push(`${pieces.length > 2 ? ', ' : ''}${work.year}`)
+  if (work.year) pieces.push(`${placed ? ', ' : ''}${work.year}`)
   if (work.doi && !arxiv) pieces.push(`, doi: ${work.doi}`)
   pieces.push('.')
   return build(pieces)
@@ -279,8 +329,8 @@ export function bibtex(work: CitableWork): FormattedCitation {
   else if (work.url) fields.push(['url', work.url])
   const body = fields.filter(([, field]) => field).map(([name, field]) => `  ${name} = {${field}}`).join(',\n')
   const text = `@${type}{${bibtexKey(work)},\n${body}\n}`
-  // BibTeX는 서식 없이 글로만 복사한다.
-  return { text, html: '' }
+  // BibTeX는 서식 없이 글로만 복사한다. LaTeX 모드에서도 그대로 .bib 파일에 붙여 넣는다.
+  return { text, html: '', latex: text }
 }
 
 // @doc: docs/design/CitationStyles.md#2-양식
@@ -296,7 +346,15 @@ export const CITATION_STYLES = [
 ] as const
 
 // @doc: docs/design/CitationStyles.md#5-복사
-export async function copyCitation(citation: FormattedCitation, clipboard: Clipboard = navigator.clipboard): Promise<void> {
+export async function copyCitation(
+  citation: FormattedCitation,
+  mode: CopyMode = 'document',
+  clipboard: Clipboard = navigator.clipboard,
+): Promise<void> {
+  if (mode === 'latex') {
+    await clipboard.writeText(citation.latex)
+    return
+  }
   // 기울임이 붙여 넣는 곳에 남도록 HTML도 함께 복사한다. 지원하지 않으면 글만 복사한다.
   if (citation.html && typeof ClipboardItem !== 'undefined' && clipboard.write) {
     try {
