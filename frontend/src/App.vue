@@ -108,7 +108,13 @@ onMounted(async () => {
         <Sidebar v-model="view" :library="library" />
       </SplitterPanel>
       <SplitterPanel :size="85" :min-size="50" class="overflow-hidden">
-        <ReaderView :key="reading.id" :paper-id="reading.id" :title="reading.title" @close="reading = null" />
+        <ReaderView
+          :key="reading.id"
+          :paper-id="reading.id"
+          :title="reading.title"
+          @close="reading = null"
+          @added="library.load()"
+        />
       </SplitterPanel>
     </Splitter>
     <Splitter v-else-if="view === 'settings' || view === 'recommend' || view === 'graph'" key="wide" class="min-h-0 flex-1 rounded-none border-0">

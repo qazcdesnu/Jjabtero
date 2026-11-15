@@ -558,3 +558,32 @@ export async function fetchCitationGraph(outside = 0): Promise<CitationGraph> {
   }
   return (await response.json()) as CitationGraph
 }
+
+// @doc: docs/design/ReaderCitations.md#4-논문-찾기
+export interface ReferenceMatch {
+  state: 'found' | 'not_found'
+  source: 'references' | 'search' | null
+  work: CitedWork | null
+  has_pdf: boolean
+  pdf_url: string | null
+}
+
+// @doc: docs/design/ReaderCitations.md#4-논문-찾기
+export async function resolveReference(paperId: number, text: string): Promise<ReferenceMatch> {
+  const response = await fetch(`/api/papers/${paperId}/references/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+  if (!response.ok) {
+    let detail = ''
+    try {
+      const body = await response.json()
+      detail = typeof body.detail === 'string' ? body.detail : ''
+    } catch {
+      detail = ''
+    }
+    throw new Error(detail || `참고문헌 찾기 실패: ${response.status}`)
+  }
+  return (await response.json()) as ReferenceMatch
+}
