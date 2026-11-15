@@ -355,3 +355,74 @@ export async function savePosition(paperId: number, position: ReadingPosition): 
     throw new Error(`읽던 위치 저장 실패: ${response.status}`)
   }
 }
+
+// @doc: docs/design/Reader.md#5-api
+export interface Annotation {
+  id: number
+  paper_id: number
+  kind: 'highlight' | 'note'
+  page: number
+  rects: { x: number; y: number; w: number; h: number }[]
+  text: string | null
+  color: string
+  note: string | null
+  created_at: string
+  updated_at: string
+}
+
+// @doc: docs/design/Reader.md#5-api
+export interface AnnotationInput {
+  kind: 'highlight' | 'note'
+  page: number
+  rects: { x: number; y: number; w: number; h: number }[]
+  text?: string | null
+  color?: string
+  note?: string | null
+}
+
+async function annotationResponse<T>(response: Response, what: string): Promise<T> {
+  if (!response.ok) {
+    throw new Error(`${what} 실패: ${response.status}`)
+  }
+  return (await response.json()) as T
+}
+
+// @doc: docs/design/Reader.md#5-api
+export async function listAnnotations(paperId: number): Promise<Annotation[]> {
+  return annotationResponse(await fetch(`/api/papers/${paperId}/annotations`), '주석 불러오기')
+}
+
+// @doc: docs/design/Reader.md#5-api
+export async function createAnnotation(paperId: number, input: AnnotationInput): Promise<Annotation> {
+  return annotationResponse(
+    await fetch(`/api/papers/${paperId}/annotations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+    '주석 저장',
+  )
+}
+
+// @doc: docs/design/Reader.md#5-api
+export async function updateAnnotation(
+  annotationId: number,
+  change: { color?: string; note?: string | null },
+): Promise<Annotation> {
+  return annotationResponse(
+    await fetch(`/api/annotations/${annotationId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(change),
+    }),
+    '주석 고치기',
+  )
+}
+
+// @doc: docs/design/Reader.md#5-api
+export async function deleteAnnotation(annotationId: number): Promise<void> {
+  const response = await fetch(`/api/annotations/${annotationId}`, { method: 'DELETE' })
+  if (!response.ok) {
+    throw new Error(`주석 지우기 실패: ${response.status}`)
+  }
+}

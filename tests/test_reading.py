@@ -67,3 +67,76 @@ def test_position_unknown_paper_and_delete(client: tuple[TestClient, list[str]])
     test_client.delete(f"/api/papers/{paper_id}")
     with test_client.app.state.engine.connect() as connection:
         assert connection.execute(text("select count(*) from reading_positions")).scalar() == 0
+
+
+HIGHLIGHT = {
+    "kind": "highlight",
+    "page": 2,
+    "rects": [{"x": 0.1, "y": 0.5, "w": 0.6, "h": 0.02}, {"x": 0.1, "y": 0.52, "w": 0.3, "h": 0.02}],
+    "text": "  attention  ",
+    "color": "green",
+}
+
+
+def test_annotations_create_list_update_delete(client: tuple[TestClient, list[str]]) -> None:
+    """주석을 만들고, 쪽·위치 순으로 읽고, 색과 메모를 고치고, 지운다. 바꿀 때마다 올리기를 예약한다.
+
+    @doc: docs/design/Reader.md#8-테스트
+    """
+    test_client, pushes = client
+    paper_id = test_client.post("/api/papers", json={"title": "T"}).json()["id"]
+    pushes.clear()
+    created = test_client.post(f"/api/papers/{paper_id}/annotations", json=HIGHLIGHT)
+    assert created.status_code == 201
+    body = created.json()
+    assert (body["kind"], body["page"], body["text"], body["color"], len(body["rects"])) == ("highlight", 2, "attention", "green", 2)
+    first = {**HIGHLIGHT, "page": 1, "rects": [{"x": 0.2, "y": 0.9, "w": 0.1, "h": 0.02}]}
+    test_client.post(f"/api/papers/{paper_id}/annotations", json=first)
+    listed = test_client.get(f"/api/papers/{paper_id}/annotations").json()
+    assert [item["page"] for item in listed] == [1, 2]
+
+    changed = test_client.patch(f"/api/annotations/{body['id']}", json={"color": "pink", "note": " 핵심 "}).json()
+    assert (changed["color"], changed["note"]) == ("pink", "핵심")
+    cleared = test_client.patch(f"/api/annotations/{body['id']}", json={"note": ""}).json()
+    assert (cleared["color"], cleared["note"]) == ("pink", None)
+
+    assert test_client.delete(f"/api/annotations/{body['id']}").status_code == 204
+    assert len(test_client.get(f"/api/papers/{paper_id}/annotations").json()) == 1
+    assert pushes == ["push"] * 5
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"kind": "underline"},
+        {"page": 0},
+        {"rects": []},
+        {"rects": [{"x": 1.2, "y": 0, "w": 0.1, "h": 0.1}]},
+        {"rects": [{"x": 0, "y": 0, "w": 0, "h": 0.1}]},
+        {"color": "red"},
+    ],
+)
+def test_annotation_rejects_invalid(client: tuple[TestClient, list[str]], change: dict) -> None:
+    """모르는 종류, 쪽 0, 빈 사각형, 범위 밖 좌표, 넓이 0, 모르는 색은 422다.
+
+    @doc: docs/design/Reader.md#8-테스트
+    """
+    test_client, _ = client
+    paper_id = test_client.post("/api/papers", json={"title": "T"}).json()["id"]
+    assert test_client.post(f"/api/papers/{paper_id}/annotations", json={**HIGHLIGHT, **change}).status_code == 422
+
+
+def test_annotations_unknown_and_cascade(client: tuple[TestClient, list[str]]) -> None:
+    """없는 논문·주석은 404이고, 논문을 지우면 주석도 지운다.
+
+    @doc: docs/design/Reader.md#8-테스트
+    """
+    test_client, _ = client
+    assert test_client.get("/api/papers/9/annotations").status_code == 404
+    assert test_client.patch("/api/annotations/9", json={"color": "blue"}).status_code == 404
+    assert test_client.delete("/api/annotations/9").status_code == 404
+    paper_id = test_client.post("/api/papers", json={"title": "T"}).json()["id"]
+    test_client.post(f"/api/papers/{paper_id}/annotations", json=HIGHLIGHT)
+    test_client.delete(f"/api/papers/{paper_id}")
+    with test_client.app.state.engine.connect() as connection:
+        assert connection.execute(text("select count(*) from annotations")).scalar() == 0

@@ -31,6 +31,10 @@ import {
   uploadPdf,
   fetchPosition,
   savePosition,
+  listAnnotations,
+  createAnnotation,
+  updateAnnotation,
+  deleteAnnotation,
   type SearchResult,
 } from './api'
 
@@ -334,6 +338,33 @@ describe('읽던 위치 API', () => {
       '/api/papers/3/position',
       expect.objectContaining({ method: 'PUT', body: JSON.stringify({ page: 2, offset: 0.5, zoom: 1 }) }),
     )
+  })
+})
+
+describe('주석 API', () => {
+  it('목록, 만들기, 고치기, 지우기 요청을 보낸다', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (_url: string, init?: RequestInit) =>
+      init?.method === 'DELETE' ? new Response(null, { status: 204 }) : new Response('[]'),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const input = { kind: 'highlight' as const, page: 1, rects: [{ x: 0, y: 0, w: 0.1, h: 0.1 }], color: 'blue' }
+
+    await listAnnotations(3)
+    await createAnnotation(3, input)
+    await updateAnnotation(7, { note: '메모' })
+    await deleteAnnotation(7)
+    expect(fetchMock.mock.calls.map((call) => [call[0], call[1]?.method])).toEqual([
+      ['/api/papers/3/annotations', undefined],
+      ['/api/papers/3/annotations', 'POST'],
+      ['/api/annotations/7', 'PATCH'],
+      ['/api/annotations/7', 'DELETE'],
+    ])
+    expect(fetchMock.mock.calls[1][1].body).toBe(JSON.stringify(input))
+  })
+
+  it('실패하면 상태 코드를 담은 오류를 던진다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 404 })))
+    await expect(deleteAnnotation(7)).rejects.toThrow('404')
   })
 })
 

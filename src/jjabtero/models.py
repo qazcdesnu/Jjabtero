@@ -115,6 +115,7 @@ class Paper(Base):
     tags: Mapped[list[Tag]] = relationship(secondary=paper_tags)
     pdf: Mapped["PaperPdf | None"] = relationship(cascade="all, delete-orphan", passive_deletes=True)
     position: Mapped["ReadingPosition | None"] = relationship(cascade="all, delete-orphan", passive_deletes=True)
+    annotations: Mapped[list["Annotation"]] = relationship(cascade="all, delete-orphan", passive_deletes=True)
 
     @property
     def author_names(self) -> list[str]:
@@ -178,4 +179,25 @@ class ReadingPosition(Base):
     page: Mapped[int] = mapped_column(Integer)
     offset: Mapped[float] = mapped_column(Float)
     zoom: Mapped[float] = mapped_column(Float)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Annotation(Base):
+    """PDF 위의 주석 하나. 하이라이트(`highlight`) 또는 영역 메모(`note`)다.
+
+    @doc: docs/design/Reader.md#4-데이터
+    @doc: docs/design/Library.md#1-데이터-모델
+    """
+
+    __tablename__ = "annotations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String)
+    page: Mapped[int] = mapped_column(Integer)
+    rects: Mapped[str] = mapped_column(Text)
+    text: Mapped[str | None] = mapped_column(Text)
+    color: Mapped[str] = mapped_column(String)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

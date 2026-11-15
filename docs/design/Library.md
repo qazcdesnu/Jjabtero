@@ -15,6 +15,7 @@
 | `paper_tags` | 연결 테이블 | 논문과 태그의 다대다 연결 |
 | `paper_pdfs` | [PaperPdf](../../src/jjabtero/models.py#PaperPdf) | 논문의 PDF 연결([PDF 리더 설계](Reader.md#4-데이터)). 논문을 지우면 함께 지운다. |
 | `reading_positions` | [ReadingPosition](../../src/jjabtero/models.py#ReadingPosition) | 논문을 읽던 위치([PDF 리더 설계](Reader.md#4-데이터)). 논문을 지우면 함께 지운다. |
+| `annotations` | [Annotation](../../src/jjabtero/models.py#Annotation) | PDF의 하이라이트와 영역 메모([PDF 리더 설계](Reader.md#4-데이터)). 논문을 지우면 함께 지운다. |
 
 **`papers`의 열**
 
@@ -64,6 +65,7 @@
 | [0004](../../src/jjabtero/migrations/versions/0004_openalex_id.py) | `papers`에 `openalex_id`를 더한다([인용 데이터 설계](Citations.md#2-서재-논문과-openalex-연결)). |
 | [0005](../../src/jjabtero/migrations/versions/0005_paper_pdfs.py) | 논문의 PDF 연결 `paper_pdfs` 테이블을 만든다([PDF 리더 설계](Reader.md#4-데이터)). |
 | [0006](../../src/jjabtero/migrations/versions/0006_reading_positions.py) | 읽던 위치 `reading_positions` 테이블을 만든다([PDF 리더 설계](Reader.md#4-데이터)). |
+| [0007](../../src/jjabtero/migrations/versions/0007_annotations.py) | PDF 주석 `annotations` 테이블을 만든다([PDF 리더 설계](Reader.md#4-데이터)). |
 
 ## 4. 저장 함수
 
