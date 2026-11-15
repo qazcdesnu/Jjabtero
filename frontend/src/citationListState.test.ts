@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { DuplicatePaperError, type CitedWork, type PaperCitations } from './api'
-import { citedWorkInput, createCitationListState } from './citationListState'
+import { citedWorkInput, createCitationListState, relationReasons } from './citationListState'
 
 const work: CitedWork = {
   openalex_id: 'W10',
@@ -33,6 +33,12 @@ function setup(overrides = {}) {
   const onAdded = vi.fn()
   const deps = {
     fetchPaperCitations: vi.fn().mockResolvedValue(structuredClone(data)),
+    fetchPaperRelated: vi.fn().mockResolvedValue({
+      state: 'ready',
+      citing_count: 10,
+      reference_count: 35,
+      works: [{ ...work, score: 1.5, cites_paper: true, cited_by_paper: false, cocited: 0 }],
+    }),
     addPaper: vi.fn().mockResolvedValue({ id: 42 }),
     ...overrides,
   }
@@ -91,3 +97,25 @@ describe('createCitationListState', () => {
     expect(lists.state.data!.openalex_id).toBe('W2')
   })
 })
+
+describe('가까운 논문', () => {
+  it('목록과 함께 가까운 논문을 읽고, 담으면 가까운 논문에도 표시한다', async () => {
+    const { lists, deps } = setup()
+    await lists.load(1)
+    expect(deps.fetchPaperRelated).toHaveBeenCalledWith(1)
+    expect(lists.state.related!.works).toHaveLength(1)
+    await lists.add(lists.state.related!.works[0])
+    expect(lists.state.related!.works[0].library_paper_id).toBe(42)
+    expect(lists.state.data!.citations[0].library_paper_id).toBe(42)
+  })
+
+  it('까닭을 사람이 읽는 말로 바꾼다', () => {
+    expect(relationReasons({ cites_paper: true, cited_by_paper: false, cocited: 3, shared_refs: 2 })).toEqual([
+      '이 논문을 인용',
+      '함께 인용 3회',
+      '공유 참고문헌 2',
+    ])
+    expect(relationReasons({ cites_paper: false, cited_by_paper: true, cocited: 0, shared_refs: null })).toEqual(['이 논문이 인용'])
+  })
+})
+

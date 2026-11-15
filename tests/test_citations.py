@@ -421,3 +421,55 @@ def test_paper_citations_states_without_link(tmp_path: Path) -> None:
     assert client.get(f"/api/papers/{no_doi}/citations").json()["state"] == "no_doi"
     assert client.get(f"/api/papers/{missing}/citations").json()["state"] == "not_found"
     assert client.get("/api/papers/99/citations").status_code == 404
+
+
+def test_related_works_scores_direct_cocitation_and_coupling() -> None:
+    """점수는 직접 인용 0.5 + 함께 인용된 비율 + 공유 참고문헌 비율이고, 논문 자신은 뺀다.
+
+    @doc: docs/design/Citations.md#7-테스트
+    """
+    from jjabtero.citations import related_works
+
+    rows = {
+        "references": {"W1", "W2"},
+        "citations": {"W10": 2, "W11": 1, "W12": 0},
+        "cocitations": {"W1": 2, "W50": 2, "W60": 2, A: 3},
+    }
+    relations = {relation.work: relation for relation in related_works(A, rows, 3)}
+    assert A not in relations
+    assert relations["W10"].score == round(0.5 + 2 / 2, 4)
+    assert relations["W1"].score == round(0.5 + 2 / 3, 4)
+    assert relations["W50"].score == round(2 / 3, 4)
+    assert relations["W12"].score == 0.5
+    w1 = relations["W1"]
+    assert (w1.cited_by_paper, w1.cites_paper, w1.cocited, w1.shared_refs) == (True, False, 2, 0)
+    ordered = [relation.work for relation in related_works(A, rows, 3)]
+    assert ordered[:2] == ["W10", "W1"]
+
+
+def test_paper_related_api_fills_missing_works(tmp_path: Path) -> None:
+    """가까운 논문 API는 점수 순 목록을 주고, 서지 정보가 없는 공동 인용 논문은 OpenAlex에서 받아 둔다.
+
+    @doc: docs/design/Citations.md#7-테스트
+    """
+    openalex = FakeOpenAlex()
+    app = create_app(
+        frontend_dist=tmp_path / "missing",
+        db_path=tmp_path / "library.db",
+        http_client=httpx2.Client(transport=httpx2.MockTransport(openalex)),
+    )
+    client = TestClient(app)
+    paper_id = client.post("/api/papers", json={"title": "T", "openalex_id": A}).json()["id"]
+    assert client.get(f"/api/papers/{paper_id}/related").json()["state"] == "pending"
+    app.state.citations.run_once()
+    body = client.get(f"/api/papers/{paper_id}/related").json()
+    assert (body["state"], body["citing_count"], body["reference_count"]) == ("ready", 3, 2)
+    works = {item["openalex_id"]: item for item in body["works"]}
+    assert body["works"][0]["openalex_id"] == "W10"
+    assert works["W50"]["title"] == "Paper W50"
+    assert works["W50"]["cocited"] == 2 and works["W50"]["cites_paper"] is False
+    lookups = [r for r in openalex.requests if r.url.params.get("filter", "").startswith("openalex_id:") and "W50" in r.url.params["filter"]]
+    assert len(lookups) == 1
+    client.get(f"/api/papers/{paper_id}/related")
+    lookups = [r for r in openalex.requests if r.url.params.get("filter", "").startswith("openalex_id:") and "W50" in r.url.params["filter"]]
+    assert len(lookups) == 1

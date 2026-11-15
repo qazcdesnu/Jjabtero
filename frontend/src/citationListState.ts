@@ -5,8 +5,10 @@ import {
   DuplicatePaperError,
   addPaper,
   fetchPaperCitations,
+  fetchPaperRelated,
   type CitedWork,
   type PaperCitations,
+  type PaperRelated,
   type PaperInput,
 } from './api'
 
@@ -26,12 +28,28 @@ export function citedWorkInput(work: CitedWork): PaperInput {
 }
 
 // @doc: docs/design/Citations.md#6-api와-화면
+export function relationReasons(work: {
+  cites_paper: boolean
+  cited_by_paper: boolean
+  cocited: number
+  shared_refs: number | null
+}): string[] {
+  const reasons: string[] = []
+  if (work.cites_paper) reasons.push('이 논문을 인용')
+  if (work.cited_by_paper) reasons.push('이 논문이 인용')
+  if (work.cocited) reasons.push(`함께 인용 ${work.cocited}회`)
+  if (work.shared_refs) reasons.push(`공유 참고문헌 ${work.shared_refs}`)
+  return reasons
+}
+
+// @doc: docs/design/Citations.md#6-api와-화면
 export function createCitationListState(
   onAdded: () => Promise<void> | void,
-  deps = { fetchPaperCitations, addPaper },
+  deps = { fetchPaperCitations, fetchPaperRelated, addPaper },
 ) {
   const state = reactive({
     data: null as PaperCitations | null,
+    related: null as PaperRelated | null,
     loading: false,
     error: '',
     adding: [] as string[],
@@ -44,8 +62,11 @@ export function createCitationListState(
     state.loading = true
     state.error = ''
     try {
-      const data = await deps.fetchPaperCitations(paperId)
-      if (currentPaper === paperId) state.data = data
+      const [data, related] = await Promise.all([deps.fetchPaperCitations(paperId), deps.fetchPaperRelated(paperId)])
+      if (currentPaper === paperId) {
+        state.data = data
+        state.related = related
+      }
     } catch (error) {
       if (currentPaper === paperId) state.error = error instanceof Error ? error.message : String(error)
     } finally {
@@ -54,8 +75,10 @@ export function createCitationListState(
   }
 
   function mark(workId: string, paperId: number): void {
-    if (!state.data) return
-    for (const list of [state.data.references, state.data.citations]) {
+    const lists: CitedWork[][] = []
+    if (state.data) lists.push(state.data.references, state.data.citations)
+    if (state.related) lists.push(state.related.works)
+    for (const list of lists) {
       for (const item of list) if (item.openalex_id === workId) item.library_paper_id = paperId
     }
   }

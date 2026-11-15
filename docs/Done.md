@@ -2,6 +2,46 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M3-T5 논문별 가까운 논문(서지 결합, 공동 인용, 직접 인용)
+
+- 시작일: 2026-11-15
+- 완료일: 2026-11-15
+- 근거 문서: [인용 데이터 설계](design/Citations.md#6-api와-화면)
+- 참고 자료: 없음
+
+### 계획
+- 인용 거리 점수를 정하고, 논문 하나와 가까운 논문을 점수와 까닭과 함께 주는 API와 화면을 만든다.
+
+### 진행 기록
+- 2026-11-15: M3-T4를 마치고 권장 순서대로 시작했다. PR #38(M3-T4)이 아직 병합되지 않아 그 브랜치에서 작업 브랜치를 만들었다.
+- 2026-11-15: 점수를 직접 인용 0.5 + 함께 인용된 비율 + 공유 참고문헌 비율로 정했다. 가까운 논문 계산, 없는 서지 정보 받기, API를 구현하고 테스트를 더했다. 참고문헌 서지 정보 받기를 함수로 빼 가져오기와 함께 쓰게 했다.
+- 2026-11-15: 화면의 "인용" 칸에 "가까운 논문"을 첫 칸으로 더하고 까닭 표시를 더했다. 타입 검사에서 형 변환 오류가 나 화면 타입을 바로 쓰도록 고쳤다.
+- 2026-11-15: 실제 OpenAlex 데이터로 'Attention Is All You Need'의 가까운 논문을 확인했다. Adam(이 논문이 인용, 함께 인용 6회), Graph Attention Networks(이 논문을 인용, 함께 인용 2회, 공유 참고문헌 5), Deep Residual Learning, Layer Normalization 등이 위에 왔다. OpenAlex에서 서지 정보를 돌려주지 않는 참고문헌 하나는 ID로 보였다.
+- 2026-11-15: 인용 데이터 설계에 점수와 API, 화면, 테스트를 더하고, 제품 비전과 설계의 미결정 사항에서 거리 점수를 지웠다.
+
+### 결정 사항
+- 가까운 논문 점수는 직접 인용 0.5 + 공동 인용 수/가져온 피인용 수 + 공유 참고문헌 수/참고문헌 수다. 세 값의 크기가 비슷해 어느 하나가 압도하지 않고, 까닭을 그대로 보여 줄 수 있어 고쳐 나가기 쉽다. 사용자가 다른 가중치를 원하면 `DIRECT_WEIGHT`나 식을 바꾼다([인용 데이터 설계](design/Citations.md#6-api와-화면)).
+- 함께 인용된 논문의 서지 정보는 가까운 논문을 처음 볼 때 받아 둔다. 갱신 때 모두 받으면 쓰지 않을 정보까지 받기 때문이다.
+
+### 변경 파일
+- `src/jjabtero/citations.py`
+- `tests/test_citations.py`
+- `frontend/src/api.ts`
+- `frontend/src/citationListState.ts`
+- `frontend/src/citationListState.test.ts`
+- `frontend/src/CitationLists.vue`
+- `docs/design/Citations.md`
+- `docs/ProductVision.md`
+- `docs/Roadmap.md`
+- `docs/Done.md`
+
+### 결과
+- 논문 상세에서 그 논문과 인용으로 가까운 논문 30편을 까닭과 함께 보고 바로 서재에 담을 수 있다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과(백엔드 새 테스트 2개, 프론트엔드 새 테스트 2개 포함).
+- `vue-tsc` 타입 검사와 `npm run build` 통과. 실제 OpenAlex 데이터로 브라우저에서 확인했다.
+
 ## M3-T4 논문 상세의 참고문헌·피인용 목록과 바로 추가
 
 - 시작일: 2026-11-15
