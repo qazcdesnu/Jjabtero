@@ -1,17 +1,18 @@
-"""리더의 읽던 위치 API.
+"""리더의 읽던 위치와 주석 API.
 
 @doc: docs/design/Reader.md#5-api
 """
 
+import json
 from collections.abc import Iterator
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from jjabtero.models import Paper, ReadingPosition
+from jjabtero.models import Annotation, Paper, ReadingPosition
 
 # @doc: docs/design/Reader.md#5-api
 router = APIRouter(prefix="/api/papers")
@@ -81,3 +82,167 @@ def save_position(
     session.commit()
     request.app.state.drive.schedule_push()
     return PositionOut(page=data.page, offset=data.offset, zoom=data.zoom, updated_at=now)
+
+
+# @doc: docs/design/Reader.md#4-데이터
+ANNOTATION_KINDS = ("highlight", "note")
+# @doc: docs/design/Reader.md#4-데이터
+ANNOTATION_COLORS = ("yellow", "green", "blue", "pink", "purple")
+
+
+class Rect(BaseModel):
+    """쪽 크기에 대한 비율(0~1)로 나타낸 사각형.
+
+    @doc: docs/design/Reader.md#4-데이터
+    """
+
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    w: float = Field(gt=0, le=1)
+    h: float = Field(gt=0, le=1)
+
+
+class AnnotationIn(BaseModel):
+    """주석을 만들 때의 입력.
+
+    @doc: docs/design/Reader.md#5-api
+    """
+
+    kind: Literal["highlight", "note"]
+    page: int = Field(ge=1)
+    rects: list[Rect] = Field(min_length=1, max_length=200)
+    text: str | None = Field(default=None, max_length=10000)
+    color: Literal["yellow", "green", "blue", "pink", "purple"] = "yellow"
+    note: str | None = Field(default=None, max_length=20000)
+
+
+class AnnotationUpdate(BaseModel):
+    """주석을 고칠 때의 입력. 보낸 항목만 바꾼다.
+
+    @doc: docs/design/Reader.md#5-api
+    """
+
+    color: Literal["yellow", "green", "blue", "pink", "purple"] | None = None
+    note: str | None = Field(default=None, max_length=20000)
+
+
+class AnnotationOut(BaseModel):
+    """주석 응답.
+
+    @doc: docs/design/Reader.md#5-api
+    """
+
+    id: int
+    paper_id: int
+    kind: str
+    page: int
+    rects: list[Rect]
+    text: str | None
+    color: str
+    note: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_annotation(cls, annotation: Annotation) -> "AnnotationOut":
+        """모델 객체를 응답으로 바꾼다.
+
+        @doc: docs/design/Reader.md#5-api
+        """
+        return cls(
+            id=annotation.id,
+            paper_id=annotation.paper_id,
+            kind=annotation.kind,
+            page=annotation.page,
+            rects=[Rect(**rect) for rect in json.loads(annotation.rects)],
+            text=annotation.text,
+            color=annotation.color,
+            note=annotation.note,
+            created_at=annotation.created_at,
+            updated_at=annotation.updated_at,
+        )
+
+
+def _clean(value: str | None) -> str | None:
+    return value.strip() or None if value is not None else None
+
+
+@router.get("/{paper_id}/annotations")
+def list_annotations(paper_id: int, session: Annotated[Session, Depends(_session)]) -> list[AnnotationOut]:
+    """`GET /api/papers/{paper_id}/annotations`를 처리한다. 쪽 순서, 쪽 안에서는 위에서부터다.
+
+    @doc: docs/design/Reader.md#5-api
+    """
+    paper = _paper(session, paper_id)
+    items = [AnnotationOut.from_annotation(annotation) for annotation in paper.annotations]
+    return sorted(items, key=lambda item: (item.page, item.rects[0].y, item.rects[0].x, item.id))
+
+
+@router.post("/{paper_id}/annotations", status_code=status.HTTP_201_CREATED)
+def create_annotation(
+    paper_id: int, data: AnnotationIn, request: Request, session: Annotated[Session, Depends(_session)]
+) -> AnnotationOut:
+    """`POST /api/papers/{paper_id}/annotations`를 처리한다.
+
+    @doc: docs/design/Reader.md#5-api
+    """
+    paper = _paper(session, paper_id)
+    now = datetime.now(UTC)
+    annotation = Annotation(
+        kind=data.kind,
+        page=data.page,
+        rects=json.dumps([rect.model_dump() for rect in data.rects]),
+        text=_clean(data.text),
+        color=data.color,
+        note=_clean(data.note),
+        created_at=now,
+        updated_at=now,
+    )
+    paper.annotations.append(annotation)
+    session.commit()
+    request.app.state.drive.schedule_push()
+    return AnnotationOut.from_annotation(annotation)
+
+
+def _annotation(session: Session, annotation_id: int) -> Annotation:
+    annotation = session.get(Annotation, annotation_id)
+    if annotation is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"주석이 없습니다: {annotation_id}")
+    return annotation
+
+
+# @doc: docs/design/Reader.md#5-api
+annotations_router = APIRouter(prefix="/api/annotations")
+
+
+@annotations_router.patch("/{annotation_id}")
+def update_annotation(
+    annotation_id: int, data: AnnotationUpdate, request: Request, session: Annotated[Session, Depends(_session)]
+) -> AnnotationOut:
+    """`PATCH /api/annotations/{annotation_id}`를 처리한다.
+
+    @doc: docs/design/Reader.md#5-api
+    """
+    annotation = _annotation(session, annotation_id)
+    if "color" in data.model_fields_set and data.color is not None:
+        annotation.color = data.color
+    if "note" in data.model_fields_set:
+        annotation.note = _clean(data.note)
+    annotation.updated_at = datetime.now(UTC)
+    session.commit()
+    request.app.state.drive.schedule_push()
+    return AnnotationOut.from_annotation(annotation)
+
+
+@annotations_router.delete("/{annotation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_annotation(
+    annotation_id: int, request: Request, session: Annotated[Session, Depends(_session)]
+) -> Response:
+    """`DELETE /api/annotations/{annotation_id}`를 처리한다.
+
+    @doc: docs/design/Reader.md#5-api
+    """
+    session.delete(_annotation(session, annotation_id))
+    session.commit()
+    request.app.state.drive.schedule_push()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

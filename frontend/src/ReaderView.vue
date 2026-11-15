@@ -14,8 +14,19 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import Button from 'primevue/button'
 import InputNumber from 'primevue/inputnumber'
 import Message from 'primevue/message'
+import Textarea from 'primevue/textarea'
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef } from 'vue'
-import { fetchPosition, pdfUrl, savePosition } from './api'
+import {
+  createAnnotation,
+  deleteAnnotation,
+  fetchPosition,
+  listAnnotations,
+  pdfUrl,
+  savePosition,
+  updateAnnotation,
+  type Annotation,
+} from './api'
+import { HIGHLIGHT_COLORS, colorFill, hitTest, normalizeRects, type Rect } from './annotations'
 import {
   clampPage,
   createPositionSaver,
@@ -51,6 +62,127 @@ const saver = createPositionSaver((position: { page: number; offset: number; zoo
   savePosition(props.paperId, position),
 )
 let restored = false
+
+const annotations = ref<Annotation[]>([])
+const annotationError = ref('')
+const pending = ref<{ page: number; rects: Rect[]; text: string; left: number; top: number } | null>(null)
+const editing = ref<{ annotation: Annotation; note: string; left: number; top: number } | null>(null)
+const byPage = computed(() => {
+  const pages = new Map<number, Annotation[]>()
+  for (const annotation of annotations.value) pages.set(annotation.page, [...(pages.get(annotation.page) ?? []), annotation])
+  return pages
+})
+
+function contentPoint(clientX: number, clientY: number) {
+  const element = scroller.value as HTMLElement
+  const box = element.getBoundingClientRect()
+  return { left: clientX - box.left + element.scrollLeft, top: clientY - box.top + element.scrollTop }
+}
+
+function pageOf(node: Node | null): HTMLElement | null {
+  const element = node instanceof Element ? node : node?.parentElement
+  return element?.closest<HTMLElement>('.reader-page') ?? null
+}
+
+function showError(error: unknown) {
+  annotationError.value = error instanceof Error ? error.message : String(error)
+}
+
+function onMouseUp(event: MouseEvent) {
+  if ((event.target as HTMLElement).closest('.reader-popup')) return
+  const selection = window.getSelection()
+  if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
+    const range = selection.getRangeAt(0)
+    const pageElement = pageOf(range.startContainer)
+    if (!pageElement) return
+    const rects = normalizeRects([...range.getClientRects()], pageElement.getBoundingClientRect())
+    if (rects.length === 0) return
+    const box = range.getBoundingClientRect()
+    pending.value = {
+      page: Number(pageElement.dataset.page),
+      rects,
+      text: selection.toString().trim(),
+      ...contentPoint(box.left + box.width / 2, box.bottom),
+    }
+    editing.value = null
+    return
+  }
+  pending.value = null
+  const pageElement = pageOf(event.target as Node)
+  if (!pageElement) {
+    editing.value = null
+    return
+  }
+  const box = pageElement.getBoundingClientRect()
+  const point = { x: (event.clientX - box.left) / box.width, y: (event.clientY - box.top) / box.height }
+  const hit = hitTest(Number(pageElement.dataset.page), point, annotations.value)
+  editing.value = hit ? { annotation: hit, note: hit.note ?? '', ...contentPoint(event.clientX, event.clientY) } : null
+}
+
+function replaceAnnotation(updated: Annotation) {
+  annotations.value = annotations.value.map((annotation) => (annotation.id === updated.id ? updated : annotation))
+  if (editing.value?.annotation.id === updated.id) editing.value.annotation = updated
+}
+
+async function addHighlight(color: string) {
+  const target = pending.value
+  if (!target) return
+  try {
+    const created = await createAnnotation(props.paperId, {
+      kind: 'highlight',
+      page: target.page,
+      rects: target.rects,
+      text: target.text,
+      color,
+    })
+    annotations.value = [...annotations.value, created]
+    window.getSelection()?.removeAllRanges()
+    pending.value = null
+    annotationError.value = ''
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function changeColor(color: string) {
+  const target = editing.value
+  if (!target) return
+  try {
+    replaceAnnotation(await updateAnnotation(target.annotation.id, { color }))
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function saveNote() {
+  const target = editing.value
+  if (!target) return
+  try {
+    replaceAnnotation(await updateAnnotation(target.annotation.id, { note: target.note }))
+    editing.value = null
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function removeAnnotation() {
+  const target = editing.value
+  if (!target) return
+  try {
+    await deleteAnnotation(target.annotation.id)
+    annotations.value = annotations.value.filter((annotation) => annotation.id !== target.annotation.id)
+    editing.value = null
+  } catch (error) {
+    showError(error)
+  }
+}
+
+function onKeyDown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    pending.value = null
+    editing.value = null
+  }
+}
 
 const tops = computed(() => pageTops(sizes.value, scale.value))
 const heights = computed(() => sizes.value.map((size) => size.height * scale.value))
@@ -141,6 +273,7 @@ function fitWidth() {
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', onKeyDown)
   try {
     loadingTask = getDocument({ url: pdfUrl(props.paperId), withCredentials: true })
     const pdf = await loadingTask.promise
@@ -161,6 +294,10 @@ onMounted(async () => {
       scroller.value.scrollTop = scrollTopFor(saved.page, saved.offset, tops.value, heights.value) - PAGE_GAP
     restored = true
     update()
+    annotations.value = await listAnnotations(props.paperId).catch((error) => {
+      showError(error)
+      return []
+    })
   } catch (error) {
     loading.value = false
     failure.value = `PDF를 열지 못했습니다: ${error instanceof Error ? error.message : String(error)}`
@@ -168,6 +305,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
   void saver.flush()
   for (const page of [...rendered.keys()]) clearPage(page)
   void loadingTask?.destroy()
@@ -203,7 +341,10 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <div ref="scroller" class="relative min-h-0 flex-1 overflow-auto" @scroll.passive="update">
+    <Message v-if="annotationError" severity="error" size="small" closable class="mx-3 mt-2" @close="annotationError = ''">
+      {{ annotationError }}
+    </Message>
+    <div ref="scroller" class="relative min-h-0 flex-1 overflow-auto" @scroll.passive="update" @mouseup="onMouseUp">
       <p v-if="loading" class="p-6 text-center text-surface-500">PDF를 여는 중…</p>
       <Message v-if="failure" severity="error" class="m-6">{{ failure }}</Message>
       <div
@@ -223,7 +364,71 @@ onUnmounted(() => {
         :data-page="index + 1"
       >
         <canvas class="absolute inset-0" />
+        <div class="pointer-events-none absolute inset-0">
+          <template v-for="annotation in byPage.get(index + 1) ?? []" :key="annotation.id">
+            <div
+              v-for="(rect, part) in annotation.rects"
+              :key="part"
+              class="reader-highlight absolute"
+              :data-annotation="annotation.id"
+              :style="{
+                left: `${rect.x * 100}%`,
+                top: `${rect.y * 100}%`,
+                width: `${rect.w * 100}%`,
+                height: `${rect.h * 100}%`,
+                background: colorFill(annotation.color),
+                mixBlendMode: 'multiply',
+              }"
+            />
+          </template>
+        </div>
         <div class="textLayer" />
+      </div>
+
+      <div
+        v-if="pending"
+        class="reader-popup absolute z-20 flex -translate-x-1/2 gap-1 rounded-md border border-surface-200 bg-surface-0 p-1 shadow-lg dark:border-surface-700 dark:bg-surface-800"
+        :style="{ left: `${pending.left}px`, top: `${pending.top + 6}px` }"
+        @mousedown.prevent
+      >
+        <button
+          v-for="color in HIGHLIGHT_COLORS"
+          :key="color.name"
+          type="button"
+          class="h-6 w-6 rounded-full border border-surface-300"
+          :style="{ background: color.fill }"
+          :aria-label="`${color.label} 하이라이트`"
+          :title="`${color.label} 하이라이트`"
+          @click="addHighlight(color.name)"
+        />
+      </div>
+
+      <div
+        v-if="editing"
+        class="reader-popup absolute z-20 flex w-72 flex-col gap-2 rounded-md border border-surface-200 bg-surface-0 p-3 shadow-lg dark:border-surface-700 dark:bg-surface-800"
+        :style="{ left: `${editing.left}px`, top: `${editing.top + 8}px` }"
+      >
+        <p v-if="editing.annotation.text" class="line-clamp-3 text-xs text-surface-500">“{{ editing.annotation.text }}”</p>
+        <div class="flex gap-1">
+          <button
+            v-for="color in HIGHLIGHT_COLORS"
+            :key="color.name"
+            type="button"
+            class="h-6 w-6 rounded-full border"
+            :class="editing.annotation.color === color.name ? 'border-surface-900 dark:border-surface-0' : 'border-surface-300'"
+            :style="{ background: color.fill }"
+            :aria-label="`${color.label}으로 바꾸기`"
+            @click="changeColor(color.name)"
+          />
+        </div>
+        <Textarea v-model="editing.note" rows="3" auto-resize placeholder="메모" aria-label="주석 메모" fluid />
+        <div class="flex justify-between gap-2">
+          <Button label="삭제" icon="pi pi-trash" size="small" severity="danger" text @click="removeAnnotation" />
+          <div class="flex gap-1">
+            <Button label="닫기" size="small" severity="secondary" text @click="editing = null" />
+            <Button label="메모 저장" size="small" @click="saveNote" />
+          </div>
+        </div>
       </div>
     </div>
   </section>
