@@ -15,6 +15,7 @@ import {
 } from './api'
 
 // @doc: docs/design/Citations.md#6-api와-화면
+// @doc: docs/design/ReaderCitations.md#5-상자
 export function citedWorkInput(work: CitedWork): PaperInput {
   return {
     title: work.title ?? work.openalex_id,

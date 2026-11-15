@@ -48,6 +48,7 @@
 | [서재 인용 그래프 설계](design/CitationGraph.md) | 시각화 라이브러리(ECharts), 서재 논문 사이 인용·가까움 그래프 데이터, API, 연도 순·자유 배치 화면 | M3-T7 |
 | [사용자 설정 설계](design/Settings.md) | 앱 안에서 바꾸는 설정 항목, 저장, API와 설정 창 | M3-T2 |
 | [PDF 리더 설계](design/Reader.md) | pdf.js 뷰어, PDF 가져오기(공개 PDF, 올리기)와 드라이브 보관, 읽던 위치·하이라이트·영역 메모 데이터, API, 화면 | M4-T1 |
+| [리더 인용 미리보기 설계](design/ReaderCitations.md) | 리더의 인용 표시 찾기, 참고문헌 항목 읽기, 항목 글로 논문 찾기 API, 미리보기 상자와 서재에 담기·새 탭에서 읽기 | M6-T1 |
 | [공개 페이지 설계](design/PublicPages.md) | 로그인 없이 여는 앱 소개·개인정보처리방침 페이지, 검색 노출 막기 | M2-T5 |
 | [구글 드라이브 동기화 설계](design/DriveSync.md) | OAuth 인증, 드라이브 파일, 동기화·충돌, API, 머리줄 상태 | M1-T9 |
 | [읽기 상태와 메모 설계](design/ReadingStatus.md) | 읽기 상태·메모 데이터, 마이그레이션 0002, API, 상세 편집 | M1-T7 |
