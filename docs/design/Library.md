@@ -57,6 +57,7 @@
 | --- | --- |
 | [0001](../../src/jjabtero/migrations/versions/0001_create_library.py) | `papers`, `authors`, `paper_authors`, `tags`, `paper_tags` 테이블을 만든다. |
 | [0002](../../src/jjabtero/migrations/versions/0002_reading_status.py) | `papers`에 `read_status`(기본 `to-read`)와 `note`를 더한다. |
+| [0003](../../src/jjabtero/migrations/versions/0003_settings.py) | 사용자 설정 `settings`(`key`, `value`) 테이블을 만든다([사용자 설정 설계](Settings.md#2-저장)). |
 
 ## 4. 저장 함수
 
