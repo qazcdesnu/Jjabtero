@@ -16,6 +16,8 @@ from pathlib import Path
 import httpx2
 from fastapi import APIRouter, FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
+from starlette.types import Scope
 from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel
 
@@ -51,6 +53,24 @@ from jjabtero.settings import router as settings_router
 
 # @doc: docs/design/AppSkeleton.md#1-백엔드-앱
 DEFAULT_FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+
+class FrontendFiles(StaticFiles):
+    """빌드된 프론트엔드 파일. 이름에 해시가 붙은 `assets/`는 오래 캐시하고, 그 밖(`index.html` 등)은 매번 확인하게 한다.
+
+    @doc: docs/design/AppSkeleton.md#1-백엔드-앱
+    """
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        """파일 응답에 캐시 지시를 붙인다.
+
+        @doc: docs/design/AppSkeleton.md#1-백엔드-앱
+        """
+        response = await super().get_response(path, scope)
+        if response.status_code in (200, 304):
+            hashed = path.replace("\\", "/").startswith("assets/")
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable" if hashed else "no-cache"
+        return response
 
 _api = APIRouter(prefix="/api")
 
@@ -156,5 +176,5 @@ def create_app(
     app.include_router(annotations_router)
     # 정적 파일 마운트는 "/" 전체를 차지하므로 API 라우터 다음에 둔다.
     if frontend_dist.is_dir():
-        app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+        app.mount("/", FrontendFiles(directory=frontend_dist, html=True), name="frontend")
     return app

@@ -11,6 +11,7 @@
   - 데이터베이스와 HTTP 클라이언트를 준비하는 인자 `db_path`, `http_client`는 [논문 검색과 추가 설계](PaperSearch.md#3-api)에 있다.
   - `frontend_dist`가 디렉터리로 있으면 그 안의 정적 파일을 `/`에서 제공하고, `/`에는 `index.html`을 준다. 없으면 정적 파일을 제공하지 않는다. 개발할 때는 Vite 개발 서버가 화면을 제공하므로 빌드 없이도 앱이 떠야 하기 때문이다.
   - API 경로를 정적 파일보다 먼저 등록해, 정적 파일이 API를 가리지 않게 한다.
+  - 정적 파일은 [FrontendFiles](../../src/jjabtero/app.py#FrontendFiles)가 캐시 지시를 붙여 준다. 이름에 내용 해시가 붙는 `assets/` 아래 파일은 1년 동안 바뀌지 않는 것(`public, max-age=31536000, immutable`)으로, 그 밖의 파일(`index.html` 등)은 쓸 때마다 서버에 확인하게(`no-cache`) 한다. 새로 배포한 뒤 새로고침하면 브라우저가 옛 `index.html`을 쓰지 않고 새 화면 파일을 받게 하기 위해서다([UI 기반 설계](UiLayout.md#5-나중에-불러오는-화면)).
 - [Health](../../src/jjabtero/app.py#Health)는 상태 확인 응답이다. `status`(항상 `"ok"`)와 `version`(패키지 버전)을 가진다.
 - `GET /api/health`는 [health](../../src/jjabtero/app.py#health)가 처리하며 `Health`를 돌려준다. 서버가 떠 있는지와 버전을 확인하는 데 쓴다.
 - 없는 API 경로는 404를 돌려준다.
