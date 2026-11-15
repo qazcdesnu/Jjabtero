@@ -27,6 +27,7 @@
 | `url` | 문자열 | 아니요 | 원문 주소 |
 | `read_status` | 문자열 | 예 | 읽기 상태([읽기 상태와 메모 설계](ReadingStatus.md#1-데이터)) |
 | `note` | 문자열 | 아니요 | 메모([읽기 상태와 메모 설계](ReadingStatus.md#1-데이터)) |
+| `openalex_id` | 문자열 | 아니요 | OpenAlex 작업 ID(예: `W2626778328`). 인용 데이터에 쓴다([인용 데이터 설계](Citations.md#2-서재-논문과-openalex-연결)). |
 | `created_at`, `updated_at` | 시각(UTC) | 예 | 만든 시각과 마지막으로 고친 시각 |
 
 - 항목 종류는 `journal-article`(저널 논문), `conference-paper`(학회 논문), `preprint`(프리프린트), `book`(책), `book-chapter`(책의 장), `thesis`(학위논문), `report`(보고서), `other`(그 밖)다.
@@ -58,12 +59,13 @@
 | [0001](../../src/jjabtero/migrations/versions/0001_create_library.py) | `papers`, `authors`, `paper_authors`, `tags`, `paper_tags` 테이블을 만든다. |
 | [0002](../../src/jjabtero/migrations/versions/0002_reading_status.py) | `papers`에 `read_status`(기본 `to-read`)와 `note`를 더한다. |
 | [0003](../../src/jjabtero/migrations/versions/0003_settings.py) | 사용자 설정 `settings`(`key`, `value`) 테이블을 만든다([사용자 설정 설계](Settings.md#2-저장)). |
+| [0004](../../src/jjabtero/migrations/versions/0004_openalex_id.py) | `papers`에 `openalex_id`를 더한다([인용 데이터 설계](Citations.md#2-서재-논문과-openalex-연결)). |
 
 ## 4. 저장 함수
 
 논문 저장 함수는 [library 모듈](../../src/jjabtero/library.py)에 둔다. 모두 SQLAlchemy 세션을 첫 인자로 받고, 바꾸는 함수는 성공하면 커밋한다.
 
-- [PaperData](../../src/jjabtero/library.py#PaperData)는 논문을 만들거나 고칠 때의 입력이다. `title`, `authors`(이름 목록, 기본 빈 목록), `item_type`(기본 `other`), `year`, `venue`, `doi`, `url`, `tags`(이름 목록, 기본 빈 목록)를 가진다. pydantic 모델이라 API 입력으로도 쓴다.
+- [PaperData](../../src/jjabtero/library.py#PaperData)는 논문을 만들거나 고칠 때의 입력이다. `title`, `authors`(이름 목록, 기본 빈 목록), `item_type`(기본 `other`), `year`, `venue`, `doi`, `url`, `tags`(이름 목록, 기본 빈 목록), `openalex_id`(선택, `https://openalex.org/` 앞부분을 지운 `W…`, 형식이 맞지 않으면 검증 오류)를 가진다. `update_paper`는 `openalex_id`가 비어 있으면 기존 값을 지우지 않는다. pydantic 모델이라 API 입력으로도 쓴다.
   - 제목, 저자 이름, 태그 이름은 앞뒤 공백을 지운다. 제목이 비면 검증 오류다. 빈 저자 이름과 빈 태그 이름은 버리고, 같은 태그는 한 번만 남긴다.
   - DOI는 [normalize_doi](../../src/jjabtero/library.py#normalize_doi)로 정규화한다. 앞뒤 공백과 `https://doi.org/`, `http://dx.doi.org/`, `doi:` 같은 앞부분을 지우고 소문자로 바꾼다. 결과가 `10.`으로 시작하지 않으면 검증 오류다. DOI는 대소문자를 구분하지 않으므로, 같은 논문을 두 번 넣는 것을 막는 데 쓴다.
 - [add_paper](../../src/jjabtero/library.py#add_paper)는 논문을 만들어 돌려준다. 같은 이름의 저자와 태그가 있으면 그것을 쓰고, 없으면 만든다.

@@ -57,6 +57,7 @@ class PaperOut(BaseModel):
     tags: list[str]
     read_status: str
     note: str | None
+    openalex_id: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -78,6 +79,7 @@ class PaperOut(BaseModel):
             tags=paper.tag_names,
             read_status=paper.read_status,
             note=paper.note,
+            openalex_id=paper.openalex_id,
             created_at=paper.created_at,
             updated_at=paper.updated_at,
         )
@@ -128,6 +130,7 @@ def create_paper(
             status.HTTP_409_CONFLICT, {"message": str(error), "paper_id": error.paper_id}
         ) from error
     request.app.state.drive.schedule_push()
+    request.app.state.citations.wake()
     return PaperOut.from_paper(paper)
 
 

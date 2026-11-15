@@ -33,6 +33,7 @@
 - 왼쪽 칸 화면 목록에 "설정"(톱니 아이콘)을 더한다([UI 기반 설계의 화면 배치](UiLayout.md#3-화면-배치)).
 - 설정 화면은 [SettingsView](../../frontend/src/SettingsView.vue)이다. 고를 항목이 없으므로 가운데와 오른쪽 칸을 합친 넓은 칸 하나에 보여 준다.
 - 항목마다 이름, 설명, 숫자 입력 칸(최솟값·최댓값 제한), 기본값을 보여 준다. "저장"을 누르면 바뀐 항목만 보낸다. 저장되면 "저장했습니다"를, 거절되면 서버가 준 이유를 보여 준다. "기본값으로"를 누르면 입력 칸을 기본값으로 바꾼다(저장은 따로 누른다).
+- 설정 항목 아래에 "인용 데이터" 칸을 두어 인용 데이터 상태와 "인용 데이터 새로 받기" 버튼을 보여 준다([인용 데이터 설계](Citations.md#6-api와-화면)).
 - 화면 상태는 [settingsState 모듈](../../frontend/src/settingsState.ts)의 [createSettingsState](../../frontend/src/settingsState.ts#createSettingsState)가 가진다. API 호출은 [api 모듈](../../frontend/src/api.ts)의 [fetchSettings](../../frontend/src/api.ts#fetchSettings)와 [saveSettings](../../frontend/src/api.ts#saveSettings)다.
 
 ## 5. 테스트

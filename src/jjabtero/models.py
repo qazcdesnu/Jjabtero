@@ -103,6 +103,7 @@ class Paper(Base):
     url: Mapped[str | None] = mapped_column(String)
     read_status: Mapped[str] = mapped_column(String, default="to-read", server_default="to-read")
     note: Mapped[str | None] = mapped_column(Text)
+    openalex_id: Mapped[str | None] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 

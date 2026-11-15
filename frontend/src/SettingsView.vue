@@ -4,6 +4,7 @@ import Button from 'primevue/button'
 import InputNumber from 'primevue/inputnumber'
 import Message from 'primevue/message'
 import { onMounted } from 'vue'
+import CitationStatusPanel from './CitationStatusPanel.vue'
 import { createSettingsState } from './settingsState'
 
 const settings = createSettingsState()
@@ -60,5 +61,7 @@ onMounted(() => settings.load())
     </form>
 
     <Message v-if="settings.state.error" severity="error">{{ settings.state.error }}</Message>
+
+    <CitationStatusPanel />
   </section>
 </template>

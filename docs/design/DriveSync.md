@@ -48,6 +48,7 @@
 - 동기화 쪽은 이 요청들을 [FilesLike](../../src/jjabtero/drive_sync.py#FilesLike) 모양으로만 쓴다. 테스트는 같은 모양의 가짜 드라이브를 넘긴다.
 - 파일 정보는 [RemoteFile](../../src/jjabtero/drive.py#RemoteFile)(ID, `checksum`)이다. `checksum`은 드라이브가 파일 내용으로 계산한 `md5Checksum`이며(폴더는 빈 문자열), 드라이브 쪽 변경 감지에 쓴다. 드라이브의 `version` 필드는 내용이 그대로여도 올라가는 것을 실제 드라이브에서 확인했으므로(올린 직전 1, 잠시 뒤 2, 리비전 하나) 쓰지 않는다.
 - 드라이브 API 오류(4xx, 5xx)는 [DriveApiError](../../src/jjabtero/drive.py#DriveApiError)다.
+- 서재 파일 말고도 다시 받을 수 있는 캐시 파일(예: 인용 데이터 `citations.db`)을 같은 폴더에 둔다. [DriveSync.put_cache](../../src/jjabtero/drive_sync.py#DriveSync.put_cache)는 이름으로 파일을 찾아 내용을 바꾸거나 새로 올리고, [DriveSync.get_cache](../../src/jjabtero/drive_sync.py#DriveSync.get_cache)는 내용을 받는다(없으면 `None`). 충돌을 따지지 않는다. 드라이브에 연결되어 있지 않거나 실패하면 올리기는 거짓을, 받기는 `None`을 돌려준다([인용 데이터 설계](Citations.md#4-저장)).
 
 ## 5. 동기화
 
