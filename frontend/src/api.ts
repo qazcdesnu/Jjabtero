@@ -325,3 +325,33 @@ export async function uploadPdf(paperId: number, file: Blob): Promise<PaperPdf> 
     }),
   )
 }
+
+// @doc: docs/design/Reader.md#5-api
+export interface ReadingPosition {
+  page: number
+  offset: number
+  zoom: number
+}
+
+// @doc: docs/design/Reader.md#5-api
+export async function fetchPosition(paperId: number): Promise<ReadingPosition | null> {
+  const response = await fetch(`/api/papers/${paperId}/position`)
+  if (response.status === 204) return null
+  if (!response.ok) {
+    throw new Error(`읽던 위치 불러오기 실패: ${response.status}`)
+  }
+  const body = await response.json()
+  return { page: body.page, offset: body.offset, zoom: body.zoom }
+}
+
+// @doc: docs/design/Reader.md#5-api
+export async function savePosition(paperId: number, position: ReadingPosition): Promise<void> {
+  const response = await fetch(`/api/papers/${paperId}/position`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(position),
+  })
+  if (!response.ok) {
+    throw new Error(`읽던 위치 저장 실패: ${response.status}`)
+  }
+}

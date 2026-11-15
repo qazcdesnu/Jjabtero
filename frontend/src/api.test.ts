@@ -29,6 +29,8 @@ import {
   refreshCitations,
   fetchOpenPdf,
   uploadPdf,
+  fetchPosition,
+  savePosition,
   type SearchResult,
 } from './api'
 
@@ -310,6 +312,28 @@ describe('PDF API', () => {
       vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: 'PDF 파일이 아닙니다.' }), { status: 415 })),
     )
     await expect(uploadPdf(3, new Blob(['x']))).rejects.toThrow('PDF 파일이 아닙니다.')
+  })
+})
+
+describe('읽던 위치 API', () => {
+  it('저장한 위치가 없으면(204) null, 있으면 위치를 돌려준다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+    await expect(fetchPosition(3)).resolves.toBeNull()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ page: 2, offset: 0.5, zoom: 1, updated_at: 'now' }))),
+    )
+    await expect(fetchPosition(3)).resolves.toEqual({ page: 2, offset: 0.5, zoom: 1 })
+  })
+
+  it('위치를 PUT으로 저장한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}'))
+    vi.stubGlobal('fetch', fetchMock)
+    await savePosition(3, { page: 2, offset: 0.5, zoom: 1 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/papers/3/position',
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ page: 2, offset: 0.5, zoom: 1 }) }),
+    )
   })
 })
 

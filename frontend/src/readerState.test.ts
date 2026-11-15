@@ -1,8 +1,9 @@
 // @doc: docs/design/Reader.md#8-테스트
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   clampPage,
+  createPositionSaver,
   fitWidthScale,
   nextZoom,
   pageAt,
@@ -63,3 +64,31 @@ describe('readerState', () => {
     expect(scrollTopFor(99, 2, tops, heights)).toBe(tops[3] + 800)
   })
 })
+
+describe('createPositionSaver', () => {
+  it('스크롤이 멈추고 2초 뒤 마지막 위치만 저장하고, flush는 바로 저장한다', async () => {
+    vi.useFakeTimers()
+    const save = vi.fn().mockResolvedValue(undefined)
+    const saver = createPositionSaver(save)
+    saver.schedule({ page: 1 })
+    vi.advanceTimersByTime(1500)
+    saver.schedule({ page: 2 })
+    vi.advanceTimersByTime(1999)
+    expect(save).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(save).toHaveBeenCalledWith({ page: 2 })
+    saver.schedule({ page: 3 })
+    await saver.flush()
+    expect(save).toHaveBeenLastCalledWith({ page: 3 })
+    await saver.flush()
+    expect(save).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
+  })
+
+  it('저장 실패는 리더를 멈추지 않는다', async () => {
+    const saver = createPositionSaver(vi.fn().mockRejectedValue(new Error('down')))
+    saver.schedule({ page: 1 })
+    await expect(saver.flush()).resolves.toBeUndefined()
+  })
+})
+

@@ -6,7 +6,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, Text
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 # @doc: docs/design/Library.md#1-데이터-모델
@@ -114,6 +114,7 @@ class Paper(Base):
     )
     tags: Mapped[list[Tag]] = relationship(secondary=paper_tags)
     pdf: Mapped["PaperPdf | None"] = relationship(cascade="all, delete-orphan", passive_deletes=True)
+    position: Mapped["ReadingPosition | None"] = relationship(cascade="all, delete-orphan", passive_deletes=True)
 
     @property
     def author_names(self) -> list[str]:
@@ -162,3 +163,19 @@ class PaperPdf(Base):
     page_count: Mapped[int | None] = mapped_column(Integer)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
+
+
+class ReadingPosition(Base):
+    """논문을 읽던 위치. 쪽 번호와 그 쪽 안의 세로 비율, 확대 배율이다.
+
+    @doc: docs/design/Reader.md#4-데이터
+    @doc: docs/design/Library.md#1-데이터-모델
+    """
+
+    __tablename__ = "reading_positions"
+
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), primary_key=True)
+    page: Mapped[int] = mapped_column(Integer)
+    offset: Mapped[float] = mapped_column(Float)
+    zoom: Mapped[float] = mapped_column(Float)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

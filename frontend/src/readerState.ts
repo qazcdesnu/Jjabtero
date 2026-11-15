@@ -85,3 +85,29 @@ export function scrollTopFor(page: number, offset: number, tops: number[], heigh
   if (tops.length === 0) return 0
   return tops[index] + Math.min(Math.max(offset, 0), 1) * heights[index]
 }
+
+// @doc: docs/design/Reader.md#4-데이터
+export const POSITION_SAVE_DELAY_MS = 2000
+
+// @doc: docs/design/Reader.md#4-데이터
+export function createPositionSaver<T>(save: (value: T) => Promise<void>, delay = POSITION_SAVE_DELAY_MS) {
+  let pending: T | null = null
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  function flush(): Promise<void> {
+    clearTimeout(timer)
+    timer = undefined
+    if (pending === null) return Promise.resolve()
+    const value = pending
+    pending = null
+    return save(value).catch(() => undefined)
+  }
+
+  function schedule(value: T): void {
+    pending = value
+    clearTimeout(timer)
+    timer = setTimeout(() => void flush(), delay)
+  }
+
+  return { schedule, flush }
+}
