@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { DuplicatePaperError, type CitedWork, type PaperCitations } from './api'
-import { citedWorkInput, createCitationListState, relationReasons } from './citationListState'
+import { citedWorkInput, createCitationListState, directionTag, relationReasons } from './citationListState'
 
 const work: CitedWork = {
   openalex_id: 'W10',
@@ -37,7 +37,7 @@ function setup(overrides = {}) {
       state: 'ready',
       citing_count: 10,
       reference_count: 35,
-      works: [{ ...work, score: 1.5, cites_paper: true, cited_by_paper: false, cocited: 0 }],
+      works: [{ ...work, score: 1.5, cites_paper: true, cited_by_paper: false, cocited: 0, direction: 'later', direction_basis: 'citation' }],
     }),
     addPaper: vi.fn().mockResolvedValue({ id: 42 }),
     ...overrides,
@@ -107,6 +107,13 @@ describe('가까운 논문', () => {
     await lists.add(lists.state.related!.works[0])
     expect(lists.state.related!.works[0].library_paper_id).toBe(42)
     expect(lists.state.data!.citations[0].library_paper_id).toBe(42)
+  })
+
+  it('선행·후행을 표시와 근거 설명으로 바꾼다', () => {
+    expect(directionTag('prior', 'citation')).toMatchObject({ label: '선행', hint: '기준 논문이 인용한 앞선 연구' })
+    expect(directionTag('later', 'date')).toMatchObject({ label: '후행', hint: '기준 논문보다 나중에 공개된 논문' })
+    expect(directionTag('mixed')?.label).toBe('선행·후행')
+    expect(directionTag(null)).toBeNull()
   })
 
   it('까닭을 사람이 읽는 말로 바꾼다', () => {

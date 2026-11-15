@@ -5,6 +5,7 @@ import Message from 'primevue/message'
 import Tag from 'primevue/tag'
 import { onMounted } from 'vue'
 import type { RecommendedWork } from './api'
+import { directionTag } from './citationListState'
 import { createRecommendState } from './recommendState'
 
 const emit = defineEmits<{ added: [] }>()
@@ -52,9 +53,22 @@ function meta(work: RecommendedWork): string {
             </a>
             <span class="text-xs text-surface-500">{{ meta(work) }}</span>
             <span class="text-xs text-surface-500">
-              이어진 서재 논문: {{ work.sources.map((source) => source.title).join(', ') }}
+              이어진 서재 논문:
+              <span v-for="(source, i) in work.sources" :key="source.paper_id"
+                >{{ i > 0 ? ', ' : '' }}{{ source.title
+                }}<span v-if="directionTag(source.direction)" :title="directionTag(source.direction, source.direction_basis)!.hint"
+                  >&nbsp;({{ directionTag(source.direction)!.label }})</span
+                ></span
+              >
             </span>
             <div class="flex flex-wrap items-center gap-2 text-xs text-surface-500">
+              <Tag
+                v-if="directionTag(work.direction)"
+                :value="directionTag(work.direction)!.label"
+                :severity="directionTag(work.direction)!.severity"
+                :title="directionTag(work.direction)!.hint"
+                class="!px-1.5 !py-0 !text-xs"
+              />
               <span>점수 {{ work.score.toFixed(2) }}</span>
               <span v-if="work.cited_by_count !== null">피인용 {{ work.cited_by_count.toLocaleString() }}</span>
               <Tag v-if="recommend.state.added.includes(work.openalex_id)" severity="success" value="서재에 담음" />

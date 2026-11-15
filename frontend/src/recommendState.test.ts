@@ -16,7 +16,8 @@ const work: RecommendedWork = {
   shared_refs: null,
   library_paper_id: null,
   score: 1.6,
-  sources: [{ paper_id: 1, title: 'Attention Is All You Need' }],
+  sources: [{ paper_id: 1, title: 'Attention Is All You Need', direction: 'later', direction_basis: 'citation' }],
+  direction: 'later',
 }
 
 function setup(overrides = {}) {

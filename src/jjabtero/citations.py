@@ -263,6 +263,47 @@ def related_works(work_id: str, rows: dict[str, Any], citing_count: int) -> list
     return sorted(relations, key=lambda relation: (-relation.score, relation.work))
 
 
+# @doc: docs/design/Citations.md#6-api와-화면
+Direction = Literal["prior", "later"]
+# @doc: docs/design/Citations.md#6-api와-화면
+DirectionBasis = Literal["citation", "date"]
+
+
+def when(publication_date: str | None, year: int | None) -> str | None:
+    """공개일(`YYYY-MM-DD`)이 있으면 그것을, 없으면 연도(`YYYY`)를 돌려준다.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+    if publication_date:
+        return publication_date
+    return f"{year:04d}" if year else None
+
+
+def work_direction(
+    relation: Relation, paper_when: str | None, work_when: str | None
+) -> tuple[Direction | None, DirectionBasis | None]:
+    """가까운 논문이 기준 논문의 선행(`prior`)인지 후행(`later`)인지와 그 근거를 정한다.
+
+    한쪽으로만 인용하면 인용 방향을 따른다. 그 밖에는 공개일을 비교하며, 한쪽이라도 연도뿐이면 연도로 비교한다.
+    같거나 알 수 없으면 `(None, None)`이다.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+    if relation.cited_by_paper and not relation.cites_paper:
+        return "prior", "citation"
+    if relation.cites_paper and not relation.cited_by_paper:
+        return "later", "citation"
+    if not paper_when or not work_when:
+        return None, None
+    if len(paper_when) < 10 or len(work_when) < 10:
+        paper_when, work_when = paper_when[:4], work_when[:4]
+    if work_when < paper_when:
+        return "prior", "date"
+    if work_when > paper_when:
+        return "later", "date"
+    return None, None
+
+
 def fetch_citations(http: httpx2.Client, work_id: str, limit: int, now: datetime) -> FetchResult:
     """참고문헌과 공개 후 1년 안의 피인용(피인용 많은 순 최대 `limit`건)을 가져온다.
 
@@ -430,6 +471,19 @@ class CitationStore:
         with self.engine.begin() as connection:
             connection.execute(delete(_link_misses).where(_link_misses.c.doi == doi))
             connection.execute(insert(_link_misses).values(doi=doi, tried_at=now.isoformat()))
+
+    def publication_dates(self, work_ids: set[str]) -> dict[str, str | None]:
+        """인용 데이터를 가져온 논문들의 공개일을 돌려준다.
+
+        @doc: docs/design/Citations.md#6-api와-화면
+        """
+        if not work_ids:
+            return {}
+        with self.engine.connect() as connection:
+            rows = connection.execute(
+                select(_fetches.c.paper, _fetches.c.publication_date).where(_fetches.c.paper.in_(work_ids))
+            ).all()
+        return {row.paper: row.publication_date for row in rows}
 
     def fetched_count(self, work_ids: set[str]) -> int:
         """이 논문들 가운데 인용 데이터를 가져온 수를 센다.
@@ -865,6 +919,8 @@ class RelatedWork(CitedWork):
     cites_paper: bool
     cited_by_paper: bool
     cocited: int
+    direction: Direction | None = None
+    direction_basis: DirectionBasis | None = None
 
 
 class PaperRelated(BaseModel):
@@ -911,9 +967,13 @@ def paper_related(paper_id: int, request: Request) -> PaperRelated:
                 owners[other.openalex_id] = other.id
             if other.doi:
                 owners[other.doi] = other.id
+        paper = session.get(Paper, paper_id)
+        paper_when = when(listed.window_start, paper.year if paper else None)
     works = []
     for relation in relations:
-        base = _cited_work({"work": relation.work, **known.get(relation.work, {})}, owners)
+        row = known.get(relation.work, {})
+        base = _cited_work({"work": relation.work, **row}, owners)
+        direction, basis = work_direction(relation, paper_when, when(row.get("publication_date"), row.get("year")))
         works.append(
             RelatedWork(
                 **base.model_dump(exclude={"shared_refs"}),
@@ -922,6 +982,8 @@ def paper_related(paper_id: int, request: Request) -> PaperRelated:
                 cites_paper=relation.cites_paper,
                 cited_by_paper=relation.cited_by_paper,
                 cocited=relation.cocited,
+                direction=direction,
+                direction_basis=basis,
             )
         )
     return PaperRelated(
@@ -944,6 +1006,7 @@ class Recommendation:
     work: str
     score: float = 0.0
     sources: list[str] = field(default_factory=list)
+    relations: list[Relation] = field(default_factory=list)
 
 
 def recommend_works(
@@ -963,10 +1026,22 @@ def recommend_works(
             item = found.setdefault(relation.work, Recommendation(relation.work))
             item.score += relation.score
             item.sources.append(paper)
+            item.relations.append(relation)
     ranked = sorted(found.values(), key=lambda item: (-item.score, -len(item.sources), item.work))
     for item in ranked:
         item.score = round(item.score, 4)
     return ranked[:limit]
+
+
+def overall_direction(directions: list[Direction | None]) -> Literal["prior", "later", "mixed"] | None:
+    """이어진 서재 논문마다의 방향을 하나로 모은다. 서로 다르면 `mixed`, 하나도 없으면 `None`이다.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+    found = {direction for direction in directions if direction}
+    if len(found) > 1:
+        return "mixed"
+    return found.pop() if found else None
 
 
 class RecommendationSource(BaseModel):
@@ -977,6 +1052,8 @@ class RecommendationSource(BaseModel):
 
     paper_id: int
     title: str
+    direction: Direction | None = None
+    direction_basis: DirectionBasis | None = None
 
 
 class RecommendedWork(CitedWork):
@@ -987,6 +1064,7 @@ class RecommendedWork(CitedWork):
 
     score: float
     sources: list[RecommendationSource]
+    direction: Literal["prior", "later", "mixed"] | None = None
 
 
 class Recommendations(BaseModel):
@@ -1027,16 +1105,28 @@ def recommendations(request: Request) -> Recommendations:
             known = store.works_by_id(wanted)
         except (OpenAlexBudgetError, httpx2.HTTPError, ValueError):
             pass
+    dates = store.publication_dates(set(rows_by_paper))
+    paper_whens = {work_id: when(dates.get(work_id), by_work[work_id].year) for work_id in rows_by_paper}
     works = []
     for item in ranked:
-        base = _cited_work({"work": item.work, **known.get(item.work, {})}, {})
+        row = known.get(item.work, {})
+        base = _cited_work({"work": item.work, **row}, {})
         if base.doi and base.doi in library_dois:
             continue
+        work_when = when(row.get("publication_date"), row.get("year"))
+        sources = []
+        for source, relation in zip(item.sources, item.relations, strict=True):
+            direction, basis = work_direction(relation, paper_whens[source], work_when)
+            paper = by_work[source]
+            sources.append(
+                RecommendationSource(paper_id=paper.id, title=paper.title, direction=direction, direction_basis=basis)
+            )
         works.append(
             RecommendedWork(
                 **base.model_dump(),
                 score=item.score,
-                sources=[RecommendationSource(paper_id=by_work[s].id, title=by_work[s].title) for s in item.sources],
+                sources=sources,
+                direction=overall_direction([source.direction for source in sources]),
             )
         )
     return Recommendations(papers=len(papers), papers_used=len(rows_by_paper), works=works)

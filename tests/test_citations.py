@@ -447,6 +447,38 @@ def test_related_works_scores_direct_cocitation_and_coupling() -> None:
     assert ordered[:2] == ["W10", "W1"]
 
 
+def test_work_direction_prefers_citation_then_date() -> None:
+    """한쪽 인용이면 인용 방향을, 아니면 공개일(한쪽이 연도뿐이면 연도)을 따르고, 같거나 모르면 표시하지 않는다.
+
+    @doc: docs/design/Citations.md#7-테스트
+    """
+    from jjabtero.citations import Relation, when, work_direction
+
+    def relation(cites: bool, cited: bool) -> Relation:
+        return Relation("W1", 1.0, cites, cited, 0, 0)
+
+    assert work_direction(relation(False, True), "2020-01-01", "2021-01-01") == ("prior", "citation")
+    assert work_direction(relation(True, False), "2020-01-01", "2019-01-01") == ("later", "citation")
+    assert work_direction(relation(False, False), "2020-05-01", "2020-03-01") == ("prior", "date")
+    assert work_direction(relation(True, True), "2020-05-01", "2020-07-01") == ("later", "date")
+    assert work_direction(relation(False, False), "2020", "2020-07-01") == (None, None)
+    assert work_direction(relation(False, False), "2019", "2020-07-01") == ("later", "date")
+    assert work_direction(relation(False, False), None, "2020-07-01") == (None, None)
+    assert (when("2020-01-02", 2020), when(None, 2020), when(None, None)) == ("2020-01-02", "2020", None)
+
+
+def test_overall_direction() -> None:
+    """이어진 서재 논문마다의 방향이 같으면 그 방향, 다르면 `mixed`, 없으면 `None`이다.
+
+    @doc: docs/design/Citations.md#7-테스트
+    """
+    from jjabtero.citations import overall_direction
+
+    assert overall_direction(["prior", None, "prior"]) == "prior"
+    assert overall_direction(["prior", "later"]) == "mixed"
+    assert overall_direction([None]) is None
+
+
 def test_paper_related_api_fills_missing_works(tmp_path: Path) -> None:
     """가까운 논문 API는 점수 순 목록을 주고, 서지 정보가 없는 공동 인용 논문은 OpenAlex에서 받아 둔다.
 
@@ -468,6 +500,9 @@ def test_paper_related_api_fills_missing_works(tmp_path: Path) -> None:
     assert body["works"][0]["openalex_id"] == "W10"
     assert works["W50"]["title"] == "Paper W50"
     assert works["W50"]["cocited"] == 2 and works["W50"]["cites_paper"] is False
+    assert (works["W10"]["direction"], works["W10"]["direction_basis"]) == ("later", "citation")
+    assert (works["W1"]["direction"], works["W1"]["direction_basis"]) == ("prior", "citation")
+    assert (works["W50"]["direction"], works["W50"]["direction_basis"]) == ("later", "date")
     lookups = [r for r in openalex.requests if r.url.params.get("filter", "").startswith("openalex_id:") and "W50" in r.url.params["filter"]]
     assert len(lookups) == 1
     client.get(f"/api/papers/{paper_id}/related")
@@ -513,5 +548,10 @@ def test_recommendations_api(tmp_path: Path) -> None:
     assert (body["papers"], body["papers_used"]) == (2, 1)
     ids = [item["openalex_id"] for item in body["works"]]
     assert ids[0] == "W10" and "W11" not in ids and A not in ids
-    assert body["works"][0]["sources"] == [{"paper_id": paper_id, "title": "Base"}]
+    assert body["works"][0]["sources"] == [
+        {"paper_id": paper_id, "title": "Base", "direction": "later", "direction_basis": "citation"}
+    ]
+    assert body["works"][0]["direction"] == "later"
+    w1 = next(item for item in body["works"] if item["openalex_id"] == "W1")
+    assert (w1["direction"], w1["sources"][0]["direction_basis"]) == ("prior", "citation")
     assert next(item for item in body["works"] if item["openalex_id"] == "W50")["title"] == "Paper W50"
