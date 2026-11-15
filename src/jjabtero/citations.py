@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session
 from jjabtero.library import normalize_doi
 from jjabtero.models import Paper
 from jjabtero.search import _openalex_item_type
+from jjabtero.semantic_scholar import S2Store, refresh_references
 from jjabtero.settings import read_settings
 
 OPENALEX_WORKS_URL = "https://api.openalex.org/works"
@@ -592,6 +593,7 @@ class CitationStatus(BaseModel):
     linked: int
     not_found: int
     fetched: int
+    s2_checked: int = 0
     running: bool
     last_run: datetime | None
     error: str
@@ -629,6 +631,7 @@ class CitationSync:
         self.drive = drive
         self.clock = clock
         self._store: CitationStore | None = None
+        self._s2_store: S2Store | None = None
         self._store_lock = threading.Lock()
         self._run_lock = threading.Lock()
         self._wake = threading.Event()
@@ -637,6 +640,16 @@ class CitationSync:
         self.running = False
         self.last_run: datetime | None = None
         self.error = ""
+
+    @property
+    def s2_store(self) -> S2Store:
+        """인용 캐시 파일 안의 Semantic Scholar 참고문헌 표.
+
+        @doc: docs/design/Citations.md#9-semantic-scholar-참고문헌
+        """
+        if self._s2_store is None or self._s2_store.engine is not self.store.engine:
+            self._s2_store = S2Store(self.store.engine)
+        return self._s2_store
 
     @property
     def store(self) -> CitationStore:
@@ -707,6 +720,7 @@ class CitationSync:
                 return 0
             limit = read_settings(session)["citing_limit"]
             work_ids = [paper.openalex_id for paper in papers if paper.openalex_id]
+            s2_papers = [(paper.doi, paper.title) for paper in papers if paper.doi]
         fetched = 0
         for work_id in store.stale(work_ids, now):
             if self._stopped:
@@ -721,7 +735,11 @@ class CitationSync:
                 continue
             store.save(work_id, result, limit, now)
             fetched += 1
-        if fetched:
+        # OpenAlex 참고문헌에 빠진 것이 많아 Semantic Scholar 참고문헌도 받아 둔다.
+        checked, s2_error = refresh_references(self.http, self.s2_store, s2_papers, now, stopped=lambda: self._stopped)
+        if s2_error and not self.error:
+            self.error = s2_error
+        if fetched or checked:
             self.drive.put_cache(CACHE_FILE, store.snapshot())
         return fetched
 
@@ -782,6 +800,7 @@ class CitationSync:
             linked=sum(1 for paper in papers if paper.openalex_id),
             not_found=store.miss_count(unlinked_dois),
             fetched=store.fetched_count(work_ids),
+            s2_checked=self.s2_store.checked_count({paper.doi for paper in papers if paper.doi}),
             running=self.running,
             last_run=self.last_run,
             error=self.error,

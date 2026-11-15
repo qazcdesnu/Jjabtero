@@ -18,6 +18,9 @@ def isolated_user_data(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("JJABTERO_DB", str(tmp_path / "user-data" / "library.db"))
     monkeypatch.delenv("JJABTERO_GOOGLE_CLIENT_SECRET", raising=False)
     monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+    monkeypatch.delenv("SEMANTIC_SCHOLAR_API_KEY", raising=False)
+    # Semantic Scholar 요청 사이 기다림을 없앤다. 테스트는 가짜 응답을 쓴다.
+    monkeypatch.setattr("jjabtero.semantic_scholar.S2_REQUEST_GAP_SECONDS", 0)
     for name in (
         "JJABTERO_ALLOWED_EMAIL",
         "JJABTERO_SESSION_SECRET",

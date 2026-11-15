@@ -87,7 +87,7 @@
 
 [router](../../src/jjabtero/citations.py#router)가 처리한다. 로그인이 켜져 있으면 로그인해야 쓴다.
 
-- `GET /api/citations/status`는 [citation_status](../../src/jjabtero/citations.py#citation_status)가 처리하며 [CitationStatus](../../src/jjabtero/citations.py#CitationStatus)를 돌려준다. 서재 논문 수, OpenAlex에 연결된 수, 찾지 못한 수, 인용 데이터를 가져온 수, 갱신 중인지, 마지막 갱신 시각, 마지막 오류다.
+- `GET /api/citations/status`는 [citation_status](../../src/jjabtero/citations.py#citation_status)가 처리하며 [CitationStatus](../../src/jjabtero/citations.py#CitationStatus)를 돌려준다. 서재 논문 수, OpenAlex에 연결된 수, 찾지 못한 수, 인용 데이터를 가져온 수, Semantic Scholar로 확인한 수([9절](#9-semantic-scholar-참고문헌)), 갱신 중인지, 마지막 갱신 시각, 마지막 오류다.
 - `POST /api/citations/refresh`는 [refresh_citations](../../src/jjabtero/citations.py#refresh_citations)가 처리한다. 모든 논문을 가져올 대상으로 표시하고 갱신을 깨운 뒤 상태를 돌려준다.
 - `GET /api/papers/{id}/citations`는 [paper_citations](../../src/jjabtero/citations.py#paper_citations)가 처리하며([paper_router](../../src/jjabtero/citations.py#paper_router)) 논문 하나의 인용 목록 [PaperCitations](../../src/jjabtero/citations.py#PaperCitations)을 돌려준다.
   - `state`: `no_doi`(DOI가 없어 연결할 수 없음), `not_found`(7일 안에 찾지 못함), `pending`(연결 전이거나 아직 가져오지 않음), `ready`.
@@ -131,3 +131,25 @@
 ## 8. 미결정 사항
 
 - 없음. 점수 식은 쓰면서 고친다.
+
+## 9. Semantic Scholar 참고문헌
+
+OpenAlex의 참고문헌 목록은 빠진 것이 많아 서재 논문 사이의 인용 선이 빠진다. 'Attention Is All You Need'는 OpenAlex에 참고문헌이 35개뿐이었고(실제 40개), LSTM, Bahdanau, GRU 논문이 빠져 서재에 그 논문들이 있어도 인용 선이 없었다. Semantic Scholar에는 41개가 모두 있었다(2026-11-15 확인). Crossref에는 arXiv 논문의 참고문헌이 없었다. 그래서 사용자가 Semantic Scholar를 함께 쓰기로 골랐다([이슈 I16](../Issue.md)). 코드는 [semantic_scholar 모듈](../../src/jjabtero/semantic_scholar.py)이다.
+
+**받기**
+
+- 인용 데이터 갱신([CitationSync](../../src/jjabtero/citations.py#CitationSync), [5. 갱신](#5-갱신))이 OpenAlex 다음에 DOI가 있는 서재 논문마다 Semantic Scholar 참고문헌을 받는다([refresh_references](../../src/jjabtero/semantic_scholar.py#refresh_references)). 논문을 담으면 갱신이 바로 깨어나므로 곧 받는다. 받은 지 7일([S2_REFRESH_AFTER](../../src/jjabtero/semantic_scholar.py#S2_REFRESH_AFTER))이 지나면 다시 받는다. 서재에서 지운 논문의 기록은 지운다.
+- `GET https://api.semanticscholar.org/graph/v1/paper/DOI:<DOI>/references?fields=title,externalIds&limit=1000`([S2_PAPER_URL](../../src/jjabtero/semantic_scholar.py#S2_PAPER_URL), [S2_REFERENCE_LIMIT](../../src/jjabtero/semantic_scholar.py#S2_REFERENCE_LIMIT))로 받는다([fetch_references](../../src/jjabtero/semantic_scholar.py#fetch_references)). DOI로 없으면 제목 맞추기(`/paper/search/match`)로 찾은 논문의 제목이 서재 제목과 똑같을 때만 그 논문의 참고문헌을 받는다. SE Networks의 CVPR DOI(`10.1109/cvpr.2018.00745`)는 DOI로 없었고 제목으로 찾아 84개를 받았다(2026-11-15 확인). 둘 다 없으면 "없음"으로 적고 7일 뒤 다시 본다.
+- Semantic Scholar에는 서재 논문의 DOI와 제목만 보낸다. 키 없이도 쓰지만 공용 한도가 있어, 요청 사이를 1.1초([S2_REQUEST_GAP_SECONDS](../../src/jjabtero/semantic_scholar.py#S2_REQUEST_GAP_SECONDS)) 띄우고, 429를 받으면([S2BudgetError](../../src/jjabtero/semantic_scholar.py#S2BudgetError)) 그 회차를 멈추고 다음 갱신(1시간 뒤)에 이어 받는다. 환경 변수 `SEMANTIC_SCHOLAR_API_KEY`가 있으면 `x-api-key` 머리글로 보낸다. 키는 저장소에 두지 않는다.
+
+**저장**
+
+- 인용 캐시 파일 `citations.db` 안의 표 두 개에 둔다([S2Store](../../src/jjabtero/semantic_scholar.py#S2Store)). `s2_fetches`(서재 논문 DOI, 받은 시각, 찾았는지)와 `s2_references`(서재 논문 DOI, 참고문헌의 DOI, arXiv ID, 다듬은 제목)다. 새 표만 더하므로 캐시 버전을 올리지 않는다. 캐시 파일 전체가 드라이브에 함께 보관된다([4. 저장](#4-저장)).
+- 식별자는 [PaperKeys](../../src/jjabtero/semantic_scholar.py#PaperKeys)다([paper_keys](../../src/jjabtero/semantic_scholar.py#paper_keys)). DOI는 소문자, arXiv ID는 소문자에 버전(`v5`)과 `arXiv:` 머리를 뗀 것이다([arxiv_id](../../src/jjabtero/semantic_scholar.py#arxiv_id)). arXiv DOI(`10.48550/arxiv.<ID>`)에서도 arXiv ID를 얻는다. 제목은 [normalize](../../src/jjabtero/titles.py#normalize)한 글이며 낱말이 3개([MIN_TITLE_WORDS](../../src/jjabtero/semantic_scholar.py#MIN_TITLE_WORDS)) 이상일 때만 쓴다.
+
+**맞추기**
+
+- 서재 논문 A의 Semantic Scholar 참고문헌 가운데 서재 논문 B와 DOI, arXiv ID, 제목 가운데 하나라도 같은 것([same_paper](../../src/jjabtero/semantic_scholar.py#same_paper))이 있으면 A가 B를 인용한다([library_cites](../../src/jjabtero/semantic_scholar.py#library_cites)). 서재 그래프의 인용 선에 더한다([서재 인용 그래프 설계](CitationGraph.md#2-그래프-데이터)).
+- 새 논문 Y를 담으면 Y의 참고문헌으로 Y가 인용한 서재 논문을 찾고, 다른 서재 논문의 참고문헌은 이미 받아 두었으므로 Y를 인용한 서재 논문도 다시 받지 않고 찾는다. OpenAlex ID가 없는 논문도 DOI만 있으면 선이 생긴다.
+- 상태 API의 `s2_checked`는 Semantic Scholar에서 참고문헌을 받은 서재 논문 수다([CitationSync.s2_store](../../src/jjabtero/citations.py#CitationSync.s2_store), [S2Store.checked_count](../../src/jjabtero/semantic_scholar.py#S2Store.checked_count)). 설정 페이지의 "인용 데이터" 칸에 "Semantic Scholar 확인"으로 보인다.
+- [test_semantic_scholar](../../tests/test_semantic_scholar.py)가 식별자, DOI와 제목으로 받기, 429, 오래된 것만 받기와 지우기, 맞추기, 그래프와 상태 API를 가짜 Semantic Scholar로 확인한다.

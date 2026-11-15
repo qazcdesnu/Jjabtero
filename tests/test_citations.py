@@ -66,6 +66,8 @@ class FakeOpenAlex:
         self.budget_left: int | None = None
 
     def __call__(self, request: httpx2.Request) -> httpx2.Response:
+        if request.url.host == "api.semanticscholar.org":
+            return httpx2.Response(404, json={"error": "not found"})
         self.requests.append(request)
         if self.budget_left is not None:
             if self.budget_left <= 0:
