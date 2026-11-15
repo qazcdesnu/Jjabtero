@@ -53,6 +53,8 @@ import {
   createPositionSaver,
   fitWidthScale,
   nextZoom,
+  notePlacement,
+  NOTE_BOX_WIDTH,
   PAGE_GAP,
   pageAt,
   pageTops,
@@ -476,6 +478,21 @@ function onKeyDown(event: KeyboardEvent) {
   }
 }
 
+// 리더에서 지금 보이는 영역(내용 좌표). 메모 상자가 화면 아래를 넘지 않게 하는 데 쓴다.
+const viewport = ref({ left: 0, top: 0, width: 0, height: 0 })
+function measureViewport() {
+  const element = scroller.value
+  if (element)
+    viewport.value = { left: element.scrollLeft, top: element.scrollTop, width: element.clientWidth, height: element.clientHeight }
+}
+const editingPlace = computed(() => (editing.value ? notePlacement(editing.value, viewport.value) : null))
+const draftingPlace = computed(() => (drafting.value ? notePlacement(drafting.value, viewport.value) : null))
+function boxStyle(place: { left: number; top: number; maxHeight: number } | null) {
+  return place
+    ? { left: `${place.left}px`, top: `${place.top}px`, maxHeight: `${place.maxHeight}px`, width: `${NOTE_BOX_WIDTH}px` }
+    : {}
+}
+
 const tops = computed(() => pageTops(sizes.value, scale.value))
 const heights = computed(() => sizes.value.map((size) => size.height * scale.value))
 const total = computed(() => sizes.value.length)
@@ -530,6 +547,7 @@ async function renderPage(page: number) {
 }
 
 function update() {
+  measureViewport()
   const element = scroller.value
   if (!element || total.value === 0) return
   // 쪽 사이 간격만큼 아래를 보아, 쪽 머리 바로 위로 이동했을 때도 그 쪽으로 센다.
@@ -567,6 +585,7 @@ function fitWidth() {
 
 onMounted(async () => {
   window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('resize', measureViewport)
   try {
     loadingTask = getDocument({ url: pdfUrl(props.paperId), withCredentials: true })
     const pdf = await loadingTask.promise
@@ -599,6 +618,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('resize', measureViewport)
   preview.close()
   void saver.flush()
   for (const page of [...rendered.keys()]) clearPage(page)
@@ -753,12 +773,12 @@ onUnmounted(() => {
 
       <div
         v-if="editing"
-        class="reader-popup absolute z-20 flex w-72 flex-col gap-2 rounded-md border border-surface-200 bg-surface-0 p-3 shadow-lg dark:border-surface-700 dark:bg-surface-800"
-        :style="{ left: `${editing.left}px`, top: `${editing.top + 8}px` }"
+        class="reader-popup absolute z-20 flex max-w-[90vw] flex-col gap-2 rounded-md border border-surface-200 bg-surface-0 p-3 shadow-lg dark:border-surface-700 dark:bg-surface-800"
+        :style="boxStyle(editingPlace)"
       >
-        <p v-if="editing.annotation.text" class="line-clamp-3 text-xs text-surface-500">“{{ editing.annotation.text }}”</p>
-        <span v-if="editing.annotation.kind === 'note'" class="text-xs text-surface-500">{{ editing.annotation.page }}쪽 영역 메모</span>
-        <div v-else class="flex gap-1">
+        <p v-if="editing.annotation.text" class="line-clamp-3 shrink-0 text-xs text-surface-500">“{{ editing.annotation.text }}”</p>
+        <span v-if="editing.annotation.kind === 'note'" class="shrink-0 text-xs text-surface-500">{{ editing.annotation.page }}쪽 영역 메모</span>
+        <div v-else class="flex shrink-0 gap-1">
           <button
             v-for="color in HIGHLIGHT_COLORS"
             :key="color.name"
@@ -770,8 +790,11 @@ onUnmounted(() => {
             @click="changeColor(color.name)"
           />
         </div>
-        <Textarea v-model="editing.note" rows="3" auto-resize placeholder="메모" aria-label="주석 메모" fluid />
-        <div class="flex justify-between gap-2">
+        <!-- 메모가 길면 이 칸 안에서 스크롤한다. 버튼은 늘 상자 아래에 보인다. -->
+        <div class="min-h-0 flex-1 overflow-y-auto">
+          <Textarea v-model="editing.note" rows="3" auto-resize placeholder="메모" aria-label="주석 메모" fluid />
+        </div>
+        <div class="flex shrink-0 justify-between gap-2">
           <Button label="삭제" icon="pi pi-trash" size="small" severity="danger" text @click="removeAnnotation" />
           <div class="flex gap-1">
             <Button label="닫기" size="small" severity="secondary" text @click="editing = null" />
@@ -782,12 +805,14 @@ onUnmounted(() => {
 
       <div
         v-if="drafting"
-        class="reader-popup absolute z-20 flex w-72 flex-col gap-2 rounded-md border border-surface-200 bg-surface-0 p-3 shadow-lg dark:border-surface-700 dark:bg-surface-800"
-        :style="{ left: `${drafting.left}px`, top: `${drafting.top + 8}px` }"
+        class="reader-popup absolute z-20 flex max-w-[90vw] flex-col gap-2 rounded-md border border-surface-200 bg-surface-0 p-3 shadow-lg dark:border-surface-700 dark:bg-surface-800"
+        :style="boxStyle(draftingPlace)"
       >
-        <span class="text-xs text-surface-500">{{ drafting.page }}쪽 영역 메모</span>
-        <Textarea v-model="drafting.note" rows="3" auto-resize placeholder="이 영역에 남길 메모" aria-label="영역 메모 내용" fluid autofocus />
-        <div class="flex justify-end gap-1">
+        <span class="shrink-0 text-xs text-surface-500">{{ drafting.page }}쪽 영역 메모</span>
+        <div class="min-h-0 flex-1 overflow-y-auto">
+          <Textarea v-model="drafting.note" rows="3" auto-resize placeholder="이 영역에 남길 메모" aria-label="영역 메모 내용" fluid autofocus />
+        </div>
+        <div class="flex shrink-0 justify-end gap-1">
           <Button label="취소" size="small" severity="secondary" text @click="drafting = null" />
           <Button label="저장" size="small" @click="saveDraft" />
         </div>

@@ -6,6 +6,7 @@ import {
   createPositionSaver,
   fitWidthScale,
   nextZoom,
+  notePlacement,
   pageAt,
   pageTops,
   positionAt,
@@ -92,3 +93,27 @@ describe('createPositionSaver', () => {
   })
 })
 
+
+describe('notePlacement', () => {
+  const view = { left: 0, top: 1000, width: 900, height: 700 }
+
+  it('기준점 아래에 두고, 화면 아래까지를 최대 높이로 한다', () => {
+    expect(notePlacement({ left: 100, top: 1200 }, view)).toEqual({ left: 100, top: 1208, maxHeight: 484 })
+  })
+
+  it('오른쪽으로 넘치면 왼쪽으로 당긴다', () => {
+    expect(notePlacement({ left: 800, top: 1200 }, view).left).toBe(900 - 432 - 8)
+  })
+
+  it('아래 공간이 200px보다 좁으면 상자를 올려 200px를 확보한다', () => {
+    expect(notePlacement({ left: 100, top: 1600 }, view)).toEqual({ left: 100, top: 1492, maxHeight: 200 })
+  })
+
+  it('화면이 200px보다 낮으면 화면 위에 붙이고 화면 높이만큼만 쓴다', () => {
+    expect(notePlacement({ left: 0, top: 1100 }, { left: 0, top: 1000, width: 900, height: 150 })).toEqual({
+      left: 8,
+      top: 1008,
+      maxHeight: 134,
+    })
+  })
+})
