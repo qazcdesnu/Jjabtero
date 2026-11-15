@@ -29,6 +29,7 @@ from jjabtero.auth import (
 )
 from jjabtero.auth import router as auth_router
 from jjabtero.citations import CACHE_FILE, CitationSync
+from jjabtero.citations import paper_router as paper_citations_router
 from jjabtero.citations import router as citations_router
 from jjabtero.db import create_db_engine, default_db_path, upgrade_database
 from jjabtero.drive_api import router as drive_router
@@ -147,6 +148,7 @@ def create_app(
     app.include_router(public_pages_router)
     app.include_router(settings_router)
     app.include_router(citations_router)
+    app.include_router(paper_citations_router)
     app.include_router(pdfs_router)
     app.include_router(reading_router)
     app.include_router(annotations_router)

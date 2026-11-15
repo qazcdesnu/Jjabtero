@@ -426,3 +426,39 @@ export async function deleteAnnotation(annotationId: number): Promise<void> {
     throw new Error(`주석 지우기 실패: ${response.status}`)
   }
 }
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export interface CitedWork {
+  openalex_id: string
+  title: string | null
+  authors: string[]
+  item_type: string
+  year: number | null
+  venue: string | null
+  doi: string | null
+  cited_by_count: number | null
+  shared_refs: number | null
+  library_paper_id: number | null
+}
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export interface PaperCitations {
+  state: 'no_doi' | 'not_found' | 'pending' | 'ready'
+  openalex_id: string | null
+  fetched_at: string | null
+  window_start: string | null
+  window_end: string | null
+  citing_total: number
+  citing_limit: number | null
+  references: CitedWork[]
+  citations: CitedWork[]
+}
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export async function fetchPaperCitations(paperId: number): Promise<PaperCitations> {
+  const response = await fetch(`/api/papers/${paperId}/citations`)
+  if (!response.ok) {
+    throw new Error(`인용 목록 불러오기 실패: ${response.status}`)
+  }
+  return (await response.json()) as PaperCitations
+}
