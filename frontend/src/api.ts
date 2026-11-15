@@ -209,3 +209,40 @@ export function driveConnectUrl(returnTo: string): string {
   return `/api/drive/connect?${new URLSearchParams({ return_to: returnTo })}`
 }
 
+
+// @doc: docs/design/Settings.md#3-api
+export interface Setting {
+  key: string
+  label: string
+  description: string
+  value: number
+  default: number
+  minimum: number
+  maximum: number
+}
+
+// @doc: docs/design/Settings.md#4-화면
+export async function fetchSettings(): Promise<Setting[]> {
+  const response = await fetch('/api/settings')
+  if (!response.ok) {
+    throw new Error(`설정 불러오기 실패: ${response.status}`)
+  }
+  return (await response.json()) as Setting[]
+}
+
+// @doc: docs/design/Settings.md#4-화면
+export async function saveSettings(changes: Record<string, number>): Promise<Setting[]> {
+  const response = await fetch('/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(changes),
+  })
+  if (response.status === 422) {
+    const body = await response.json()
+    throw new Error(typeof body.detail === 'string' ? body.detail : '설정 값이 올바르지 않습니다.')
+  }
+  if (!response.ok) {
+    throw new Error(`설정 저장 실패: ${response.status}`)
+  }
+  return (await response.json()) as Setting[]
+}

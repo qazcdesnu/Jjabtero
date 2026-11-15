@@ -128,3 +128,15 @@ class Paper(Base):
         @doc: docs/design/Library.md#1-데이터-모델
         """
         return sorted(tag.name for tag in self.tags)
+
+
+class Setting(Base):
+    """사용자가 바꾼 설정 하나. 없는 키는 기본값을 쓴다.
+
+    @doc: docs/design/Settings.md#2-저장
+    """
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    value: Mapped[str] = mapped_column(String)

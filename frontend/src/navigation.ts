@@ -4,6 +4,7 @@
 export const VIEWS = [
   { name: 'library', label: '서재', icon: 'pi pi-book' },
   { name: 'search', label: '논문 검색', icon: 'pi pi-search' },
+  { name: 'settings', label: '설정', icon: 'pi pi-cog' },
 ] as const
 
 // @doc: docs/design/UiLayout.md#3-화면-배치

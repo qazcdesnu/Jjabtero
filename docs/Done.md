@@ -2,6 +2,55 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M3-T3 사용자 설정(설정 저장, API, 설정 페이지) 구현
+
+- 시작일: 2026-11-15
+- 완료일: 2026-11-15
+- 근거 문서: [사용자 설정 설계](design/Settings.md)
+- 참고 자료: 없음
+
+### 계획
+- 사용자 설정 설계를 구현 수준으로 고치고, 설정 저장(마이그레이션 0003), API, 설정 페이지를 구현한다.
+- 인용 데이터 가져오기는 새 태스크 M3-T8로 나눈다.
+
+### 진행 기록
+- 2026-11-15: 사용자가 `citing_limit` 기본값을 10으로 하고 사용자 설정 페이지를 만들라고 했다. 원래 M3-T3에 설정과 인용 데이터 가져오기가 함께 있었으나, 설정을 먼저 끝내 배포 화면에서 확인할 수 있도록 M3-T3을 설정만으로 줄이고 인용 데이터 가져오기를 M3-T8로 로드맵 맨 뒤에 더했다. M3-T4~T7은 M3-T8 뒤에 한다. PR #28까지 병합되어 최신 `main`에서 작업 브랜치를 만들었다.
+- 2026-11-15: 사용자 설정 설계를 구현 수준(모듈, API 응답 모양, 화면, 테스트)으로 고쳤다. 인용 데이터 설계의 기본값과 마이그레이션 번호, 서재 데이터 설계의 마이그레이션 목록, UI 기반 설계의 화면 목록을 맞췄다.
+- 2026-11-15: 설정 모델과 마이그레이션 0003, 설정 모듈(항목 정의, 읽기·저장, API)을 구현하고 테스트를 더했다. 화면에 "설정" 페이지(왼쪽 목록, 가운데·오른쪽을 합친 칸)와 상태 모듈, API 함수를 더하고 테스트를 더했다.
+- 2026-11-15: 임시 데이터 폴더로 서버를 띄워 브라우저에서 설정 페이지를 열고 값을 바꿔 저장해 보았다. 숫자 입력 칸이 넓어 범위 안내를 가려 입력 칸 너비를 줄였다. 저장 뒤 `GET /api/settings`가 바꾼 값을 돌려주는 것을 확인했다.
+
+### 결정 사항
+- `citing_limit` 기본값은 10이다. 사용자가 정했다.
+- 설정은 창이 아니라 왼쪽 화면 목록의 "설정" 페이지로 둔다. 사용자가 페이지를 요청했다([사용자 설정 설계](design/Settings.md#4-화면)).
+- `GET /api/settings`는 값과 함께 이름, 설명, 범위를 돌려준다. 화면이 항목 목록을 따로 갖지 않게 하기 위해서다.
+
+### 변경 파일
+- `docs/design/Settings.md`
+- `docs/design/Citations.md`
+- `docs/design/Library.md`
+- `docs/design/UiLayout.md`
+- `src/jjabtero/models.py`
+- `src/jjabtero/migrations/versions/0003_settings.py`
+- `src/jjabtero/settings.py`
+- `src/jjabtero/app.py`
+- `tests/test_settings.py`
+- `frontend/src/api.ts`
+- `frontend/src/api.test.ts`
+- `frontend/src/settingsState.ts`
+- `frontend/src/settingsState.test.ts`
+- `frontend/src/SettingsView.vue`
+- `frontend/src/navigation.ts`
+- `frontend/src/App.vue`
+- `docs/Roadmap.md`
+- `docs/Done.md`
+
+### 결과
+- 왼쪽 목록의 "설정"에서 `citing_limit`(기본 10, 1~1000)을 바꾸고 저장할 수 있다. 값은 서재 파일에 저장되어 드라이브로 동기화된다. M3-T8의 인용 데이터 가져오기가 이 값을 읽는다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과(백엔드 새 테스트 11개, 프론트엔드 새 테스트 8개 포함).
+- `vue-tsc` 타입 검사와 `npm run build` 통과. 브라우저에서 설정 페이지 표시와 저장을 확인했다.
+
 ## I13 피인용 기간을 논문 공개 후 1년, 고르는 순서를 피인용 많은 순으로 변경
 
 - 시작일: 2026-11-15

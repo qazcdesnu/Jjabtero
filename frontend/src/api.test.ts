@@ -3,6 +3,7 @@
 // @doc: docs/design/LibraryView.md#4-테스트
 // @doc: docs/design/ReadingStatus.md#4-테스트
 // @doc: docs/design/DriveSync.md#9-테스트
+// @doc: docs/design/Settings.md#5-테스트
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -20,6 +21,8 @@ import {
   searchPapers,
   toPaperInput,
   updateReading,
+  fetchSettings,
+  saveSettings,
   type SearchResult,
 } from './api'
 
@@ -222,3 +225,35 @@ describe('드라이브 API', () => {
   })
 })
 
+
+describe('fetchSettings', () => {
+  it('설정 목록을 돌려준다', async () => {
+    const items = [{ key: 'citing_limit', value: 10 }]
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(items)))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchSettings()).resolves.toEqual(items)
+    expect(fetchMock).toHaveBeenCalledWith('/api/settings')
+  })
+})
+
+describe('saveSettings', () => {
+  it('바꿀 항목을 PUT으로 보낸다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([])))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await saveSettings({ citing_limit: 20 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/settings',
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ citing_limit: 20 }) }),
+    )
+  })
+
+  it('422면 서버가 준 이유를 담은 오류를 던진다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: '1~1000 사이' }), { status: 422 })),
+    )
+    await expect(saveSettings({ citing_limit: 0 })).rejects.toThrow('1~1000 사이')
+  })
+})

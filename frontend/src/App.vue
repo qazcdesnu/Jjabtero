@@ -4,6 +4,7 @@
 <!-- @doc: docs/design/LibraryFilter.md#3-화면-상태 -->
 <!-- @doc: docs/design/DriveSync.md#7-화면 -->
 <!-- @doc: docs/design/Auth.md#6-화면 -->
+<!-- @doc: docs/design/Settings.md#4-화면 -->
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Splitter from 'primevue/splitter'
@@ -22,6 +23,7 @@ import PaperDetail from './PaperDetail.vue'
 import { createSearchState } from './searchState'
 import SearchResultDetail from './SearchResultDetail.vue'
 import SearchView from './SearchView.vue'
+import SettingsView from './SettingsView.vue'
 import Sidebar from './Sidebar.vue'
 
 const view = ref<string>(DEFAULT_VIEW)
@@ -83,7 +85,15 @@ onMounted(async () => {
       </div>
     </header>
 
-    <Splitter class="min-h-0 flex-1 rounded-none border-0">
+    <Splitter v-if="view === 'settings'" key="settings" class="min-h-0 flex-1 rounded-none border-0">
+      <SplitterPanel :size="15" :min-size="10" class="overflow-auto">
+        <Sidebar v-model="view" :library="library" />
+      </SplitterPanel>
+      <SplitterPanel :size="85" :min-size="50" class="overflow-auto">
+        <SettingsView />
+      </SplitterPanel>
+    </Splitter>
+    <Splitter v-else key="main" class="min-h-0 flex-1 rounded-none border-0">
       <SplitterPanel :size="15" :min-size="10" class="overflow-auto">
         <Sidebar v-model="view" :library="library" />
       </SplitterPanel>
