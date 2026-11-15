@@ -58,6 +58,7 @@ class PaperOut(BaseModel):
     read_status: str
     note: str | None
     openalex_id: str | None
+    has_pdf: bool
     created_at: datetime
     updated_at: datetime
 
@@ -80,6 +81,7 @@ class PaperOut(BaseModel):
             read_status=paper.read_status,
             note=paper.note,
             openalex_id=paper.openalex_id,
+            has_pdf=paper.pdf is not None,
             created_at=paper.created_at,
             updated_at=paper.updated_at,
         )

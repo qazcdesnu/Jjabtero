@@ -5,6 +5,7 @@
 // @doc: docs/design/DriveSync.md#9-테스트
 // @doc: docs/design/Settings.md#5-테스트
 // @doc: docs/design/Citations.md#7-테스트
+// @doc: docs/design/Reader.md#8-테스트
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -26,6 +27,8 @@ import {
   saveSettings,
   fetchCitationStatus,
   refreshCitations,
+  fetchOpenPdf,
+  uploadPdf,
   type SearchResult,
 } from './api'
 
@@ -285,6 +288,28 @@ describe('인용 데이터 API', () => {
   it('실패하면 상태 코드를 담은 오류를 던진다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 500 })))
     await expect(fetchCitationStatus()).rejects.toThrow('500')
+  })
+})
+
+describe('PDF API', () => {
+  it('공개 PDF 받기는 POST, 올리기는 PDF 본문을 PUT으로 보낸다', async () => {
+    const info = { paper_id: 3, sha256: 'a', size: 1, source: 'upload', source_url: null, stored_in_drive: true }
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify(info)))
+    vi.stubGlobal('fetch', fetchMock)
+    const file = new Blob(['%PDF-'])
+
+    await expect(fetchOpenPdf(3)).resolves.toEqual(info)
+    await uploadPdf(3, file)
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/papers/3/pdf/fetch', { method: 'POST' })
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/papers/3/pdf', expect.objectContaining({ method: 'PUT', body: file }))
+  })
+
+  it('실패하면 서버의 detail을 오류로 던진다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: 'PDF 파일이 아닙니다.' }), { status: 415 })),
+    )
+    await expect(uploadPdf(3, new Blob(['x']))).rejects.toThrow('PDF 파일이 아닙니다.')
   })
 })
 

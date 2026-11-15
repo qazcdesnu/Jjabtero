@@ -13,6 +13,7 @@
 | `paper_authors` | [PaperAuthor](../../src/jjabtero/models.py#PaperAuthor) | 논문과 저자의 연결. 저자 순서 `position`(0부터)을 가진다. |
 | `tags` | [Tag](../../src/jjabtero/models.py#Tag) | 사용자가 붙이는 태그. 이름이 같으면 같은 태그다. |
 | `paper_tags` | 연결 테이블 | 논문과 태그의 다대다 연결 |
+| `paper_pdfs` | [PaperPdf](../../src/jjabtero/models.py#PaperPdf) | 논문의 PDF 연결([PDF 리더 설계](Reader.md#4-데이터)). 논문을 지우면 함께 지운다. |
 
 **`papers`의 열**
 
@@ -60,6 +61,7 @@
 | [0002](../../src/jjabtero/migrations/versions/0002_reading_status.py) | `papers`에 `read_status`(기본 `to-read`)와 `note`를 더한다. |
 | [0003](../../src/jjabtero/migrations/versions/0003_settings.py) | 사용자 설정 `settings`(`key`, `value`) 테이블을 만든다([사용자 설정 설계](Settings.md#2-저장)). |
 | [0004](../../src/jjabtero/migrations/versions/0004_openalex_id.py) | `papers`에 `openalex_id`를 더한다([인용 데이터 설계](Citations.md#2-서재-논문과-openalex-연결)). |
+| [0005](../../src/jjabtero/migrations/versions/0005_paper_pdfs.py) | 논문의 PDF 연결 `paper_pdfs` 테이블을 만든다([PDF 리더 설계](Reader.md#4-데이터)). |
 
 ## 4. 저장 함수
 

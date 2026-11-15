@@ -55,6 +55,8 @@ export interface PaperInput {
 
 // @doc: docs/design/PaperSearch.md#4-화면
 export interface Paper extends PaperInput {
+  // @doc: docs/design/Reader.md#5-api
+  has_pdf?: boolean
   id: number
   read_status: string
   note: string | null
@@ -277,4 +279,49 @@ export function fetchCitationStatus(): Promise<CitationStatus> {
 // @doc: docs/design/Citations.md#6-api와-화면
 export function refreshCitations(): Promise<CitationStatus> {
   return citationRequest('/api/citations/refresh', { method: 'POST' })
+}
+
+// @doc: docs/design/Reader.md#5-api
+export interface PaperPdf {
+  paper_id: number
+  sha256: string
+  size: number
+  source: string
+  source_url: string | null
+  stored_in_drive: boolean
+}
+
+async function pdfResponse(response: Response): Promise<PaperPdf> {
+  if (!response.ok) {
+    let detail = ''
+    try {
+      const body = await response.json()
+      detail = typeof body.detail === 'string' ? body.detail : ''
+    } catch {
+      detail = ''
+    }
+    throw new Error(detail || `PDF 요청 실패: ${response.status}`)
+  }
+  return (await response.json()) as PaperPdf
+}
+
+// @doc: docs/design/Reader.md#5-api
+export function pdfUrl(paperId: number): string {
+  return `/api/papers/${paperId}/pdf`
+}
+
+// @doc: docs/design/Reader.md#5-api
+export async function fetchOpenPdf(paperId: number): Promise<PaperPdf> {
+  return pdfResponse(await fetch(`/api/papers/${paperId}/pdf/fetch`, { method: 'POST' }))
+}
+
+// @doc: docs/design/Reader.md#5-api
+export async function uploadPdf(paperId: number, file: Blob): Promise<PaperPdf> {
+  return pdfResponse(
+    await fetch(`/api/papers/${paperId}/pdf`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/pdf' },
+      body: file,
+    }),
+  )
 }

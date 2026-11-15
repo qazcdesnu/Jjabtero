@@ -15,24 +15,29 @@
 
 논문마다 PDF는 하나다. 새로 넣으면 옛 것을 바꾼다.
 
+가져오기와 보관은 [pdfs 모듈](../../src/jjabtero/pdfs.py)에 있다.
+
 **자동: 공개 PDF 받기**
 
-- 서재 논문의 OpenAlex 작업([인용 데이터 설계](Citations.md#2-서재-논문과-openalex-연결))에서 `best_oa_location.pdf_url`, 없으면 `open_access.oa_url`을 쓴다. 'Attention Is All You Need'는 `https://arxiv.org/pdf/1706.03762`였다(2026-11-15 확인).
+- [open_pdf_url](../../src/jjabtero/pdfs.py#open_pdf_url)이 주소를 찾는다. 서재 논문의 OpenAlex 작업([인용 데이터 설계](Citations.md#2-서재-논문과-openalex-연결))에서 `best_oa_location.pdf_url`, 없으면 `open_access.oa_url`을 쓴다. 'Attention Is All You Need'는 `https://arxiv.org/pdf/1706.03762`였다(2026-11-15 확인).
 - OpenAlex에 연결되지 않았어도 DOI가 `10.48550/arxiv.<ID>`이면 `https://arxiv.org/pdf/<ID>`를 쓴다.
-- 받은 내용이 PDF(`%PDF-`로 시작)가 아니면 버린다. 출판사 페이지가 PDF 대신 HTML을 주는 경우가 있기 때문이다.
+- [download_pdf](../../src/jjabtero/pdfs.py#download_pdf)가 넘겨주기(redirect)를 따라가며 받는다. 받은 내용이 PDF(`%PDF-`로 시작)가 아니면 버린다([check_pdf](../../src/jjabtero/pdfs.py#check_pdf), [NotPdfError](../../src/jjabtero/pdfs.py#NotPdfError)). 출판사 페이지가 PDF 대신 HTML을 주는 경우가 있기 때문이다.
 - 자동 받기는 사용자가 논문 상세에서 "PDF 받기"를 누를 때 한다. 서재에 담을 때마다 자동으로 받으면 쓰지 않을 PDF까지 드라이브를 채우기 때문이다.
 
 **수동: PDF 올리기**
 
 - 논문 상세의 "PDF 올리기"로 사용자가 가진 PDF를 올린다. 같은 검사(`%PDF-`)를 한다.
-- 크기 제한은 100MB다. Render 무료 서버의 메모리(512MB)를 넘지 않기 위해서다.
+- 크기 제한은 100MB다([MAX_PDF_BYTES](../../src/jjabtero/pdfs.py#MAX_PDF_BYTES), [PdfTooLargeError](../../src/jjabtero/pdfs.py#PdfTooLargeError)). 받을 때는 받다가 넘으면 멈춘다. Render 무료 서버의 메모리(512MB)를 넘지 않기 위해서다.
 
 ## 3. 보관
 
-- PDF는 구글 드라이브 `Jjabtero/pdfs/` 폴더에 `<SHA-256>.pdf` 이름으로 올린다. 내용 해시를 이름으로 쓰면 같은 PDF를 두 번 올리지 않고, 다른 컴퓨터에서 받은 파일이 맞는지 확인할 수 있다. 드라이브 권한은 지금의 `drive.file`(앱이 만든 파일만)로 충분하다.
+[PdfStore](../../src/jjabtero/pdfs.py#PdfStore)가 맡는다. [create_app](../../src/jjabtero/app.py#create_app)이 데이터베이스 옆 `pdfs/` 폴더로 하나를 만든다. 드라이브는 [DriveFilesLike](../../src/jjabtero/pdfs.py#DriveFilesLike) 모양으로만 쓴다.
+
+- PDF는 구글 드라이브 `Jjabtero/pdfs/` 폴더에 `<SHA-256>.pdf` 이름으로 올린다([DriveSync.put_file](../../src/jjabtero/drive_sync.py#DriveSync.put_file)). 같은 이름이 이미 있으면 다시 올리지 않는다. 내용 해시를 이름으로 쓰면 같은 PDF를 두 번 올리지 않고, 다른 컴퓨터에서 받은 파일이 맞는지 확인할 수 있다. 드라이브 권한은 지금의 `drive.file`(앱이 만든 파일만)로 충분하다.
 - 로컬에는 데이터 폴더의 `pdfs/<SHA-256>.pdf`에 사본을 둔다. 드라이브에 연결되어 있지 않으면 로컬 사본만 있다.
 - 서재 파일에는 논문과 PDF의 연결만 둔다(4절의 `paper_pdfs`). 서재와 함께 동기화되므로, 다른 컴퓨터는 이 연결을 보고 드라이브에서 받는다.
-- 서버(Render)는 재시작 때 디스크가 지워지므로, 로컬 사본이 없으면 열 때 드라이브에서 받아 둔다.
+- 서버(Render)는 재시작 때 디스크가 지워지므로, 로컬 사본이 없으면 열 때 드라이브에서 받아 둔다([PdfStore.read](../../src/jjabtero/pdfs.py#PdfStore.read), [DriveSync.download_file](../../src/jjabtero/drive_sync.py#DriveSync.download_file)). 받은 내용의 해시가 다르면 버린다.
+- 저장은 [PdfStore.save](../../src/jjabtero/pdfs.py#PdfStore.save)가 한다. 로컬에 먼저 임시 파일로 쓴 뒤 이름을 바꾼다.
 - 논문을 지우거나 PDF를 바꾸면 연결만 지운다. 드라이브의 파일은 지우지 않는다. 사용자가 실수로 지운 것을 되살릴 수 있게 하기 위해서다. 쓰지 않는 파일 정리는 나중에 필요하면 이슈로 다룬다.
 
 ## 4. 데이터
@@ -41,7 +46,7 @@
 
 | 표 | 열 | 내용 |
 | --- | --- | --- |
-| `paper_pdfs` | `paper_id`(기본 키, 논문 지우면 함께 지움), `sha256`, `size`, `source`(`openalex`, `arxiv`, `upload`), `source_url`, `drive_file_id`, `page_count`, `added_at` | 논문의 PDF |
+| `paper_pdfs`([PaperPdf](../../src/jjabtero/models.py#PaperPdf), 마이그레이션 0005) | `paper_id`(기본 키, 논문 지우면 함께 지움), `sha256`, `size`, `source`(`openalex`, `arxiv`, `upload`), `source_url`, `drive_file_id`, `page_count`, `added_at` | 논문의 PDF |
 | `reading_positions` | `paper_id`(기본 키), `page`(1부터), `offset`(그 쪽 안의 세로 위치 0~1), `zoom`, `updated_at` | 읽던 위치 |
 | `annotations` | `id`, `paper_id`, `kind`(`highlight`, `note`), `page`, `rects`(JSON), `text`, `color`, `note`, `created_at`, `updated_at` | 하이라이트와 영역 메모 |
 
@@ -52,21 +57,23 @@
 
 ## 5. API
 
+PDF API는 [pdfs 모듈](../../src/jjabtero/pdfs.py)의 [router](../../src/jjabtero/pdfs.py#router)다. 정보 응답은 [PdfOut](../../src/jjabtero/pdfs.py#PdfOut)(논문 ID, SHA-256, 크기, 출처, 출처 주소, 드라이브에 있는지)이다.
+
 | 메서드와 경로 | 내용 |
 | --- | --- |
-| `GET /api/papers/{id}/pdf` | PDF 내용(`application/pdf`). 로컬 사본이 없으면 드라이브에서 받아 둔다. 없으면 404 |
-| `POST /api/papers/{id}/pdf/fetch` | 공개 PDF를 받아 보관하고 `paper_pdfs` 정보를 돌려준다. 공개 PDF가 없으면 404 |
-| `PUT /api/papers/{id}/pdf` | 올린 PDF(본문이 PDF 내용)를 보관하고 정보를 돌려준다. PDF가 아니면 415, 너무 크면 413 |
+| `GET /api/papers/{id}/pdf`([read_pdf](../../src/jjabtero/pdfs.py#read_pdf)) | PDF 내용(`application/pdf`). 로컬 사본이 없으면 드라이브에서 받아 둔다. 없으면 404 |
+| `POST /api/papers/{id}/pdf/fetch`([fetch_pdf](../../src/jjabtero/pdfs.py#fetch_pdf)) | 공개 PDF를 받아 보관하고 `paper_pdfs` 정보를 돌려준다. 공개 PDF가 없으면 404, PDF가 아니거나 받지 못하면 502 |
+| `PUT /api/papers/{id}/pdf`([upload_pdf](../../src/jjabtero/pdfs.py#upload_pdf)) | 올린 PDF(본문이 PDF 내용)를 보관하고 정보를 돌려준다. PDF가 아니면 415, 너무 크면 413 |
 | `GET`, `PUT /api/papers/{id}/position` | 읽던 위치를 읽고 쓴다 |
 | `GET /api/papers/{id}/annotations` | 주석 목록 |
 | `POST /api/papers/{id}/annotations`, `PATCH`·`DELETE /api/annotations/{id}` | 주석을 만들고 고치고 지운다 |
 
 - 모두 로그인이 켜져 있으면 로그인해야 쓴다. PDF도 `/api` 아래라 공개되지 않는다.
-- 논문 목록 응답에 PDF가 있는지(`has_pdf`)를 더해, 목록과 상세에서 표시한다.
+- 논문 목록 응답에 PDF가 있는지(`has_pdf`, 화면 타입 [Paper.has_pdf](../../frontend/src/api.ts#Paper.has_pdf))를 더해, 목록과 상세에서 표시한다. 화면의 API 호출은 [fetchOpenPdf](../../frontend/src/api.ts#fetchOpenPdf), [uploadPdf](../../frontend/src/api.ts#uploadPdf), [pdfUrl](../../frontend/src/api.ts#pdfUrl)이고 응답 타입은 [PaperPdf](../../frontend/src/api.ts#PaperPdf)다.
 
 ## 6. 화면
 
-- 논문 상세에 PDF 칸을 둔다. PDF가 있으면 "읽기"를, 없으면 "PDF 받기"(공개 PDF가 있을 때)와 "PDF 올리기"를 보여 준다.
+- 논문 상세에 PDF 칸([PdfPanel](../../frontend/src/PdfPanel.vue))을 둔다. PDF가 있으면 "읽기"와 "PDF 바꾸기"를, 없으면 "PDF 받기"와 "PDF 올리기"를 보여 준다. 받기·올리기 상태는 [createPdfState](../../frontend/src/pdfState.ts#createPdfState)가 가진다. 리더 화면이 생기기 전(M4-T3 전)에는 "읽기"가 PDF를 새 탭에서 연다.
 - "읽기"를 누르면 리더 화면이 열린다. 리더는 왼쪽 목록을 남기고 가운데와 오른쪽 칸을 합친 넓은 칸을 쓴다. 위에 제목, 쪽 이동, 확대·축소, 닫기를 둔다.
 - 하이라이트: 글을 고르면 작은 도구 막대가 떠 색을 고르면 하이라이트가 된다. 누르면 메모를 달거나 지울 수 있다.
 - 영역 메모: 도구 막대의 "영역 메모"를 켜고 끌어서 사각형을 그리면 메모 입력이 열린다.
@@ -81,3 +88,10 @@
 | M4-T4 | `reading_positions`, 위치 API, 이어 읽기 |
 | M4-T5 | `annotations`의 하이라이트, 주석 API, 글 선택 도구 막대 |
 | M4-T6 | 영역 메모와 주석 목록 |
+
+## 8. 테스트
+
+- [test_pdfs](../../tests/test_pdfs.py): 공개 PDF 받기(OpenAlex, arXiv DOI, 없음, PDF가 아님), 로컬 사본과 드라이브 `pdfs/` 폴더 보관, 올리기(바꾸기, PDF 아님 415, 너무 큼 413), 로컬 사본이 없을 때 드라이브에서 받기, 드라이브 없이 로컬만, 없는 논문 404, 논문을 지우면 연결만 지우기.
+- [pdfState.test](../../frontend/src/pdfState.test.ts): 받기·올리기 성공과 실패.
+- [api.test](../../frontend/src/api.test.ts): PDF API 호출과 오류 메시지.
+
