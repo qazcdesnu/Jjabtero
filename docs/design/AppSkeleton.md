@@ -19,7 +19,8 @@
 
 [cli 모듈](../../src/jjabtero/cli.py)의 [main](../../src/jjabtero/cli.py#main)이 실행 명령 `jjabtero`다. `pyproject.toml`의 `project.scripts`에 등록한다.
 
-- `create_app()`으로 앱을 만들어 uvicorn으로 띄운다.
+- 시작하면 먼저 현재 디렉터리의 `.env` 파일을 읽어 환경 변수로 넣는다([load_env_file](../../src/jjabtero/cli.py#load_env_file)). 파일이 없으면 넘어간다. 이미 있는 환경 변수는 덮어쓰지 않는다. 그래서 배포 환경(Render)은 대시보드의 환경 변수를 쓰고, 내 컴퓨터에서는 저장소 루트의 `.env`에 `OPENALEX_API_KEY` 같은 값을 둔다. `.env`는 비밀 값을 담으므로 `.gitignore`와 `.dockerignore`에 넣는다. 넣을 수 있는 이름은 저장소의 `.env.example`에 있다.
+- `create_app()`으로 앱을 만들어 uvicorn으로 띄운다. `create_app`은 `.env`를 읽지 않는다. 테스트가 개발자의 `.env`에 영향받지 않게 하기 위해서다.
 - 옵션은 `--host`(기본 `127.0.0.1`)와 `--port`(기본 `8000`)다. 기본값이 로컬 주소인 것은 혼자 쓰는 앱을 외부에 열지 않기 위해서다.
 - 앞단 프록시가 넘기는 `X-Forwarded-Proto`·`X-Forwarded-For`는 환경 변수 `JJABTERO_FORWARDED_ALLOW_IPS`(쉼표로 구분한 주소, 또는 `*`)에 있는 주소에서 온 요청일 때만 믿는다. 기본값은 `127.0.0.1`이다. 배포 환경에서 앱이 `https` 주소를 알게 하기 위해서다([배포 설계](Deployment.md#5-빌드와-실행)).
 - 인자 `argv`를 받으면 명령줄 대신 그것을 해석한다. 테스트에서 쓴다.
@@ -38,5 +39,5 @@
 ## 4. 테스트
 
 - [test_app](../../tests/test_app.py)은 상태 확인 API, 없는 API 경로, 빌드된 화면이 있을 때와 없을 때의 `/`를 확인한다.
-- [test_cli](../../tests/test_cli.py)는 실행 명령이 기본값과 지정한 옵션으로 uvicorn을 부르는지 확인한다. 실제 서버는 띄우지 않는다.
+- [test_cli](../../tests/test_cli.py)는 실행 명령이 기본값과 지정한 옵션으로 uvicorn을 부르는지, `.env`를 읽되 이미 있는 환경 변수를 덮어쓰지 않는지 확인한다. 테스트는 임시 디렉터리에서 돌아 개발자의 `.env`를 읽지 않는다. 실제 서버는 띄우지 않는다.
 - [api.test](../../frontend/src/api.test.ts)는 `fetchHealth`의 성공과 실패를 `fetch`를 대신한 가짜 응답으로 확인한다.

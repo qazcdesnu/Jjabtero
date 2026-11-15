@@ -8,8 +8,10 @@
 import argparse
 import os
 from collections.abc import Sequence
+from pathlib import Path
 
 import uvicorn
+from dotenv import load_dotenv
 
 from jjabtero.app import create_app
 from jjabtero.auth import AuthConfigError, auth_settings_from_env
@@ -18,6 +20,15 @@ from jjabtero.drive_sync import default_drive_paths
 from jjabtero.google_auth import TokenStore
 
 _LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
+ENV_FILE = ".env"
+
+
+def load_env_file() -> None:
+    """현재 디렉터리의 `.env`를 환경 변수로 읽는다. 이미 있는 값은 덮어쓰지 않는다.
+
+    @doc: docs/design/AppSkeleton.md#2-실행-명령
+    """
+    load_dotenv(Path.cwd() / ENV_FILE, override=False)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -27,6 +38,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     @doc: docs/design/Auth.md#2-켜고-끄기
     @doc: docs/design/DriveSync.md#8-서버-환경
     """
+    load_env_file()
     parser = argparse.ArgumentParser(prog="jjabtero", description="Jjabtero 서버를 띄운다.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)

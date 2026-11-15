@@ -10,5 +10,6 @@ dist/
 client_secret*.json
 *token*.json
 *.db
+.env
 .DS_Store
 /private/

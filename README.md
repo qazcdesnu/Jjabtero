@@ -22,6 +22,12 @@ uv sync                        # 백엔드 가상 환경과 의존성
 npm --prefix frontend install  # 프론트엔드 의존성
 ```
 
+**환경 변수**: 저장소 루트에 `.env` 파일을 두면 실행 명령이 읽는다. `.env.example`을 `.env`로 복사해 필요한 값만 채운다. `.env`는 Git에 올라가지 않는다. 이미 셸에 있는 환경 변수가 `.env`보다 우선한다.
+
+```sh
+cp .env.example .env           # 그다음 .env를 열어 값을 채운다
+```
+
 **쓰기**: 화면을 빌드한 뒤 서버 하나를 띄우고 브라우저에서 http://127.0.0.1:8000 을 연다.
 
 ```sh
@@ -38,7 +44,7 @@ npm --prefix frontend run dev  # 터미널 2: 프론트엔드
 
 **서재 데이터**: 서재는 SQLite 파일 하나에 저장한다. 기본 위치는 운영체제의 사용자 데이터 폴더이며(macOS: `~/Library/Application Support/Jjabtero/library.db`), 환경 변수 `JJABTERO_DB`로 바꿀 수 있다. 구글 드라이브와 동기화하는 방법은 아래에 있다.
 
-**논문 검색**: 첫 화면에서 OpenAlex와 arXiv를 검색하고, 결과를 골라 "서재에 추가"를 누른다. OpenAlex는 키 없이도 쓰지만 하루 사용량이 같은 IP 안에서 나뉜다. [OpenAlex 설정](https://openalex.org/settings/api)에서 무료 키를 받아 환경 변수 `OPENALEX_API_KEY`에 넣으면 사용량이 늘어난다.
+**논문 검색**: 첫 화면에서 OpenAlex와 arXiv를 검색하고, 결과를 골라 "서재에 추가"를 누른다. OpenAlex는 키 없이도 쓰지만 하루 사용량이 같은 IP 안에서 나뉜다. [OpenAlex 설정](https://openalex.org/settings/api)에서 무료 키를 받아 `.env`(또는 환경 변수)의 `OPENALEX_API_KEY`에 넣으면 사용량이 늘어난다.
 
 **구글 드라이브 동기화**: 본인의 Google Cloud 프로젝트에서 Drive API를 켜고 웹 애플리케이션 OAuth 클라이언트(리디렉션 URI `http://127.0.0.1:8000/api/drive/callback`, 범위 `drive.file`)를 만든 뒤, 받은 JSON을 사용자 데이터 폴더의 `google_client_secret.json`(macOS: `~/Library/Application Support/Jjabtero/`)으로 둔다. 저장소 안에는 두지 않는다. 앱 오른쪽 위 "드라이브 연결"을 누르면 연결되고, 그 뒤로는 앱을 띄울 때와 서재를 고친 뒤 자동으로 동기화한다. 자세한 동작은 [구글 드라이브 동기화 설계](docs/design/DriveSync.md)에 있다.
 
