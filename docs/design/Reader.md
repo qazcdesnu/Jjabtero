@@ -79,8 +79,8 @@ PDF API는 [pdfs 모듈](../../src/jjabtero/pdfs.py)의 [router](../../src/jjabt
 - 쪽 배치와 위치 계산은 [readerState 모듈](../../frontend/src/readerState.ts)의 순수 함수다. [pageTops](../../frontend/src/readerState.ts#pageTops)는 쪽마다 위쪽 위치를([PAGE_GAP](../../frontend/src/readerState.ts#PAGE_GAP) 간격), [pageAt](../../frontend/src/readerState.ts#pageAt)은 스크롤 위치의 쪽을, [visiblePages](../../frontend/src/readerState.ts#visiblePages)는 그릴 쪽을, [nextZoom](../../frontend/src/readerState.ts#nextZoom)과 [fitWidthScale](../../frontend/src/readerState.ts#fitWidthScale)은 확대 배율을, [clampPage](../../frontend/src/readerState.ts#clampPage)는 쪽 번호 범위를 맡는다. 읽던 위치에 쓸 [positionAt](../../frontend/src/readerState.ts#positionAt)과 [scrollTopFor](../../frontend/src/readerState.ts#scrollTopFor)는 스크롤 위치와 (쪽, 쪽 안 비율)을 서로 바꾼다. 확대·축소할 때도 이 둘로 보던 자리를 지킨다.
 - 하이라이트: 글을 고르면 선택 아래에 색 다섯 개([HIGHLIGHT_COLORS](../../frontend/src/annotations.ts#HIGHLIGHT_COLORS))의 작은 도구 막대가 뜨고, 색을 누르면 하이라이트가 된다. 선택의 화면 사각형은 [normalizeRects](../../frontend/src/annotations.ts#normalizeRects)가 쪽 비율로 바꾸고 같은 줄의 조각을 합친다. 여러 쪽에 걸친 선택은 시작한 쪽 안의 부분만 쓴다.
 - 하이라이트는 캔버스와 글자 층 사이의 층에 반투명 색(곱하기 혼합, [colorFill](../../frontend/src/annotations.ts#colorFill))으로 그린다. 글자 층이 위에 있어 하이라이트 위에서도 글을 고를 수 있다. 그래서 하이라이트를 누른 것은 글자 층의 클릭 위치로 판정한다([hitTest](../../frontend/src/annotations.ts#hitTest), 겹치면 나중 것). 누르면 고른 글, 색 바꾸기, 메모, 삭제가 있는 작은 창이 뜬다. Esc나 다른 곳을 누르면 닫힌다.
-- 영역 메모: 도구 막대의 "영역 메모"를 켜고 끌어서 사각형을 그리면 메모 입력이 열린다.
-- 오른쪽에 접을 수 있는 주석 목록을 두어, 누르면 그 자리로 간다.
+- 영역 메모: 머리줄의 "영역 메모"를 켜면 커서가 십자가 되고 글자 층이 선택을 받지 않는다. 쪽 위를 끌면 점선 사각형이 보이고([dragRect](../../frontend/src/annotations.ts#dragRect), 쪽 너비·높이의 1%([MIN_NOTE_SIZE](../../frontend/src/annotations.ts#MIN_NOTE_SIZE))보다 작으면 버림), 놓으면 메모 입력이 열린다. 저장하면 `kind: note` 주석이 되고 영역 메모 모드가 꺼진다. 영역 메모는 노란 테두리 사각형과 말풍선 표시로 그리고, 누르면 하이라이트와 같은 창(색 고르기 없음)이 뜬다.
+- 머리줄의 "주석 n"으로 오른쪽 주석 목록을 열고 닫는다. 쪽 순서로 종류, 쪽, 요약([annotationSummary](../../frontend/src/annotations.ts#annotationSummary): 하이라이트는 글과 메모, 영역 메모는 메모)을 보여 주고, 누르면 그 자리로 스크롤하고 주석 창을 연다.
 
 ## 7. 태스크 나누기
 
@@ -97,7 +97,7 @@ PDF API는 [pdfs 모듈](../../src/jjabtero/pdfs.py)의 [router](../../src/jjabt
 - [test_pdfs](../../tests/test_pdfs.py): 공개 PDF 받기(OpenAlex, arXiv DOI, 없음, PDF가 아님), 로컬 사본과 드라이브 `pdfs/` 폴더 보관, 올리기(바꾸기, PDF 아님 415, 너무 큼 413), 로컬 사본이 없을 때 드라이브에서 받기, 드라이브 없이 로컬만, 없는 논문 404, 논문을 지우면 연결만 지우기.
 - [test_reading](../../tests/test_reading.py): 읽던 위치가 없을 때 204, 저장과 바꾸기, 범위 밖 422, 없는 논문 404, 논문을 지우면 함께 지우기, 저장마다 드라이브 올리기 예약.
 - [test_reading](../../tests/test_reading.py)의 주석 부분: 만들기, 쪽·위치 순 목록, 색·메모 고치기(빈 메모는 비움), 지우기, 잘못된 종류·쪽·사각형·색 422, 없는 논문·주석 404, 논문을 지우면 함께 지우기.
-- [annotations.test](../../frontend/src/annotations.test.ts): 화면 사각형의 쪽 비율 변환과 같은 줄 합치기, 쪽 밖 버리기·자르기, 누른 위치 판정, 색.
+- [annotations.test](../../frontend/src/annotations.test.ts): 화면 사각형의 쪽 비율 변환과 같은 줄 합치기, 쪽 밖 버리기·자르기, 누른 위치 판정, 색, 끈 영역의 사각형(뒤집힌 방향, 쪽 밖 자르기, 너무 작음), 목록 요약.
 - [pdfState.test](../../frontend/src/pdfState.test.ts): 받기·올리기 성공과 실패.
 - [readerState.test](../../frontend/src/readerState.test.ts): 확대 단계, 너비 맞춤, 쪽 위치, 보이는 쪽, 쪽 번호 범위, 읽던 위치와 스크롤 위치 변환, 위치 저장 지연(2초, 마지막 값만, 닫을 때 바로, 실패 무시).
 - 리더 화면 자체(pdf.js 그리기)는 단위 테스트 대신 브라우저에서 실제 PDF로 확인한다.
