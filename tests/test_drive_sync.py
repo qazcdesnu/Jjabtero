@@ -7,11 +7,12 @@ import time
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Engine
+from alembic import command
+from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 
 from fakes import FakeDrive, write_client_secret
-from jjabtero.db import create_db_engine, upgrade_database
+from jjabtero.db import _alembic_config, create_db_engine, upgrade_database
 from jjabtero.drive_sync import (
     DrivePaths,
     DriveSync,
@@ -19,12 +20,15 @@ from jjabtero.drive_sync import (
     restore_db,
     seed_token_from_env,
     snapshot_db,
+    upgrade_keeping_sync,
 )
 from jjabtero.google_auth import DriveAuthError, Token, TokenStore
 from jjabtero.library import PaperData, add_paper, list_papers
 
 
-def computer(tmp_path: Path, name: str, drive: FakeDrive, connected: bool = True) -> DriveSync:
+def computer(
+    tmp_path: Path, name: str, drive: FakeDrive, connected: bool = True, watch_interval: float = 0
+) -> DriveSync:
     """임시 폴더에 서재 하나와 그 동기화를 만든다. 여러 개가 같은 가짜 드라이브를 쓸 수 있다.
 
     @doc: docs/design/DriveSync.md#9-테스트
@@ -36,7 +40,9 @@ def computer(tmp_path: Path, name: str, drive: FakeDrive, connected: bool = True
     write_client_secret(paths.client_secret)
     if connected:
         TokenStore(paths.token).save(Token("a", "r", time.time() + 3600))
-    return DriveSync(engine, paths, http=None, files_factory=lambda http, token: drive, push_delay=0.05)
+    return DriveSync(
+        engine, paths, http=None, files_factory=lambda http, token: drive, push_delay=0.05, watch_interval=watch_interval
+    )
 
 
 def add(engine: Engine, title: str) -> None:
@@ -395,3 +401,191 @@ def test_flush_pushes_pending_change_now(tmp_path: Path, drive: FakeDrive) -> No
     assert drive.calls == ["update"]
     assert a.status().pending is False
 
+
+def old_computer(tmp_path: Path, name: str, drive: FakeDrive) -> DriveSync:
+    """스키마 0002(옛 버전 앱)에 논문 하나가 든 서재와 그 동기화.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    folder = tmp_path / name
+    engine = create_db_engine(folder / "library.db")
+    with engine.begin() as connection:
+        command.upgrade(_alembic_config(connection), "0002")
+        connection.execute(
+            text("INSERT INTO papers (id, title, item_type, created_at, updated_at) VALUES (1, 'Old', 'other', '2026-01-01', '2026-01-01')")
+        )
+    paths = DrivePaths(folder / "client.json", folder / "token.json", folder / "drive_sync.json", folder / "backups")
+    write_client_secret(paths.client_secret)
+    TokenStore(paths.token).save(Token("a", "r", time.time() + 3600))
+    return DriveSync(engine, paths, http=None, files_factory=lambda http, token: drive, push_delay=0.05, watch_interval=0)
+
+
+def test_schema_upgrade_is_not_counted_as_local_change(tmp_path: Path, drive: FakeDrive) -> None:
+    """새 버전 앱이 스키마를 올려도 서재가 마지막 동기화 때와 같았으면 로컬 변경으로 세지 않아, 드라이브 변경을 받는다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    old = old_computer(tmp_path, "old", drive)
+    assert old.sync().state == "idle"
+    web = computer(tmp_path, "web", drive)
+    web.sync()
+    add(web.engine, "Added on web")
+    web.sync()
+
+    assert upgrade_keeping_sync(old.engine, old.paths.state) is True
+    status = old.sync()
+    assert status.state == "idle"
+    assert titles(old.engine) == ["Added on web", "Old"]
+
+
+def test_plain_schema_upgrade_would_conflict(tmp_path: Path, drive: FakeDrive) -> None:
+    """(이전 동작) 상태를 이어받지 않고 스키마만 올리면 드라이브도 바뀐 경우 충돌이 된다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    old = old_computer(tmp_path, "old", drive)
+    old.sync()
+    web = computer(tmp_path, "web", drive)
+    web.sync()
+    add(web.engine, "Added on web")
+    web.sync()
+    upgrade_database(old.engine)
+    assert old.sync().state == "conflict"
+
+
+def test_upgrade_keeping_sync_leaves_real_local_change(tmp_path: Path, drive: FakeDrive) -> None:
+    """스키마를 올리기 전에 이미 바뀐 서재는 그대로 로컬 변경으로 남는다. 상태 파일이 없어도 스키마는 올린다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    old = old_computer(tmp_path, "old", drive)
+    old.sync()
+    saved = old.paths.state.read_text()
+    with old.engine.begin() as connection:
+        connection.execute(text("UPDATE papers SET title = 'Edited' WHERE id = 1"))
+    assert upgrade_keeping_sync(old.engine, old.paths.state) is False
+    assert old.paths.state.read_text() == saved
+    fresh = create_db_engine(tmp_path / "fresh" / "library.db")
+    assert upgrade_keeping_sync(fresh, tmp_path / "fresh" / "drive_sync.json") is False
+    with fresh.connect() as connection:
+        assert connection.execute(text("SELECT COUNT(*) FROM papers")).scalar() == 0
+
+
+def test_check_reads_only_metadata_and_downloads_remote_change(tmp_path: Path, drive: FakeDrive) -> None:
+    """확인은 드라이브가 그대로면 아무것도 하지 않고, 바뀌었으면 받는다. 이쪽 변경은 올리지 않는다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    a = computer(tmp_path, "a", drive)
+    add(a.engine, "A1")
+    a.sync()
+    b = computer(tmp_path, "b", drive)
+    b.sync()
+    before = b.status().data_version
+    assert b.check().data_version == before
+    add(a.engine, "A2")
+    a.sync()
+    assert b.check().data_version == before + 1
+    assert titles(b.engine) == ["A1", "A2"]
+    add(b.engine, "B1")
+    remote = drive.files[b._load_state().file_id]["data"]
+    b.check()
+    assert drive.files[b._load_state().file_id]["data"] == remote
+
+
+def test_ensure_fresh_checks_at_most_every_30_seconds(tmp_path: Path, drive: FakeDrive) -> None:
+    """쓰기 앞의 확인은 마지막 확인이 30초보다 오래되었을 때만 한다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    now = [1000.0]
+    a = computer(tmp_path, "a", drive)
+    a.sync()
+    a.clock = lambda: now[0]
+    a._checked_at = None
+    calls = []
+    original = a.check
+    a.check = lambda: calls.append(now[0]) or original()  # type: ignore[method-assign]
+    a.ensure_fresh()
+    now[0] += 10
+    a.ensure_fresh()
+    now[0] += 25
+    a.ensure_fresh()
+    assert calls == [1000.0, 1035.0]
+
+
+def test_write_after_ensure_fresh_does_not_conflict(tmp_path: Path, drive: FakeDrive) -> None:
+    """다른 곳이 올린 변경을 쓰기 전에 받으면, 이쪽 쓰기를 올려도 충돌이 아니다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    computer_a = computer(tmp_path, "a", drive)
+    add(computer_a.engine, "First")
+    computer_a.sync()
+    server = computer(tmp_path, "server", drive)
+    server.sync()
+    add(server.engine, "Added on web")
+    server.sync()
+    computer_a._checked_at = None
+    computer_a.ensure_fresh()
+    add(computer_a.engine, "Added here")
+    assert computer_a.sync().state == "idle"
+    assert server.check().state == "idle"
+    assert titles(server.engine) == ["Added here", "Added on web", "First"]
+
+
+def test_watcher_downloads_remote_change_without_action(tmp_path: Path, drive: FakeDrive) -> None:
+    """확인 스레드가 주기적으로 드라이브를 보아, 아무것도 하지 않아도 다른 곳의 변경을 받는다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    a = computer(tmp_path, "a", drive)
+    add(a.engine, "A1")
+    a.sync()
+    b = computer(tmp_path, "b", drive, watch_interval=0.05)
+    b.start(wait=True)
+    add(a.engine, "A2")
+    a.sync()
+    deadline = time.time() + 3
+    while titles(b.engine) != ["A1", "A2"] and time.time() < deadline:
+        time.sleep(0.05)
+    b.stop()
+    assert titles(b.engine) == ["A1", "A2"]
+
+
+
+def test_write_during_upload_is_pushed_next_time(tmp_path: Path, drive: FakeDrive) -> None:
+    """올리는 도중에 들어온 쓰기는 올린 것으로 적지 않아, 다음 동기화 때 올라간다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    a = computer(tmp_path, "a", drive)
+    add(a.engine, "A1")
+    a.sync()
+    original = drive.update
+
+    def slow_update(file_id: str, data: bytes):
+        add(a.engine, "During upload")
+        return original(file_id, data)
+
+    drive.update = slow_update  # type: ignore[method-assign]
+    add(a.engine, "A2")
+    a.sync()
+    drive.update = original  # type: ignore[method-assign]
+    assert a.sync().state == "idle"
+    b = computer(tmp_path, "b", drive)
+    b.sync()
+    assert titles(b.engine) == ["A1", "A2", "During upload"]
+
+
+def test_download_records_hash_of_restored_copy(tmp_path: Path, drive: FakeDrive) -> None:
+    """받은 뒤 적는 해시는 덮어쓴 서재와 같아, 바로 다음 동기화에서 로컬 변경이 아니다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    a = computer(tmp_path, "a", drive)
+    add(a.engine, "A1")
+    a.sync()
+    b = computer(tmp_path, "b", drive)
+    b.sync()
+    assert content_hash(b.engine) == b._load_state().local_hash

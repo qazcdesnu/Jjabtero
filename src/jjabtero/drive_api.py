@@ -90,6 +90,15 @@ def sync_now(request: Request) -> SyncStatus:
     return _drive(request).sync()
 
 
+@router.post("/check")
+def check_now(request: Request) -> SyncStatus:
+    """`POST /api/drive/check`를 처리한다. 드라이브가 바뀌었을 때만 맞춘다.
+
+    @doc: docs/design/DriveSync.md#6-api
+    """
+    return _drive(request).check()
+
+
 @router.post("/resolve")
 def resolve(request: Request, body: ResolveRequest) -> SyncStatus:
     """`POST /api/drive/resolve`를 처리한다.

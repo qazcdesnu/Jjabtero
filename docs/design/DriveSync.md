@@ -57,8 +57,8 @@
 
 **로컬 사본**
 
-- [snapshot_db](../../src/jjabtero/drive_sync.py#snapshot_db)는 SQLite 백업 기능으로 실행 중인 데이터베이스의 일관된 사본을 바이트로 만든다. 쓰는 도중의 파일을 복사하면 깨질 수 있기 때문이다.
-- [restore_db](../../src/jjabtero/drive_sync.py#restore_db)는 받은 사본을 먼저 임시 파일에서 열어 무결성 검사(`PRAGMA integrity_check`)를 하고, 통과하면 SQLite 백업 기능으로 실행 중인 데이터베이스에 덮어쓴다. 그다음 스키마를 최신으로 올린다. 다른 컴퓨터의 사본이 옛 스키마일 수 있기 때문이다. 검사에 실패하면 로컬은 그대로 두고 오류를 낸다.
+- [snapshot_db](../../src/jjabtero/drive_sync.py#snapshot_db)는 SQLite 백업 기능으로 실행 중인 데이터베이스의 일관된 사본을 바이트로 만든다. 쓰는 도중의 파일을 복사하면 깨질 수 있기 때문이다. 올릴 때는 [snapshot_with_hash](../../src/jjabtero/drive_sync.py#snapshot_with_hash)로 사본과 **그 사본의** 내용 해시를 함께 만들어 상태 파일에 적는다. 처음에는 올린 뒤 그때의 서재로 해시를 계산해, 사본을 만든 뒤 들어온 쓰기가 "올렸음"으로 적히고 다시 올라가지 않았다(2026-11-15 테스트에서 발견, [이슈 H2](../Issue.md)).
+- [restore_db](../../src/jjabtero/drive_sync.py#restore_db)는 받은 사본을 먼저 임시 파일에서 열어 무결성 검사(`PRAGMA integrity_check`)를 하고, 통과하면 그 임시 사본의 스키마를 최신으로 올린 뒤 SQLite 백업 기능으로 실행 중인 데이터베이스에 덮어쓴다. 다른 컴퓨터의 사본이 옛 스키마일 수 있기 때문이다. 덮어쓴 사본의 내용 해시를 돌려주며, 이것을 상태 파일에 적는다. 검사에 실패하면 로컬은 그대로 두고 오류를 낸다.
 - [content_hash](../../src/jjabtero/drive_sync.py#content_hash)는 데이터베이스의 SQL 덤프로 만든 해시다. 파일 바이트는 내용이 같아도 달라질 수 있어, 내용이 바뀌었는지는 이 해시로 판단한다.
 
 **판단**
@@ -74,6 +74,20 @@
 7. 둘 다 바뀌었으면 충돌이다. 아무것도 덮어쓰지 않는다.
 
 받거나 올린 뒤에는 상태 파일에 그때의 드라이브 `checksum`, 로컬 해시, 시각을 적는다.
+
+**스키마를 올릴 때**
+
+- 앱을 켜면 데이터베이스 스키마를 최신으로 올린다. 올리면 내용 해시가 달라지므로, 그대로 두면 사용자가 아무것도 고치지 않았는데 "로컬이 바뀜"이 된다. 그새 드라이브도 바뀌었으면 충돌이다. 이 컴퓨터는 스키마 0002에 머물러 있다가 새 버전 앱이 0007로 올리면서 이렇게 충돌했다(2026-11-15 확인, [이슈 H2](../Issue.md)).
+- 그래서 앱은 [upgrade_keeping_sync](../../src/jjabtero/drive_sync.py#upgrade_keeping_sync)로 스키마를 올린다. 올리기 전 내용 해시가 상태 파일의 로컬 해시와 같으면(마지막 동기화 뒤 바뀌지 않았으면) 올린 뒤의 해시로 상태 파일을 고친다. 다르면 진짜 로컬 변경이므로 그대로 둔다. 상태 파일이 없으면 스키마만 올린다.
+
+**드라이브 변경 받아 오기**
+
+- 처음에는 드라이브 변경을 앱을 켤 때, 이쪽에서 쓴 뒤, "지금 동기화" 때만 확인했다. 그래서 두 곳(이 컴퓨터와 서버)이 함께 켜져 있으면, 한쪽이 올린 것을 다른 쪽이 모른 채 무언가 쓰면(읽던 위치 저장만 해도) 충돌이 났다([이슈 H2](../Issue.md)). 이제 세 군데에서 확인한다.
+- [DriveSync.check](../../src/jjabtero/drive_sync.py#DriveSync.check)는 드라이브 파일 정보(`checksum`)만 읽어, 상태 파일과 같으면 아무것도 하지 않고, 다르면 `sync`와 같이 맞춘다(대개 받기). 이쪽의 변경은 자동 올리기가 맡으므로 드라이브가 그대로면 올리지 않는다. 충돌 중이거나 다른 동기화가 돌면 하지 않는다.
+- **주기적으로**: 앱이 시작되면 확인 스레드가 1분([WATCH_SECONDS](../../src/jjabtero/drive_sync.py#WATCH_SECONDS))마다 `check`를 부른다. 환경 변수 `JJABTERO_DRIVE_WATCH_SECONDS`로 바꾸며, 0이면 돌리지 않는다(테스트). 앱이 끝날 때 멈춘다([DriveSync.stop](../../src/jjabtero/drive_sync.py#DriveSync.stop)).
+- **쓰기 앞에서**: 서재를 바꾸는 요청(`/api/` 아래의 POST·PUT·PATCH·DELETE, 드라이브·로그인 API 제외)이 오면, 처리하기 전에 [DriveSync.ensure_fresh](../../src/jjabtero/drive_sync.py#DriveSync.ensure_fresh)가 마지막 확인이 30초([FRESH_SECONDS](../../src/jjabtero/drive_sync.py#FRESH_SECONDS))보다 오래되었으면 `check`한다. 다른 곳이 올린 변경을 받은 뒤 그 위에 쓰기 위해서다. 앱의 미들웨어([_fresh_before_write](../../src/jjabtero/app.py#_fresh_before_write))가 부르며, 로그인 검사 안쪽에 둔다. 30초 안에 연달아 쓰는 요청(읽던 위치 저장 등)은 드라이브를 다시 보지 않는다.
+- **화면이 다시 보일 때**: 7절.
+- 그래도 두 곳에서 30초 안에 거의 동시에 쓰면 충돌이 날 수 있다. 이것은 자동 합치기([이슈 I21](../Issue.md))가 맡는다.
 
 **충돌 풀기**
 
@@ -97,13 +111,14 @@
 - `GET /api/drive/callback?code=&state=`: 기억한 `state`와 맞으면 코드를 토큰으로 바꿔 저장하고, 동기화한 뒤 `return_to`로 보낸다(302). `state`가 맞지 않거나 `error`가 오면 400.
 - 리디렉션 URI는 요청이 들어온 호스트와 포트로 만든 `<scheme>://<host>/api/drive/callback`이다. 콘솔에 등록한 주소와 같아야 한다.
 - `POST /api/drive/sync`: 지금 동기화하고 상태를 돌려준다.
+- `POST /api/drive/check`: 드라이브가 바뀌었을 때만 맞추고 상태를 돌려준다([check_now](../../src/jjabtero/drive_api.py#check_now), 5절).
 - `POST /api/drive/resolve`: 본문 `{"choice": "remote" | "local"}`로 충돌을 풀고 상태를 돌려준다. 다른 값은 422.
 - `POST /api/drive/disconnect`: 토큰을 지우고 상태를 돌려준다. 동기화 상태 파일은 남긴다.
 
 ## 7. 화면
 
 - API 함수는 [api 모듈](../../frontend/src/api.ts)의 [fetchDriveStatus](../../frontend/src/api.ts#fetchDriveStatus), [syncDrive](../../frontend/src/api.ts#syncDrive), [resolveDrive](../../frontend/src/api.ts#resolveDrive), [disconnectDrive](../../frontend/src/api.ts#disconnectDrive), [driveConnectUrl](../../frontend/src/api.ts#driveConnectUrl)이다.
-- [driveState 모듈](../../frontend/src/driveState.ts)의 [createDriveState](../../frontend/src/driveState.ts#createDriveState)가 상태를 가진다. 처음에 상태를 불러오고, 그 뒤 10초마다(동기화 중이거나 대기 중이면 2초마다) 다시 불러온다. `data_version`이 바뀌면 받은 콜백을 부른다. [syncedLabel](../../frontend/src/driveState.ts#syncedLabel)은 맞춤 상태의 문구(마지막 동기화 시각 또는 "올릴 변경 있음")를 만든다.
+- [driveState 모듈](../../frontend/src/driveState.ts)의 [createDriveState](../../frontend/src/driveState.ts#createDriveState)가 상태를 가진다. 처음에 상태를 불러오고, 그 뒤 10초마다(동기화 중이거나 대기 중이면 2초마다) 다시 불러온다. 앱 창이 다시 보이거나(`visibilitychange`) 창으로 돌아오면(`focus`), 상태가 맞춤이나 오류이고 마지막 확인에서 15초([CHECK_GAP_MS](../../frontend/src/driveState.ts#CHECK_GAP_MS))가 지났으면 [checkDrive](../../frontend/src/api.ts#checkDrive)(`POST /api/drive/check`)를 부른다. 다른 곳에서 고치고 돌아왔을 때 바로 받기 위해서다. `data_version`이 바뀌면 받은 콜백을 부른다. [syncedLabel](../../frontend/src/driveState.ts#syncedLabel)은 맞춤 상태의 문구(마지막 동기화 시각 또는 "올릴 변경 있음")를 만든다.
 - 머리줄의 `DriveStatus.vue`가 상태를 보여 준다.
   - 설정 안 됨: 회색 "드라이브 설정 안 됨"(마우스를 올리면 클라이언트 파일 위치 안내).
   - 연결 안 됨: "드라이브 연결" 단추. 누르면 `driveConnectUrl`로 이동한다.
@@ -132,8 +147,8 @@ Render처럼 파일 시스템이 재시작마다 지워지는 서버에서도 �
 
 - [test_google_auth](../../tests/test_google_auth.py): 클라이언트 읽기와 오류, 동의 주소의 인자, 코드 교환과 갱신(가짜 응답), 갱신 토큰 유지, 만료 전 갱신, `invalid_grant`로 토큰 지우기, 토큰 파일 권한.
 - [test_drive](../../tests/test_drive.py): `DriveFiles`의 요청 모양(검색 질의, 업로드 형식)과 응답 해석, 오류.
-- [test_drive_sync](../../tests/test_drive_sync.py): 메모리 안의 가짜 드라이브로 `sync`의 모든 경우(처음 올리기, 처음 받기, 처음 연결 충돌, 변경 없음, 로컬만, 드라이브만, 둘 다, 올리기 직전 충돌, 드라이브 파일이 지워짐), `resolve` 두 쪽과 백업, 사본 만들기·되살리기와 깨진 사본 거부, 인증 오류, 자동 올리기 대기.
-- [test_drive_api](../../tests/test_drive_api.py): 상태, 연결 주소와 `return_to` 검사, 콜백의 `state` 검사, 동기화·충돌 풀기·연결 해제, 논문 API가 자동 올리기를 예약하는지.
+- [test_drive_sync](../../tests/test_drive_sync.py): 메모리 안의 가짜 드라이브로 `sync`의 모든 경우(처음 올리기, 처음 받기, 처음 연결 충돌, 변경 없음, 로컬만, 드라이브만, 둘 다, 올리기 직전 충돌, 드라이브 파일이 지워짐), `resolve` 두 쪽과 백업, 사본 만들기·되살리기와 깨진 사본 거부, 인증 오류, 자동 올리기 대기. 스키마 올리기(옛 스키마 서재가 상태를 이어받아 드라이브 변경을 받음, 이어받지 않으면 충돌, 진짜 로컬 변경은 남김), `check`(드라이브가 그대로면 아무것도 안 함, 바뀌면 받음, 이쪽 변경은 올리지 않음), `ensure_fresh`의 30초 간격, 쓰기 전에 받으면 충돌 없음, 확인 스레드가 아무것도 하지 않아도 받음, 올리는 도중에 들어온 쓰기가 다음 동기화에 올라감, 받은 뒤 적는 해시가 서재와 같음.
+- [test_drive_api](../../tests/test_drive_api.py): 상태, 연결 주소와 `return_to` 검사, 콜백의 `state` 검사, 동기화·충돌 풀기·연결 해제, 논문 API가 자동 올리기를 예약하는지, 쓰기 요청이 드라이브 변경을 먼저 받는지(서버가 논문을 담은 뒤 이 컴퓨터가 읽던 위치를 저장해도 충돌 없음), 확인 API.
 - 서버 환경(8절): [test_drive_sync](../../tests/test_drive_sync.py)는 환경 변수로 토큰 파일 만들기, 빈 서버가 기다려 받기, 대기 중인 올리기를 바로 하기를, [test_drive_api](../../tests/test_drive_api.py)는 앱이 시작할 때 받고 끝날 때 올리기를, [test_cli](../../tests/test_cli.py)는 갱신 토큰 꺼내기와 연결이 없을 때의 오류를 확인한다.
-- 프론트엔드는 드라이브 API 함수([api.test](../../frontend/src/api.test.ts))와 [driveState.test](../../frontend/src/driveState.test.ts)(불러오기, `data_version` 콜백, 동작 뒤 상태 갱신, 오류)를 확인한다.
+- 프론트엔드는 드라이브 API 함수([api.test](../../frontend/src/api.test.ts))와 [driveState.test](../../frontend/src/driveState.test.ts)(불러오기, `data_version` 콜백, 동작 뒤 상태 갱신, 오류, 창으로 돌아올 때의 확인과 15초 간격, 충돌 중에는 확인하지 않음)를 확인한다.
 - 실제 드라이브 확인은 사용자가 브라우저에서 연결한 뒤 한다.

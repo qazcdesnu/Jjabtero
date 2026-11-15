@@ -19,6 +19,8 @@ def isolated_user_data(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.delenv("JJABTERO_GOOGLE_CLIENT_SECRET", raising=False)
     monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
     monkeypatch.delenv("SEMANTIC_SCHOLAR_API_KEY", raising=False)
+    # 테스트 앱마다 드라이브 확인 스레드를 띄우지 않는다. 확인은 테스트가 직접 부른다.
+    monkeypatch.setenv("JJABTERO_DRIVE_WATCH_SECONDS", "0")
     # Semantic Scholar 요청 사이 기다림을 없앤다. 테스트는 가짜 응답을 쓴다.
     monkeypatch.setattr("jjabtero.semantic_scholar.S2_REQUEST_GAP_SECONDS", 0)
     for name in (
