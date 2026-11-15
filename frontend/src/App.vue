@@ -5,12 +5,13 @@
 <!-- @doc: docs/design/DriveSync.md#7-화면 -->
 <!-- @doc: docs/design/Auth.md#6-화면 -->
 <!-- @doc: docs/design/Settings.md#4-화면 -->
+<!-- @doc: docs/design/Reader.md#6-화면 -->
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Splitter from 'primevue/splitter'
 import SplitterPanel from 'primevue/splitterpanel'
 import Tag from 'primevue/tag'
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { fetchHealth, type Health } from './api'
 import { createAuthState, watchUnauthorized } from './auth'
 import LoginView from './LoginView.vue'
@@ -24,6 +25,9 @@ import { createSearchState } from './searchState'
 import SearchResultDetail from './SearchResultDetail.vue'
 import SearchView from './SearchView.vue'
 import SettingsView from './SettingsView.vue'
+
+// pdf.js가 무거우므로 리더는 처음 열 때 불러온다.
+const ReaderView = defineAsyncComponent(() => import('./ReaderView.vue'))
 import Sidebar from './Sidebar.vue'
 
 const view = ref<string>(DEFAULT_VIEW)
@@ -32,10 +36,12 @@ const library = createLibraryState()
 const drive = createDriveState(() => library.load())
 const auth = createAuthState()
 const ready = ref(false)
+const reading = ref<{ id: number; title: string } | null>(null)
 
 watchUnauthorized(() => auth.refresh())
 
 watch(view, (name) => {
+  reading.value = null
   if (name === 'library') library.load()
 })
 const health = ref<Health | null>(null)
@@ -85,7 +91,15 @@ onMounted(async () => {
       </div>
     </header>
 
-    <Splitter v-if="view === 'settings'" key="settings" class="min-h-0 flex-1 rounded-none border-0">
+    <Splitter v-if="reading" key="reader" class="min-h-0 flex-1 rounded-none border-0">
+      <SplitterPanel :size="15" :min-size="10" class="overflow-auto">
+        <Sidebar v-model="view" :library="library" />
+      </SplitterPanel>
+      <SplitterPanel :size="85" :min-size="50" class="overflow-hidden">
+        <ReaderView :key="reading.id" :paper-id="reading.id" :title="reading.title" @close="reading = null" />
+      </SplitterPanel>
+    </Splitter>
+    <Splitter v-else-if="view === 'settings'" key="settings" class="min-h-0 flex-1 rounded-none border-0">
       <SplitterPanel :size="15" :min-size="10" class="overflow-auto">
         <Sidebar v-model="view" :library="library" />
       </SplitterPanel>
@@ -103,7 +117,11 @@ onMounted(async () => {
       </SplitterPanel>
       <SplitterPanel :size="30" :min-size="20" class="overflow-auto">
         <SearchResultDetail v-if="view === 'search' && search.selected.value" :search="search" />
-        <PaperDetail v-else-if="view === 'library' && library.selected.value" :library="library" />
+        <PaperDetail
+          v-else-if="view === 'library' && library.selected.value"
+          :library="library"
+          @read="(paper) => (reading = paper)"
+        />
         <div v-else class="flex h-full flex-col items-center justify-center gap-2 text-surface-500">
           <i class="pi pi-file text-4xl" />
           <p>항목을 고르면 여기에 상세가 보입니다.</p>

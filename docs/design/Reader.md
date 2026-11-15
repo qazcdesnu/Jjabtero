@@ -8,8 +8,9 @@
   - 브라우저에서 PDF를 그리는 사실상 표준이고, 글자 층(text layer)을 함께 그려 글을 고를 수 있다. 하이라이트가 이 글자 층의 선택을 쓴다.
   - 라이선스가 Apache-2.0이라 PrimeVue처럼 상용 라이선스 문제가 없다.
 - 뷰어 컴포넌트는 직접 만든다. Vue용 포장 라이브러리는 하이라이트·영역 메모 같은 주석 층을 우리 데이터에 맞게 얹기 어렵기 때문이다. 쪽마다 캔버스, 글자 층, 주석 층(하이라이트와 영역 메모를 그리는 절대 위치 `div`)을 겹친다.
-- pdf.js는 무거우므로(작업자 스크립트 포함 1MB 이상) 리더 화면을 처음 열 때만 불러온다(동적 `import`). 첫 화면 번들을 키우지 않기 위해서다([이슈 I11](../Issue.md)).
-- 화면에 보이는 쪽과 그 앞뒤 쪽만 그린다. 긴 논문도 메모리를 적게 쓰기 위해서다.
+- pdf.js는 무거우므로(작업자 스크립트 포함 1MB 이상) 리더 화면을 처음 열 때만 불러온다(`App.vue`의 `defineAsyncComponent`). 빌드하면 리더가 따로 묶이고(약 435KB, gzip 131KB), 작업자 스크립트(약 1.3MB)는 별도 파일이다. 첫 화면 번들을 키우지 않기 위해서다([이슈 I11](../Issue.md)).
+- 화면에 보이는 쪽과 그 앞뒤 쪽만 그리고, 두 쪽보다 멀어진 쪽은 지운다. 긴 논문도 메모리를 적게 쓰기 위해서다. 모든 쪽의 크기는 열 때 먼저 읽어 자리를 잡아 두므로 스크롤 길이가 바뀌지 않는다.
+- 글자 층 스타일은 `pdfjs-dist/web/pdf_viewer.css`를 리더에서만 불러온다. 글자 층 크기는 쪽 요소의 CSS 변수 `--scale-factor`, `--total-scale-factor`로 맞춘다.
 
 ## 2. PDF 가져오기
 
@@ -73,8 +74,9 @@ PDF API는 [pdfs 모듈](../../src/jjabtero/pdfs.py)의 [router](../../src/jjabt
 
 ## 6. 화면
 
-- 논문 상세에 PDF 칸([PdfPanel](../../frontend/src/PdfPanel.vue))을 둔다. PDF가 있으면 "읽기"와 "PDF 바꾸기"를, 없으면 "PDF 받기"와 "PDF 올리기"를 보여 준다. 받기·올리기 상태는 [createPdfState](../../frontend/src/pdfState.ts#createPdfState)가 가진다. 리더 화면이 생기기 전(M4-T3 전)에는 "읽기"가 PDF를 새 탭에서 연다.
-- "읽기"를 누르면 리더 화면이 열린다. 리더는 왼쪽 목록을 남기고 가운데와 오른쪽 칸을 합친 넓은 칸을 쓴다. 위에 제목, 쪽 이동, 확대·축소, 닫기를 둔다.
+- 논문 상세에 PDF 칸([PdfPanel](../../frontend/src/PdfPanel.vue))을 둔다. PDF가 있으면 "읽기"와 "PDF 바꾸기"를, 없으면 "PDF 받기"와 "PDF 올리기"를 보여 준다. 받기·올리기 상태는 [createPdfState](../../frontend/src/pdfState.ts#createPdfState)가 가진다. "새 탭에서 열기"로 브라우저의 PDF 뷰어로도 열 수 있다.
+- "읽기"를 누르면 리더 화면([ReaderView](../../frontend/src/ReaderView.vue))이 열린다. 리더는 왼쪽 목록을 남기고 가운데와 오른쪽 칸을 합친 넓은 칸을 쓴다. 위에 닫기, 제목, 쪽 이동(이전·다음, 쪽 번호 입력), 확대·축소(50~300%, [ZOOM_STEPS](../../frontend/src/readerState.ts#ZOOM_STEPS)), 너비 맞춤을 둔다. 처음에는 너비에 맞추되 150%를 넘지 않는다. 왼쪽 목록에서 다른 화면을 고르면 리더가 닫힌다.
+- 쪽 배치와 위치 계산은 [readerState 모듈](../../frontend/src/readerState.ts)의 순수 함수다. [pageTops](../../frontend/src/readerState.ts#pageTops)는 쪽마다 위쪽 위치를([PAGE_GAP](../../frontend/src/readerState.ts#PAGE_GAP) 간격), [pageAt](../../frontend/src/readerState.ts#pageAt)은 스크롤 위치의 쪽을, [visiblePages](../../frontend/src/readerState.ts#visiblePages)는 그릴 쪽을, [nextZoom](../../frontend/src/readerState.ts#nextZoom)과 [fitWidthScale](../../frontend/src/readerState.ts#fitWidthScale)은 확대 배율을, [clampPage](../../frontend/src/readerState.ts#clampPage)는 쪽 번호 범위를 맡는다. 읽던 위치에 쓸 [positionAt](../../frontend/src/readerState.ts#positionAt)과 [scrollTopFor](../../frontend/src/readerState.ts#scrollTopFor)는 스크롤 위치와 (쪽, 쪽 안 비율)을 서로 바꾼다. 확대·축소할 때도 이 둘로 보던 자리를 지킨다.
 - 하이라이트: 글을 고르면 작은 도구 막대가 떠 색을 고르면 하이라이트가 된다. 누르면 메모를 달거나 지울 수 있다.
 - 영역 메모: 도구 막대의 "영역 메모"를 켜고 끌어서 사각형을 그리면 메모 입력이 열린다.
 - 오른쪽에 접을 수 있는 주석 목록을 두어, 누르면 그 자리로 간다.
@@ -93,5 +95,7 @@ PDF API는 [pdfs 모듈](../../src/jjabtero/pdfs.py)의 [router](../../src/jjabt
 
 - [test_pdfs](../../tests/test_pdfs.py): 공개 PDF 받기(OpenAlex, arXiv DOI, 없음, PDF가 아님), 로컬 사본과 드라이브 `pdfs/` 폴더 보관, 올리기(바꾸기, PDF 아님 415, 너무 큼 413), 로컬 사본이 없을 때 드라이브에서 받기, 드라이브 없이 로컬만, 없는 논문 404, 논문을 지우면 연결만 지우기.
 - [pdfState.test](../../frontend/src/pdfState.test.ts): 받기·올리기 성공과 실패.
+- [readerState.test](../../frontend/src/readerState.test.ts): 확대 단계, 너비 맞춤, 쪽 위치, 보이는 쪽, 쪽 번호 범위, 읽던 위치와 스크롤 위치 변환.
+- 리더 화면 자체(pdf.js 그리기)는 단위 테스트 대신 브라우저에서 실제 PDF로 확인한다.
 - [api.test](../../frontend/src/api.test.ts): PDF API 호출과 오류 메시지.
 

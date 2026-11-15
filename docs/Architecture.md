@@ -75,6 +75,7 @@ Python 버전은 `.python-version`과 `pyproject.toml`의 `requires-python`(`>=3
 | 빌드·개발 서버 | Vite |
 | 패키지 관리 | npm |
 | UI | PrimeVue 4.5.5(Aura 테마, primeicons), Tailwind CSS 4 ([UI 기반 설계](design/UiLayout.md)) |
+| PDF 렌더링 | pdf.js(`pdfjs-dist` 6.4.299, [PDF 리더 설계](design/Reader.md#1-뷰어-라이브러리)) |
 | 테스트 | Vitest |
 
 ## 4. 스타일
