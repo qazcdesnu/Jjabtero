@@ -26,7 +26,7 @@ from jjabtero.library import (
     update_reading,
 )
 from jjabtero.models import Paper
-from jjabtero.search import SOURCES, SearchResponse, search_papers
+from jjabtero.search import SOURCES, SearchMode, SearchResponse, search_papers
 
 router = APIRouter(prefix="/api")
 
@@ -94,6 +94,7 @@ def search(
     client: Annotated[httpx2.Client, Depends(_http_client)],
     sources: Annotated[list[str] | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=25)] = 10,
+    mode: Annotated[SearchMode, Query()] = "all",
 ) -> SearchResponse:
     """`GET /api/search`를 처리한다.
 
@@ -108,7 +109,7 @@ def search(
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, f"알 수 없는 검색원입니다: {', '.join(unknown)}"
         )
-    response = search_papers(client, query, chosen, limit)
+    response = search_papers(client, query, chosen, limit, mode)
     dois = {result.doi for result in response.results if result.doi}
     rows = session.execute(select(Paper.doi, Paper.id).where(Paper.doi.in_(dois)))
     owners = {doi: paper_id for doi, paper_id in rows}

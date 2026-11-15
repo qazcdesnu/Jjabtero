@@ -75,8 +75,11 @@ export class DuplicatePaperError extends Error {
 }
 
 // @doc: docs/design/PaperSearch.md#4-화면
-export async function searchPapers(query: string, sources: string[]): Promise<SearchResponse> {
-  const params = new URLSearchParams({ q: query })
+export type SearchMode = 'all' | 'title' | 'author'
+
+// @doc: docs/design/PaperSearch.md#4-화면
+export async function searchPapers(query: string, sources: string[], mode: SearchMode = 'all'): Promise<SearchResponse> {
+  const params = new URLSearchParams({ q: query, mode })
   for (const source of sources) {
     params.append('sources', source)
   }

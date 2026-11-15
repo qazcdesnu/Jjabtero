@@ -74,10 +74,10 @@ const result: SearchResult = {
 }
 
 describe('searchPapers', () => {
-  it('검색어와 검색원을 질의로 보내고 응답을 돌려준다', async () => {
+  it('검색어, 검색 방식, 검색원을 질의로 보내고 응답을 돌려준다', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(new Response(JSON.stringify({ results: [result], errors: [] })))
+      .mockImplementation(async () => new Response(JSON.stringify({ results: [result], errors: [] })))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(searchPapers('attention need', ['openalex', 'arxiv'])).resolves.toEqual({
@@ -85,8 +85,10 @@ describe('searchPapers', () => {
       errors: [],
     })
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/search?q=attention+need&sources=openalex&sources=arxiv',
+      '/api/search?q=attention+need&mode=all&sources=openalex&sources=arxiv',
     )
+    await searchPapers('Robeyns', ['arxiv'], 'author')
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/search?q=Robeyns&mode=author&sources=arxiv')
   })
 
   it('실패 응답이면 상태 코드를 담은 오류를 던진다', async () => {

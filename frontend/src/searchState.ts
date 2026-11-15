@@ -6,8 +6,16 @@ import {
   addPaper,
   searchPapers,
   toPaperInput,
+  type SearchMode,
   type SearchResult,
 } from './api'
+
+// @doc: docs/design/PaperSearch.md#4-화면
+export const SEARCH_MODES = [
+  { value: 'all', label: '일반', placeholder: '논문 제목, 저자, 주제로 검색' },
+  { value: 'title', label: '제목', placeholder: '논문 제목으로 검색' },
+  { value: 'author', label: '저자', placeholder: '저자 이름(여럿이면 쉼표로: Robeyns, Aitchison)' },
+] as const
 
 // @doc: docs/design/PaperSearch.md#4-화면
 export const SEARCH_SOURCES = [
@@ -29,6 +37,7 @@ export function resultKey(result: SearchResult): string {
 export function createSearchState(deps = { searchPapers, addPaper }) {
   const state = reactive({
     query: '',
+    mode: 'all' as SearchMode,
     sources: SEARCH_SOURCES.map((source) => source.name as string),
     searching: false,
     error: '',
@@ -50,7 +59,7 @@ export function createSearchState(deps = { searchPapers, addPaper }) {
     state.searching = true
     state.error = ''
     try {
-      const response = await deps.searchPapers(state.query.trim(), state.sources)
+      const response = await deps.searchPapers(state.query.trim(), state.sources, state.mode)
       state.results = response.results
       state.failures = response.errors
       state.selectedKey = null

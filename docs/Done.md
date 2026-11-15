@@ -2,6 +2,54 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md), [M3 인용 기반 연결·추천](Done-M3.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## I20 검색에서 제목이 많이 일치하는 결과를 위로 올리고, 일반·제목·저자 검색 옵션 두기
+
+- 시작일: 2026-11-15
+- 완료일: 2026-11-15
+- 근거 문서: [논문 검색과 추가 설계](design/PaperSearch.md)
+- 참고 자료: 없음
+
+### 계획
+- 사용자가 알려 준 검색("a self-improving coding agent")이 왜 원하는 논문(Robeyns, Szummer, Aitchison)을 놓치는지 확인한다.
+- 검색원들의 결과를 검색어와의 일치도로 다시 정렬한다.
+- 일반·제목·저자 검색 옵션을 API와 화면에 더하고, 검색원마다 맞는 질의로 바꾼다.
+- 테스트를 더하고 실제 검색으로 확인한다.
+
+### 진행 기록
+- 2026-11-15: 사용자가 요청했다. 병합되지 않은 가장 최근 브랜치 `i19-citation-copy-modes`에서 작업 브랜치를 만들었다.
+- 2026-11-15: 같은 검색어로 확인했다. arXiv는 그 논문을 2번째로 주었고, OpenAlex는 상위 20개에 없었다. OpenAlex에는 그 논문이 있었지만(`W6948264221`) 일반 검색, `title.search`, `raw_author_name.search` 어느 것으로도 나오지 않았다. 앱은 OpenAlex 결과 뒤에 arXiv 결과를 이어 붙이므로 그 논문이 12번째쯤에 묻혔다. arXiv는 `ti:`와 `au:` 검색으로도 정확히 찾았다.
+- 2026-11-15: 검색 방식(일반·제목·저자)과 맞는 정도로 다시 정렬하기를 백엔드에 더했다. 실제 검색으로 확인했다. 일반·제목 검색 모두 그 논문이 1번째로 왔고, 저자 이름만 일반 검색에 넣어도 1번째였다. 저자 검색("Robeyns, Aitchison")은 같은 점수가 많아 같은 점수끼리 최신 논문을 앞에 두게 했고, 그 논문은 3번째였다.
+- 2026-11-15: 검색 화면에 일반·제목·저자 단추를 두고 안내 글을 방식에 맞췄다. 브라우저에서 같은 검색어로 그 논문이 첫 줄에 나오는 것을 확인했다.
+
+### 결정 사항
+- 두 방법을 함께 한다. 일치도 정렬은 모든 검색에서 원하는 논문을 앞으로 올리고, 검색 방식은 원하는 것을 좁혀 찾게 한다.
+- 정렬은 서버에서 한다. 검색원들의 결과를 합치는 곳이 서버이고, 같은 규칙을 화면과 테스트에서 한 번에 확인할 수 있기 때문이다.
+- OpenAlex가 그 논문을 검색으로 돌려주지 않는 것은 OpenAlex 쪽 색인 문제로 보고 따로 고치지 않는다. arXiv가 찾고, 정렬로 앞에 오기 때문이다.
+
+### 변경 파일
+- `docs/Issue.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+- `docs/design/PaperSearch.md`
+- `src/jjabtero/search.py`
+- `src/jjabtero/papers_api.py`
+- `src/jjabtero/titles.py`
+- `tests/test_search.py`
+- `tests/test_papers_api.py`
+- `frontend/src/api.ts`
+- `frontend/src/api.test.ts`
+- `frontend/src/searchState.ts`
+- `frontend/src/searchState.test.ts`
+- `frontend/src/SearchView.vue`
+
+### 결과
+- 검색 결과가 검색어와 맞는 정도로 정렬되어 제목이 같은 논문이 맨 위에 온다. 검색창 옆에서 일반·제목·저자 검색을 고른다. 저자는 쉼표로 여럿을 넣는다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+- `npx vue-tsc --noEmit -p tsconfig.app.json`, `npm run build`: 통과.
+- 실제 OpenAlex·arXiv로 세 방식을 검색하고, 브라우저에서 일반·저자 검색을 확인했다. 브라우저 콘솔 오류는 없었다.
+
 ## I19 인용 양식 복사를 문서용(워드·구글 문서)과 LaTeX용 두 모드로 나누기
 
 - 시작일: 2026-11-15

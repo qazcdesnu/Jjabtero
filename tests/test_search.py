@@ -7,7 +7,7 @@ import httpx2
 import pytest
 
 from fakes import ARXIV_BODY, fixed_responses, make_client
-from jjabtero.search import search_arxiv, search_openalex, search_papers
+from jjabtero.search import SOURCES, SearchResult, author_names, relevance, search_arxiv, search_openalex, search_papers
 
 
 def test_search_openalex_maps_fields() -> None:
@@ -123,3 +123,96 @@ def test_search_papers_reports_unparsable_response() -> None:
     response = search_papers(client, "attention", ["arxiv"], 10)
     assert response.results == []
     assert [error.source for error in response.errors] == ["arxiv"]
+
+
+def result(title: str, authors: list[str] | None = None, source: str = "openalex", year: int | None = None) -> SearchResult:
+    """검색 결과 하나.
+
+    @doc: docs/design/PaperSearch.md#5-테스트
+    """
+    return SearchResult(source=source, source_id=title, title=title, authors=authors or [], item_type="other", year=year)
+
+
+def test_author_names_split() -> None:
+    """저자 검색어를 쉼표, 세미콜론, &, and로 나눈다.
+
+    @doc: docs/design/PaperSearch.md#5-테스트
+    """
+    assert author_names("Robeyns, Szummer; Aitchison") == ["Robeyns", "Szummer", "Aitchison"]
+    assert author_names("Maxime Robeyns and Laurence Aitchison") == ["Maxime Robeyns", "Laurence Aitchison"]
+    assert author_names("Robeyns") == ["Robeyns"]
+
+
+def test_relevance_prefers_exact_title_then_phrase_then_words() -> None:
+    """제목이 같으면 가장 높고, 검색어가 제목 안에 있으면 다음, 그 밖에는 낱말 비율이다. 일반 검색은 저자도 본다.
+
+    @doc: docs/design/PaperSearch.md#5-테스트
+    """
+    query = "a self-improving coding agent"
+    exact = relevance(result("A Self-Improving Coding Agent"), query)
+    phrase = relevance(result("Towards a Self-Improving Coding Agent for Science"), query)
+    words = relevance(result("Values Shape What Self-Improving Coding Agents Build"), query)
+    assert exact > phrase > words > 0
+    assert relevance(result("Unrelated"), query) == 0
+    by_author = relevance(result("Something", ["Maxime Robeyns", "Laurence Aitchison"]), "Robeyns Aitchison")
+    assert by_author == 0.5
+    assert relevance(result("Something", ["Maxime Robeyns"]), "Robeyns Aitchison", "title") == 0
+
+
+def test_relevance_author_mode_counts_found_authors() -> None:
+    """저자 검색은 찾는 저자 가운데 결과에 있는 비율이고, 이름 낱말이 모두 한 저자에 있어야 한다.
+
+    @doc: docs/design/PaperSearch.md#5-테스트
+    """
+    paper = result("X", ["Maxime Robeyns", "Martin Szummer", "Laurence Aitchison"])
+    assert relevance(paper, "Robeyns, Aitchison", "author") == 1.0
+    assert relevance(paper, "Robeyns, Kingma", "author") == 0.5
+    assert relevance(paper, "Maxime Aitchison", "author") == 0.0
+
+
+def test_modes_change_queries() -> None:
+    """제목·저자 검색은 OpenAlex 필터와 arXiv ti:, au:로 바꿔 보낸다.
+
+    @doc: docs/design/PaperSearch.md#5-테스트
+    """
+    sent: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        sent.append(request)
+        if request.url.host == "api.openalex.org":
+            return httpx2.Response(200, json={"results": []})
+        return httpx2.Response(200, text='<feed xmlns="http://www.w3.org/2005/Atom"></feed>')
+
+    client = make_client(handler)
+    search_openalex(client, "a self-improving, coding agent", 5, "title")
+    search_openalex(client, "Robeyns, Maxime Aitchison", 5, "author")
+    search_arxiv(client, "a self-improving coding agent", 5, "title")
+    search_arxiv(client, "Robeyns, Laurence Aitchison", 5, "author")
+    openalex = [request.url.params for request in sent if request.url.host == "api.openalex.org"]
+    assert openalex[0]["filter"] == "title.search:a self-improving coding agent" and "search" not in openalex[0]
+    assert openalex[1]["filter"] == "raw_author_name.search:Robeyns,raw_author_name.search:Maxime Aitchison"
+    arxiv = [request.url.params["search_query"] for request in sent if request.url.host != "api.openalex.org"]
+    assert arxiv == ["ti:self-improving AND ti:coding AND ti:agent", 'au:Robeyns AND au:"Laurence Aitchison"']
+
+
+def test_search_papers_sorts_by_relevance(monkeypatch: pytest.MonkeyPatch) -> None:
+    """검색원 순서와 상관없이 제목이 같은 결과를 맨 앞에 두고, 저자 검색은 같은 점수끼리 최신 논문을 앞에 둔다.
+
+    @doc: docs/design/PaperSearch.md#5-테스트
+    """
+    found = {
+        "openalex": [result("Self-Improving AI Coding Agents"), result("Unrelated Paper", year=2026)],
+        "arxiv": [result("A Self-Improving Coding Agent", source="arxiv")],
+    }
+    monkeypatch.setitem(SOURCES, "openalex", lambda client, query, limit, mode: found["openalex"])
+    monkeypatch.setitem(SOURCES, "arxiv", lambda client, query, limit, mode: found["arxiv"])
+    response = search_papers(make_client(lambda request: httpx2.Response(500)), "a self-improving coding agent", ["openalex", "arxiv"], 10)
+    assert [item.title for item in response.results] == [
+        "A Self-Improving Coding Agent",
+        "Self-Improving AI Coding Agents",
+        "Unrelated Paper",
+    ]
+    found["openalex"] = [result("Old", ["Laurence Aitchison"], year=2019), result("New", ["Laurence Aitchison"], year=2025)]
+    found["arxiv"] = []
+    response = search_papers(make_client(lambda request: httpx2.Response(500)), "Aitchison", ["openalex", "arxiv"], 10, "author")
+    assert [item.title for item in response.results] == ["New", "Old"]

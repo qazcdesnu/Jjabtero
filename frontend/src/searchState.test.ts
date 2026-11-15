@@ -37,7 +37,10 @@ describe('createSearchState', () => {
 
     await search.run()
 
-    expect(deps.searchPapers).toHaveBeenCalledWith('attention', ['openalex', 'arxiv'])
+    expect(deps.searchPapers).toHaveBeenCalledWith('attention', ['openalex', 'arxiv'], 'all')
+    search.state.mode = 'author'
+    await search.run()
+    expect(deps.searchPapers).toHaveBeenLastCalledWith('attention', ['openalex', 'arxiv'], 'author')
     expect(search.state.results).toEqual([result])
     expect(search.state.failures).toEqual(failures)
     expect(search.state.selectedKey).toBeNull()
