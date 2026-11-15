@@ -48,4 +48,14 @@ Zotero형 3단 배치다. 사용자가 골랐다.
 ## 4. 테스트와 확인
 
 - 화면 로직은 `.ts` 모듈에 두고 Vitest로 테스트한다([시스템 구조](../Architecture.md#2-디렉터리-구조)의 `.vue` 제약). [navigation.test](../../frontend/src/navigation.test.ts)는 화면 목록과 처음 화면을 확인한다.
+- [lazyView.test](../../frontend/src/lazyView.test.ts)는 나중에 불러오는 화면의 자동 새로고침(한 번만, 1분 안 되풀이 막기, 기록할 곳이 없으면 하지 않기)을 확인한다.
 - 모양은 자동 테스트로 확인하지 않는다. 화면을 크게 바꾼 작업은 빌드한 앱을 헤드리스 브라우저로 찍어 확인하고, 그 결과를 작업 기록에 적는다.
+
+## 5. 나중에 불러오는 화면
+
+PDF 리더와 인용 그래프는 무거운 라이브러리(pdf.js, ECharts)를 쓰므로, 그 화면을 처음 열 때 화면 파일을 따로 불러온다. [lazyView](../../frontend/src/lazyView.ts#lazyView)가 Vue의 `defineAsyncComponent`를 감싸 만든다.
+
+- 화면 파일 이름에는 내용 해시가 붙는다(`ReaderView-<해시>.js`). 새로 배포하면 첫 화면 파일이 바뀌고 그것을 불러오는 화면 파일의 해시도 바뀌며, 서버에서 옛 파일은 사라진다. 그래서 배포 전에 열어 둔 탭에서 그 화면을 처음 열면 옛 파일을 불러오지 못한다. `defineAsyncComponent`는 이때 아무것도 그리지 않아 칸이 비어 보였다([이슈 H1](../Issue.md)).
+- 불러오기에 실패하면 페이지를 한 번 새로고침한다([reloadingLoader](../../frontend/src/lazyView.ts#reloadingLoader)). 새로고침하면 새 첫 화면 파일과 새 화면 파일 이름을 받는다. 서버는 `index.html`을 매번 확인하게 내려준다([앱 골격 설계](AppSkeleton.md#1-백엔드-앱)).
+- 새로고침이 끝없이 되풀이되지 않도록, 마지막 새로고침 시각을 세션 저장소의 [RELOAD_KEY](../../frontend/src/lazyView.ts#RELOAD_KEY)에 적고 1분([RELOAD_GUARD_MS](../../frontend/src/lazyView.ts#RELOAD_GUARD_MS)) 안에는 다시 하지 않는다([shouldReload](../../frontend/src/lazyView.ts#shouldReload)). 세션 저장소를 쓸 수 없으면 새로고침하지 않는다.
+- 새로고침하지 않거나 새로고침한 뒤에도 실패하면, 빈 칸 대신 안내 화면([LoadFailedView](../../frontend/src/LoadFailedView.vue))을 보여 준다. 실패 까닭과 "새로고침" 버튼이 있다.

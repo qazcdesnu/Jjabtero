@@ -13,13 +13,14 @@ import Button from 'primevue/button'
 import Splitter from 'primevue/splitter'
 import SplitterPanel from 'primevue/splitterpanel'
 import Tag from 'primevue/tag'
-import { defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { fetchHealth, type Health } from './api'
 import { createAuthState, watchUnauthorized } from './auth'
 import LoginView from './LoginView.vue'
 import { createDriveState } from './driveState'
 import DriveStatus from './DriveStatus.vue'
 import LibraryView from './LibraryView.vue'
+import { lazyView } from './lazyView'
 import { createLibraryState } from './libraryState'
 import { DEFAULT_VIEW } from './navigation'
 import PaperDetail from './PaperDetail.vue'
@@ -30,9 +31,9 @@ import SettingsView from './SettingsView.vue'
 import RecommendView from './RecommendView.vue'
 
 // pdf.js가 무거우므로 리더는 처음 열 때 불러온다.
-const ReaderView = defineAsyncComponent(() => import('./ReaderView.vue'))
+const ReaderView = lazyView(() => import('./ReaderView.vue'))
 // ECharts도 무거우므로 그래프 화면을 처음 열 때 불러온다.
-const GraphView = defineAsyncComponent(() => import('./GraphView.vue'))
+const GraphView = lazyView(() => import('./GraphView.vue'))
 import Sidebar from './Sidebar.vue'
 
 const view = ref<string>(DEFAULT_VIEW)

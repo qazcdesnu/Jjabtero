@@ -15,7 +15,7 @@
 | vis-network | 쉬움 | 없음 | 관리가 뜸하고 통계를 못 그린다. |
 
 - 서재 그래프는 많아야 수백 개 점이라 ECharts의 힘 배치로 충분하다.
-- 무거우므로(전체 약 1MB) `echarts/core`에 필요한 부품(`GraphChart`, 축·격자·도움말·범례 부품, `CanvasRenderer`)만 등록해 크기를 줄이고, 그래프 화면을 처음 열 때만 불러온다(`App.vue`의 `defineAsyncComponent`). 첫 화면 번들을 키우지 않기 위해서다([이슈 I11](../Issue.md)).
+- 무거우므로(전체 약 1MB) `echarts/core`에 필요한 부품(`GraphChart`, 축·격자·도움말·범례 부품, `CanvasRenderer`)만 등록해 크기를 줄이고, 그래프 화면을 처음 열 때만 불러온다([UI 기반 설계의 나중에 불러오는 화면](UiLayout.md#5-나중에-불러오는-화면)). 첫 화면 번들을 키우지 않기 위해서다([이슈 I11](../Issue.md)).
 
 ## 2. 그래프 데이터
 
