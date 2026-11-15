@@ -928,3 +928,115 @@ def paper_related(paper_id: int, request: Request) -> PaperRelated:
         state="ready", citing_count=len(rows["citations"]), reference_count=len(rows["references"]), works=works
     )
 
+
+
+# @doc: docs/design/Citations.md#6-api와-화면
+RECOMMEND_LIMIT = 50
+
+
+@dataclass
+class Recommendation:
+    """서재 밖 추천 하나. 서재 논문마다의 가까운 점수를 더한 값과 이어진 서재 논문들이다.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+
+    work: str
+    score: float = 0.0
+    sources: list[str] = field(default_factory=list)
+
+
+def recommend_works(
+    rows_by_paper: dict[str, dict[str, Any]], exclude: set[str], limit: int = RECOMMEND_LIMIT
+) -> list[Recommendation]:
+    """서재 논문들과 인용으로 가까운 서재 밖 논문을 점수 순으로 돌려준다.
+
+    서재 논문 A마다 `related_works`의 점수를 구해 같은 논문끼리 더한다. 여러 서재 논문과 이어질수록 위로 온다.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+    found: dict[str, Recommendation] = {}
+    for paper, rows in rows_by_paper.items():
+        for relation in related_works(paper, rows, len(rows["citations"])):
+            if relation.work in exclude:
+                continue
+            item = found.setdefault(relation.work, Recommendation(relation.work))
+            item.score += relation.score
+            item.sources.append(paper)
+    ranked = sorted(found.values(), key=lambda item: (-item.score, -len(item.sources), item.work))
+    for item in ranked:
+        item.score = round(item.score, 4)
+    return ranked[:limit]
+
+
+class RecommendationSource(BaseModel):
+    """추천과 이어진 서재 논문.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+
+    paper_id: int
+    title: str
+
+
+class RecommendedWork(CitedWork):
+    """서재 밖 추천 논문 하나.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+
+    score: float
+    sources: list[RecommendationSource]
+
+
+class Recommendations(BaseModel):
+    """서재 밖 추천 목록.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+
+    papers: int
+    papers_used: int
+    works: list[RecommendedWork]
+
+
+@router.get("/recommendations")
+def recommendations(request: Request) -> Recommendations:
+    """`GET /api/citations/recommendations`를 처리한다.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+    sync: CitationSync = request.app.state.citations
+    with Session(sync.library_engine) as session:
+        papers = list(session.scalars(select(Paper)))
+    by_work = {paper.openalex_id: paper for paper in papers if paper.openalex_id}
+    library_dois = {paper.doi for paper in papers if paper.doi}
+    store = sync.store
+    rows_by_paper = {}
+    for work_id in by_work:
+        rows = store.relation_rows(work_id)
+        if rows["references"] or rows["citations"]:
+            rows_by_paper[work_id] = rows
+    ranked = recommend_works(rows_by_paper, set(by_work))
+    wanted = {item.work for item in ranked}
+    known = store.works_by_id(wanted)
+    missing = sorted(wanted - set(known))
+    if missing:
+        try:
+            store.save_works(lookup_works(sync.http, missing, sync.clock()))
+            known = store.works_by_id(wanted)
+        except (OpenAlexBudgetError, httpx2.HTTPError, ValueError):
+            pass
+    works = []
+    for item in ranked:
+        base = _cited_work({"work": item.work, **known.get(item.work, {})}, {})
+        if base.doi and base.doi in library_dois:
+            continue
+        works.append(
+            RecommendedWork(
+                **base.model_dump(),
+                score=item.score,
+                sources=[RecommendationSource(paper_id=by_work[s].id, title=by_work[s].title) for s in item.sources],
+            )
+        )
+    return Recommendations(papers=len(papers), papers_used=len(rows_by_paper), works=works)

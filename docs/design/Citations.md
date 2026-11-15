@@ -99,6 +99,11 @@
   - 함께 인용된 논문은 서지 정보가 없으므로 이 API를 부를 때 없는 것만 OpenAlex에서 100건씩 받아 `works`에 둔다([lookup_works](../../src/jjabtero/citations.py#lookup_works), [CitationStore.works_by_id](../../src/jjabtero/citations.py#CitationStore.works_by_id), [CitationStore.save_works](../../src/jjabtero/citations.py#CitationStore.save_works)). 받지 못하면 제목 없이 ID로 보여 준다.
 - 논문 상세에 "인용" 칸([CitationLists](../../frontend/src/CitationLists.vue))을 둔다. "가까운 논문"이 첫 칸이고, 항목마다 까닭을 작은 표시로 보여 준다([relationReasons](../../frontend/src/citationListState.ts#relationReasons)). API 호출은 [fetchPaperRelated](../../frontend/src/api.ts#fetchPaperRelated)(타입 [PaperRelated](../../frontend/src/api.ts#PaperRelated), [RelatedWork](../../frontend/src/api.ts#RelatedWork))다. "피인용 n"과 "참고문헌 n"을 바꿔 보고, 피인용은 기간과 "n편 가운데 피인용 많은 순 m편"을 알린다. 항목마다 제목(DOI 또는 OpenAlex로 이어지는 링크), 저자·연도·게재처, 피인용 수, 공유 참고문헌 수를 보여 주고, 서재에 있으면 "서재에 있음", 없으면 "서재에 담기"를 둔다. 상태가 `ready`가 아니면 그 까닭을 한 줄로 알린다.
   - "서재에 담기"는 항목을 서재 입력으로 바꿔([citedWorkInput](../../frontend/src/citationListState.ts#citedWorkInput): 원문 주소는 DOI, 없으면 OpenAlex 주소, OpenAlex ID 포함) 논문을 추가하고, 그 항목을 "서재에 있음"으로 바꾼 뒤 서재 목록을 다시 읽는다. DOI가 이미 있으면 그 논문으로 표시한다. 상태는 [createCitationListState](../../frontend/src/citationListState.ts#createCitationListState)가 가지며, 다른 논문을 고른 뒤 늦게 온 응답은 버린다. API 호출은 [fetchPaperCitations](../../frontend/src/api.ts#fetchPaperCitations)(타입 [PaperCitations](../../frontend/src/api.ts#PaperCitations), [CitedWork](../../frontend/src/api.ts#CitedWork))다.
+- `GET /api/citations/recommendations`는 [recommendations](../../src/jjabtero/citations.py#recommendations)가 처리하며 서재 밖 추천 [Recommendations](../../src/jjabtero/citations.py#Recommendations)(서재 논문 수, 계산에 쓴 논문 수, 항목)을 돌려준다.
+  - 인용 데이터가 있는 서재 논문 A마다 가까운 논문 점수(`related_works`)를 구해 같은 논문끼리 더한다([recommend_works](../../src/jjabtero/citations.py#recommend_works), 결과는 [Recommendation](../../src/jjabtero/citations.py#Recommendation)). 여러 서재 논문과 이어질수록 점수가 커진다. 같은 점수는 이어진 서재 논문 수, ID 순이다.
+  - 서재에 있는 논문(OpenAlex ID 또는 DOI가 같은 것)은 뺀다. 상위 50편([RECOMMEND_LIMIT](../../src/jjabtero/citations.py#RECOMMEND_LIMIT))을 주고, 서지 정보가 없는 것은 가까운 논문처럼 OpenAlex에서 받아 둔다.
+  - 항목은 [RecommendedWork](../../src/jjabtero/citations.py#RecommendedWork)로, `CitedWork`에 점수와 이어진 서재 논문 목록([RecommendationSource](../../src/jjabtero/citations.py#RecommendationSource): 논문 ID, 제목)을 더한 것이다.
+- 왼쪽 화면 목록에 "추천"을 두고, 설정처럼 가운데·오른쪽을 합친 넓은 칸에 추천 화면([RecommendView](../../frontend/src/RecommendView.vue))을 보여 준다. 알림처럼 띄우지 않는다. 항목마다 제목, 저자·연도·게재처, 이어진 서재 논문, 점수, 피인용 수, "서재에 담기"를 두고, "다시 계산"으로 새로 읽는다. 상태는 [createRecommendState](../../frontend/src/recommendState.ts#createRecommendState), API 호출은 [fetchRecommendations](../../frontend/src/api.ts#fetchRecommendations)(타입 [Recommendations](../../frontend/src/api.ts#Recommendations), [RecommendedWork](../../frontend/src/api.ts#RecommendedWork))다.
 - 설정 페이지([사용자 설정 설계](Settings.md#4-화면))에 "인용 데이터" 칸을 두어 상태를 보여 주고 "인용 데이터 새로 받기" 버튼을 둔다. 화면은 [CitationStatusPanel](../../frontend/src/CitationStatusPanel.vue)이고, 응답 타입은 [CitationStatus](../../frontend/src/api.ts#CitationStatus), API 호출은 [fetchCitationStatus](../../frontend/src/api.ts#fetchCitationStatus)와 [refreshCitations](../../frontend/src/api.ts#refreshCitations)다.
 
 ## 7. 테스트
@@ -112,13 +117,14 @@
 - 7일 지난 논문만 다시 가져옴, 지운 논문의 데이터 정리, 429에서 멈춤.
 - 캐시 버전이 다르면 다시 만듦, 드라이브에 올리고 받기.
 - API 상태와 새로 받기.
+- 추천 점수 더하기(여러 서재 논문과 이어진 논문이 위로, 서재 논문 빼기, 한도)와 API(빈 서재, 이어진 서재 논문, 서재 DOI 빼기, 없는 서지 정보 받기).
 - 가까운 논문 점수(직접 인용, 함께 인용된 비율, 공유 참고문헌 비율, 자신 빼기, 순서)와 API(점수 순, 없는 서지 정보를 한 번만 받기).
 - 논문의 인용 목록 API: 가져오기 전 `pending`, 가져온 뒤 기간·건수·한도, 피인용 많은 순 목록과 서지 정보, 서재에 있는 논문 표시, DOI 없음·찾지 못함·없는 논문.
 
-[citationListState.test](../../frontend/src/citationListState.test.ts)는 인용 논문의 서재 입력 변환, 목록 읽기, 담기와 표시, 이미 있는 DOI, 실패 메시지, 늦게 온 응답 버리기, 가까운 논문 읽기와 담기 표시, 까닭 문구를 확인한다.
+[citationListState.test](../../frontend/src/citationListState.test.ts)는 인용 논문의 서재 입력 변환, 목록 읽기, 담기와 표시, 이미 있는 DOI, 실패 메시지, 늦게 온 응답 버리기, 가까운 논문 읽기와 담기 표시, 까닭 문구를 확인한다. [recommendState.test](../../frontend/src/recommendState.test.ts)는 추천 읽기, 담기와 표시, 이미 있음, 실패 메시지를 확인한다.
 
 [api.test](../../frontend/src/api.test.ts)는 `toPaperInput`의 OpenAlex ID와 인용 데이터 API 호출을 확인한다.
 
 ## 8. 미결정 사항
 
-- 서재 밖 추천 점수: M3-T6.
+- 없음. 점수 식은 쓰면서 고친다.
