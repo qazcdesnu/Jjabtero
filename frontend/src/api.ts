@@ -464,11 +464,19 @@ export async function fetchPaperCitations(paperId: number): Promise<PaperCitatio
 }
 
 // @doc: docs/design/Citations.md#6-api와-화면
+export type Direction = 'prior' | 'later'
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export type DirectionBasis = 'citation' | 'date'
+
+// @doc: docs/design/Citations.md#6-api와-화면
 export interface RelatedWork extends CitedWork {
   score: number
   cites_paper: boolean
   cited_by_paper: boolean
   cocited: number
+  direction: Direction | null
+  direction_basis: DirectionBasis | null
 }
 
 // @doc: docs/design/Citations.md#6-api와-화면
@@ -491,7 +499,8 @@ export async function fetchPaperRelated(paperId: number): Promise<PaperRelated> 
 // @doc: docs/design/Citations.md#6-api와-화면
 export interface RecommendedWork extends CitedWork {
   score: number
-  sources: { paper_id: number; title: string }[]
+  sources: { paper_id: number; title: string; direction: Direction | null; direction_basis: DirectionBasis | null }[]
+  direction: Direction | 'mixed' | null
 }
 
 // @doc: docs/design/Citations.md#6-api와-화면

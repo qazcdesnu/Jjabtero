@@ -6,7 +6,7 @@ import SelectButton from 'primevue/selectbutton'
 import Tag from 'primevue/tag'
 import { computed, ref, watch } from 'vue'
 import type { CitedWork, RelatedWork } from './api'
-import { createCitationListState, relationReasons } from './citationListState'
+import { createCitationListState, directionTag, relationReasons } from './citationListState'
 
 const props = defineProps<{ paperId: number }>()
 const emit = defineEmits<{ added: [] }>()
@@ -32,6 +32,10 @@ const items = computed<CitedWork[]>(() => {
 
 function reasons(work: CitedWork): string[] {
   return 'score' in work ? relationReasons(work as RelatedWork) : []
+}
+
+function direction(work: CitedWork) {
+  return 'score' in work ? directionTag((work as RelatedWork).direction, (work as RelatedWork).direction_basis) : null
 }
 
 function authorLine(work: CitedWork): string {
@@ -81,6 +85,13 @@ function authorLine(work: CitedWork): string {
             <div class="flex flex-wrap items-center gap-2 text-xs text-surface-500">
               <span v-if="work.cited_by_count !== null">피인용 {{ work.cited_by_count.toLocaleString() }}</span>
               <template v-if="tab === 'related'">
+                <Tag
+                  v-if="direction(work)"
+                  :value="direction(work)!.label"
+                  :severity="direction(work)!.severity"
+                  :title="direction(work)!.hint"
+                  class="!px-1.5 !py-0 !text-xs"
+                />
                 <span v-for="reason in reasons(work)" :key="reason" class="rounded bg-surface-100 px-1.5 py-0.5 dark:bg-surface-800">{{ reason }}</span>
               </template>
               <span v-else-if="work.shared_refs">공유 참고문헌 {{ work.shared_refs }}</span>

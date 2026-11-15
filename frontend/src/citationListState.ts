@@ -7,6 +7,8 @@ import {
   fetchPaperCitations,
   fetchPaperRelated,
   type CitedWork,
+  type Direction,
+  type DirectionBasis,
   type PaperCitations,
   type PaperRelated,
   type PaperInput,
@@ -40,6 +42,23 @@ export function relationReasons(work: {
   if (work.cocited) reasons.push(`함께 인용 ${work.cocited}회`)
   if (work.shared_refs) reasons.push(`공유 참고문헌 ${work.shared_refs}`)
   return reasons
+}
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export function directionTag(
+  direction: Direction | 'mixed' | null,
+  basis: DirectionBasis | null = null,
+): { label: string; hint: string; severity: 'info' | 'warn' | 'secondary' } | null {
+  if (direction === 'mixed') return { label: '선행·후행', hint: '이어진 서재 논문에 따라 선행이기도 하고 후행이기도 합니다', severity: 'secondary' }
+  if (direction === 'prior') {
+    const hint = basis === 'citation' ? '기준 논문이 인용한 앞선 연구' : '기준 논문보다 먼저 공개된 논문'
+    return { label: '선행', hint, severity: 'info' }
+  }
+  if (direction === 'later') {
+    const hint = basis === 'citation' ? '기준 논문을 인용한 후속 연구' : '기준 논문보다 나중에 공개된 논문'
+    return { label: '후행', hint, severity: 'warn' }
+  }
+  return null
 }
 
 // @doc: docs/design/Citations.md#6-api와-화면
