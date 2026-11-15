@@ -24,6 +24,7 @@ export interface TextPiece {
   x: number
   y: number
   width?: number
+  height?: number
 }
 
 // @doc: docs/design/ReaderCitations.md#3-참고문헌-항목-읽기
