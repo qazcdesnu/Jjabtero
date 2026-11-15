@@ -2,6 +2,48 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M3-T6 서재 밖 논문 추천
+
+- 시작일: 2026-11-15
+- 완료일: 2026-11-15
+- 근거 문서: [인용 데이터 설계](design/Citations.md#6-api와-화면)
+- 참고 자료: 없음
+
+### 계획
+- 서재 논문 전체와 인용으로 가까운 서재 밖 논문을 점수 순으로 주는 API와 추천 화면을 만든다.
+
+### 진행 기록
+- 2026-11-15: M3-T5를 마치고 권장 순서대로 시작했다. PR #39(M3-T5)가 아직 병합되지 않아 그 브랜치에서 작업 브랜치를 만들었다.
+- 2026-11-15: 추천 점수를 서재 논문마다의 가까운 논문 점수의 합으로 정했다. 추천 계산과 API를 구현하고 테스트를 더했다.
+- 2026-11-15: 화면에 "추천" 화면(왼쪽 목록, 넓은 칸)과 상태 모듈을 더하고 테스트를 더했다. 추천을 어디에 보여 줄지는 앞서 사용자에게 제안했으나 답을 받지 못해, 제안대로 알림 없이 왼쪽 목록의 화면으로 두었다.
+- 2026-11-15: 실제 OpenAlex 데이터로 서재 2편('Attention Is All You Need', 'Squeeze-and-Excitation Networks')의 추천을 확인했다. 두 논문 모두와 이어진 Deep Residual Learning(점수 2.10), NASNet, VGG, ImageNet Challenge, ResNeXt 등이 위에 왔다.
+- 2026-11-15: 인용 데이터 설계에 추천 API와 화면, 테스트를, UI 기반 설계에 화면 목록과 넓은 칸을 더했다.
+
+### 결정 사항
+- 추천 점수는 서재 논문마다의 가까운 논문 점수를 더한 값이다. 여러 서재 논문과 이어질수록 위에 오고, 까닭(이어진 서재 논문)을 그대로 보여 줄 수 있기 때문이다([인용 데이터 설계](design/Citations.md#6-api와-화면)).
+- 추천은 왼쪽 목록의 "추천" 화면에서 볼 때 계산한다. 알림처럼 띄우지 않는다. 제안했던 방식이다.
+
+### 변경 파일
+- `src/jjabtero/citations.py`
+- `tests/test_citations.py`
+- `frontend/src/api.ts`
+- `frontend/src/recommendState.ts`
+- `frontend/src/recommendState.test.ts`
+- `frontend/src/RecommendView.vue`
+- `frontend/src/navigation.ts`
+- `frontend/src/App.vue`
+- `docs/design/Citations.md`
+- `docs/design/UiLayout.md`
+- `docs/Roadmap.md`
+- `docs/Done.md`
+
+### 결과
+- "추천" 화면에서 서재 전체와 인용으로 가까운 서재 밖 논문 50편을 이어진 서재 논문과 함께 보고 바로 담을 수 있다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과(백엔드 새 테스트 2개, 프론트엔드 새 테스트 2개 포함).
+- `vue-tsc` 타입 검사와 `npm run build` 통과. 실제 OpenAlex 데이터로 브라우저에서 확인했다.
+
 ## M3-T5 논문별 가까운 논문(서지 결합, 공동 인용, 직접 인용)
 
 - 시작일: 2026-11-15

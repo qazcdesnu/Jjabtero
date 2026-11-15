@@ -487,3 +487,25 @@ export async function fetchPaperRelated(paperId: number): Promise<PaperRelated> 
   }
   return (await response.json()) as PaperRelated
 }
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export interface RecommendedWork extends CitedWork {
+  score: number
+  sources: { paper_id: number; title: string }[]
+}
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export interface Recommendations {
+  papers: number
+  papers_used: number
+  works: RecommendedWork[]
+}
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export async function fetchRecommendations(): Promise<Recommendations> {
+  const response = await fetch('/api/citations/recommendations')
+  if (!response.ok) {
+    throw new Error(`추천 불러오기 실패: ${response.status}`)
+  }
+  return (await response.json()) as Recommendations
+}

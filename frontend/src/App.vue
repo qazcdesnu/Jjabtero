@@ -6,6 +6,7 @@
 <!-- @doc: docs/design/Auth.md#6-화면 -->
 <!-- @doc: docs/design/Settings.md#4-화면 -->
 <!-- @doc: docs/design/Reader.md#6-화면 -->
+<!-- @doc: docs/design/Citations.md#6-api와-화면 -->
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Splitter from 'primevue/splitter'
@@ -25,6 +26,7 @@ import { createSearchState } from './searchState'
 import SearchResultDetail from './SearchResultDetail.vue'
 import SearchView from './SearchView.vue'
 import SettingsView from './SettingsView.vue'
+import RecommendView from './RecommendView.vue'
 
 // pdf.js가 무거우므로 리더는 처음 열 때 불러온다.
 const ReaderView = defineAsyncComponent(() => import('./ReaderView.vue'))
@@ -99,12 +101,13 @@ onMounted(async () => {
         <ReaderView :key="reading.id" :paper-id="reading.id" :title="reading.title" @close="reading = null" />
       </SplitterPanel>
     </Splitter>
-    <Splitter v-else-if="view === 'settings'" key="settings" class="min-h-0 flex-1 rounded-none border-0">
+    <Splitter v-else-if="view === 'settings' || view === 'recommend'" key="wide" class="min-h-0 flex-1 rounded-none border-0">
       <SplitterPanel :size="15" :min-size="10" class="overflow-auto">
         <Sidebar v-model="view" :library="library" />
       </SplitterPanel>
       <SplitterPanel :size="85" :min-size="50" class="overflow-auto">
-        <SettingsView />
+        <SettingsView v-if="view === 'settings'" />
+        <RecommendView v-else @added="library.load()" />
       </SplitterPanel>
     </Splitter>
     <Splitter v-else key="main" class="min-h-0 flex-1 rounded-none border-0">

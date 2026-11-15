@@ -473,3 +473,45 @@ def test_paper_related_api_fills_missing_works(tmp_path: Path) -> None:
     client.get(f"/api/papers/{paper_id}/related")
     lookups = [r for r in openalex.requests if r.url.params.get("filter", "").startswith("openalex_id:") and "W50" in r.url.params["filter"]]
     assert len(lookups) == 1
+
+
+def test_recommend_works_sums_scores_and_excludes_library() -> None:
+    """여러 서재 논문과 이어진 논문의 점수를 더하고, 서재 논문은 빼며, 이어진 서재 논문을 기억한다.
+
+    @doc: docs/design/Citations.md#7-테스트
+    """
+    from jjabtero.citations import recommend_works
+
+    rows_by_paper = {
+        "WA": {"references": {"W1", "WB"}, "citations": {}, "cocitations": {}},
+        "WB": {"references": {"W1", "W2"}, "citations": {}, "cocitations": {}},
+    }
+    ranked = recommend_works(rows_by_paper, {"WA", "WB"})
+    assert [item.work for item in ranked] == ["W1", "W2"]
+    assert ranked[0].score == 1.0 and ranked[0].sources == ["WA", "WB"]
+    assert ranked[1].score == 0.5 and ranked[1].sources == ["WB"]
+    assert len(recommend_works(rows_by_paper, {"WA", "WB"}, limit=1)) == 1
+
+
+def test_recommendations_api(tmp_path: Path) -> None:
+    """추천 API는 서재 밖 논문을 점수 순으로 주고, 이어진 서재 논문과 서지 정보를 담으며, 서재 DOI는 뺀다.
+
+    @doc: docs/design/Citations.md#7-테스트
+    """
+    app = create_app(
+        frontend_dist=tmp_path / "missing",
+        db_path=tmp_path / "library.db",
+        http_client=httpx2.Client(transport=httpx2.MockTransport(FakeOpenAlex())),
+    )
+    client = TestClient(app)
+    empty = client.get("/api/citations/recommendations").json()
+    assert (empty["papers"], empty["papers_used"], empty["works"]) == (0, 0, [])
+    paper_id = client.post("/api/papers", json={"title": "Base", "openalex_id": A}).json()["id"]
+    app.state.citations.run_once()
+    client.post("/api/papers", json={"title": "Owned", "doi": "10.1/w11"})
+    body = client.get("/api/citations/recommendations").json()
+    assert (body["papers"], body["papers_used"]) == (2, 1)
+    ids = [item["openalex_id"] for item in body["works"]]
+    assert ids[0] == "W10" and "W11" not in ids and A not in ids
+    assert body["works"][0]["sources"] == [{"paper_id": paper_id, "title": "Base"}]
+    assert next(item for item in body["works"] if item["openalex_id"] == "W50")["title"] == "Paper W50"
