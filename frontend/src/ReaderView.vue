@@ -26,7 +26,15 @@ import {
   updateAnnotation,
   type Annotation,
 } from './api'
-import { HIGHLIGHT_COLORS, colorFill, hitTest, normalizeRects, type Rect } from './annotations'
+import {
+  HIGHLIGHT_COLORS,
+  annotationSummary,
+  colorFill,
+  dragRect,
+  hitTest,
+  normalizeRects,
+  type Rect,
+} from './annotations'
 import {
   clampPage,
   createPositionSaver,
@@ -67,6 +75,86 @@ const annotations = ref<Annotation[]>([])
 const annotationError = ref('')
 const pending = ref<{ page: number; rects: Rect[]; text: string; left: number; top: number } | null>(null)
 const editing = ref<{ annotation: Annotation; note: string; left: number; top: number } | null>(null)
+const noteMode = ref(false)
+const dragging = ref<{ page: number; start: { x: number; y: number }; current: { x: number; y: number } } | null>(null)
+const drafting = ref<{ page: number; rect: Rect; note: string; left: number; top: number } | null>(null)
+const listOpen = ref(false)
+const dragPreview = computed(() => (dragging.value ? dragRect(dragging.value.start, dragging.value.current) : null))
+
+function pagePoint(pageElement: HTMLElement, event: MouseEvent) {
+  const box = pageElement.getBoundingClientRect()
+  return { x: (event.clientX - box.left) / box.width, y: (event.clientY - box.top) / box.height }
+}
+
+function onMouseDown(event: MouseEvent) {
+  if (!noteMode.value || (event.target as HTMLElement).closest('.reader-popup')) return
+  const pageElement = pageOf(event.target as Node)
+  if (!pageElement) return
+  event.preventDefault()
+  const point = pagePoint(pageElement, event)
+  dragging.value = { page: Number(pageElement.dataset.page), start: point, current: point }
+  pending.value = null
+  editing.value = null
+  drafting.value = null
+}
+
+function onMouseMove(event: MouseEvent) {
+  const drag = dragging.value
+  if (!drag) return
+  const pageElement = pageElements.value[drag.page - 1]
+  if (pageElement) drag.current = pagePoint(pageElement, event)
+}
+
+function finishDrag(event: MouseEvent) {
+  const drag = dragging.value
+  dragging.value = null
+  if (!drag) return
+  const rect = dragRect(drag.start, drag.current)
+  if (!rect) return
+  drafting.value = { page: drag.page, rect, note: '', ...contentPoint(event.clientX, event.clientY) }
+}
+
+async function saveDraft() {
+  const draft = drafting.value
+  if (!draft) return
+  try {
+    const created = await createAnnotation(props.paperId, {
+      kind: 'note',
+      page: draft.page,
+      rects: [draft.rect],
+      color: 'yellow',
+      note: draft.note,
+    })
+    annotations.value = [...annotations.value, created]
+    drafting.value = null
+    noteMode.value = false
+    annotationError.value = ''
+  } catch (error) {
+    showError(error)
+  }
+}
+
+function goToAnnotation(annotation: Annotation) {
+  const element = scroller.value
+  const pageElement = pageElements.value[annotation.page - 1]
+  if (!element || !pageElement) return
+  const rect = annotation.rects[0]
+  const top = tops.value[annotation.page - 1] + rect.y * heights.value[annotation.page - 1]
+  element.scrollTop = Math.max(top - 120, 0)
+  update()
+  editing.value = {
+    annotation,
+    note: annotation.note ?? '',
+    left: pageElement.offsetLeft + rect.x * pageElement.offsetWidth,
+    top: top + rect.h * heights.value[annotation.page - 1],
+  }
+  pending.value = null
+}
+
+const sortedAnnotations = computed(() =>
+  [...annotations.value].sort((a, b) => a.page - b.page || a.rects[0].y - b.rects[0].y || a.id - b.id),
+)
+
 const byPage = computed(() => {
   const pages = new Map<number, Annotation[]>()
   for (const annotation of annotations.value) pages.set(annotation.page, [...(pages.get(annotation.page) ?? []), annotation])
@@ -90,6 +178,11 @@ function showError(error: unknown) {
 
 function onMouseUp(event: MouseEvent) {
   if ((event.target as HTMLElement).closest('.reader-popup')) return
+  if (dragging.value) {
+    finishDrag(event)
+    return
+  }
+  if (noteMode.value) return
   const selection = window.getSelection()
   if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
     const range = selection.getRangeAt(0)
@@ -181,6 +274,9 @@ function onKeyDown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
     pending.value = null
     editing.value = null
+    drafting.value = null
+    dragging.value = null
+    noteMode.value = false
   }
 }
 
@@ -339,12 +435,40 @@ onUnmounted(() => {
         <Button icon="pi pi-search-plus" text rounded aria-label="확대" @click="setScale(nextZoom(scale, 1))" />
         <Button label="너비 맞춤" size="small" text @click="fitWidth" />
       </div>
+      <div class="flex items-center gap-1">
+        <Button
+          icon="pi pi-stop"
+          label="영역 메모"
+          size="small"
+          :text="!noteMode"
+          :aria-pressed="noteMode"
+          title="끌어서 영역을 고르고 메모를 답니다"
+          @click="noteMode = !noteMode"
+        />
+        <Button
+          icon="pi pi-list"
+          :label="`주석 ${annotations.length}`"
+          size="small"
+          :text="!listOpen"
+          :aria-pressed="listOpen"
+          @click="listOpen = !listOpen"
+        />
+      </div>
     </header>
 
     <Message v-if="annotationError" severity="error" size="small" closable class="mx-3 mt-2" @close="annotationError = ''">
       {{ annotationError }}
     </Message>
-    <div ref="scroller" class="relative min-h-0 flex-1 overflow-auto" @scroll.passive="update" @mouseup="onMouseUp">
+    <div class="flex min-h-0 flex-1">
+    <div
+      ref="scroller"
+      class="relative min-h-0 flex-1 overflow-auto"
+      :class="{ 'reader-note-mode': noteMode }"
+      @scroll.passive="update"
+      @mousedown="onMouseDown"
+      @mousemove="onMouseMove"
+      @mouseup="onMouseUp"
+    >
       <p v-if="loading" class="p-6 text-center text-surface-500">PDF를 여는 중…</p>
       <Message v-if="failure" severity="error" class="m-6">{{ failure }}</Message>
       <div
@@ -366,21 +490,47 @@ onUnmounted(() => {
         <canvas class="absolute inset-0" />
         <div class="pointer-events-none absolute inset-0">
           <template v-for="annotation in byPage.get(index + 1) ?? []" :key="annotation.id">
+            <template v-if="annotation.kind === 'highlight'">
+              <div
+                v-for="(rect, part) in annotation.rects"
+                :key="part"
+                class="reader-highlight absolute"
+                :data-annotation="annotation.id"
+                :style="{
+                  left: `${rect.x * 100}%`,
+                  top: `${rect.y * 100}%`,
+                  width: `${rect.w * 100}%`,
+                  height: `${rect.h * 100}%`,
+                  background: colorFill(annotation.color),
+                  mixBlendMode: 'multiply',
+                }"
+              />
+            </template>
             <div
-              v-for="(rect, part) in annotation.rects"
-              :key="part"
-              class="reader-highlight absolute"
+              v-else
+              class="reader-note absolute rounded-sm border-2 border-amber-400"
               :data-annotation="annotation.id"
               :style="{
-                left: `${rect.x * 100}%`,
-                top: `${rect.y * 100}%`,
-                width: `${rect.w * 100}%`,
-                height: `${rect.h * 100}%`,
-                background: colorFill(annotation.color),
-                mixBlendMode: 'multiply',
+                left: `${annotation.rects[0].x * 100}%`,
+                top: `${annotation.rects[0].y * 100}%`,
+                width: `${annotation.rects[0].w * 100}%`,
+                height: `${annotation.rects[0].h * 100}%`,
+                background: 'rgba(250, 204, 21, 0.10)',
               }"
-            />
+            >
+              <i class="pi pi-comment absolute -top-3 -right-3 rounded-full bg-amber-400 p-1 text-xs text-white" />
+            </div>
           </template>
+          <div
+            v-if="dragging && dragging.page === index + 1 && dragPreview"
+            class="absolute border-2 border-dashed border-amber-500 bg-amber-200/20"
+            :style="{
+              left: `${dragPreview.x * 100}%`,
+              top: `${dragPreview.y * 100}%`,
+              width: `${dragPreview.w * 100}%`,
+              height: `${dragPreview.h * 100}%`,
+            }"
+          />
         </div>
         <div class="textLayer" />
       </div>
@@ -409,7 +559,8 @@ onUnmounted(() => {
         :style="{ left: `${editing.left}px`, top: `${editing.top + 8}px` }"
       >
         <p v-if="editing.annotation.text" class="line-clamp-3 text-xs text-surface-500">“{{ editing.annotation.text }}”</p>
-        <div class="flex gap-1">
+        <span v-if="editing.annotation.kind === 'note'" class="text-xs text-surface-500">{{ editing.annotation.page }}쪽 영역 메모</span>
+        <div v-else class="flex gap-1">
           <button
             v-for="color in HIGHLIGHT_COLORS"
             :key="color.name"
@@ -430,6 +581,57 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
+
+      <div
+        v-if="drafting"
+        class="reader-popup absolute z-20 flex w-72 flex-col gap-2 rounded-md border border-surface-200 bg-surface-0 p-3 shadow-lg dark:border-surface-700 dark:bg-surface-800"
+        :style="{ left: `${drafting.left}px`, top: `${drafting.top + 8}px` }"
+      >
+        <span class="text-xs text-surface-500">{{ drafting.page }}쪽 영역 메모</span>
+        <Textarea v-model="drafting.note" rows="3" auto-resize placeholder="이 영역에 남길 메모" aria-label="영역 메모 내용" fluid autofocus />
+        <div class="flex justify-end gap-1">
+          <Button label="취소" size="small" severity="secondary" text @click="drafting = null" />
+          <Button label="저장" size="small" @click="saveDraft" />
+        </div>
+      </div>
+    </div>
+
+    <aside
+      v-if="listOpen"
+      class="flex w-72 shrink-0 flex-col overflow-auto border-l border-surface-200 bg-surface-0 dark:border-surface-700 dark:bg-surface-900"
+      aria-label="주석 목록"
+    >
+      <p v-if="sortedAnnotations.length === 0" class="p-4 text-sm text-surface-500">
+        글을 골라 하이라이트하거나 "영역 메모"로 메모를 남기면 여기에 모입니다.
+      </p>
+      <button
+        v-for="annotation in sortedAnnotations"
+        :key="annotation.id"
+        type="button"
+        class="flex gap-2 border-b border-surface-100 px-3 py-2 text-left text-sm hover:bg-surface-50 dark:border-surface-800 dark:hover:bg-surface-800"
+        @click="goToAnnotation(annotation)"
+      >
+        <span
+          class="mt-1 h-3 w-3 shrink-0 rounded-sm"
+          :class="annotation.kind === 'note' ? 'border-2 border-amber-400' : ''"
+          :style="annotation.kind === 'highlight' ? { background: colorFill(annotation.color) } : {}"
+        />
+        <span class="min-w-0 flex-1">
+          <span class="block text-xs text-surface-500">{{ annotation.page }}쪽 · {{ annotation.kind === 'note' ? '영역 메모' : '하이라이트' }}</span>
+          <span class="line-clamp-2">{{ annotationSummary(annotation) }}</span>
+        </span>
+      </button>
+    </aside>
     </div>
   </section>
 </template>
+
+<style scoped>
+.reader-note-mode {
+  cursor: crosshair;
+}
+.reader-note-mode :deep(.textLayer) {
+  pointer-events: none;
+}
+</style>
+

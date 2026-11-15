@@ -82,3 +82,24 @@ export function hitTest<T extends { page: number; rects: Rect[] }>(
   }
   return null
 }
+
+// @doc: docs/design/Reader.md#6-화면
+export const MIN_NOTE_SIZE = 0.01
+
+// @doc: docs/design/Reader.md#6-화면
+export function dragRect(start: { x: number; y: number }, end: { x: number; y: number }): Rect | null {
+  const clamp = (value: number) => Math.min(Math.max(value, 0), 1)
+  const x = clamp(Math.min(start.x, end.x))
+  const y = clamp(Math.min(start.y, end.y))
+  const w = clamp(Math.max(start.x, end.x)) - x
+  const h = clamp(Math.max(start.y, end.y)) - y
+  if (w < MIN_NOTE_SIZE || h < MIN_NOTE_SIZE) return null
+  return { x: round(x), y: round(y), w: round(w), h: round(h) }
+}
+
+// @doc: docs/design/Reader.md#6-화면
+export function annotationSummary(annotation: { kind: string; text: string | null; note: string | null }): string {
+  const parts = annotation.kind === 'highlight' ? [annotation.text, annotation.note] : [annotation.note]
+  const summary = parts.filter((part) => part && part.trim()).join(' — ')
+  return summary || (annotation.kind === 'highlight' ? '(글 없음)' : '(메모 없음)')
+}
