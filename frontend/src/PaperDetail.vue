@@ -15,6 +15,7 @@ import { createLibraryState } from './libraryState'
 import PdfPanel from './PdfPanel.vue'
 
 const props = defineProps<{ library: ReturnType<typeof createLibraryState> }>()
+const emit = defineEmits<{ read: [paper: { id: number; title: string }] }>()
 const paper = computed(() => props.library.selected.value)
 const removing = ref(false)
 const confirm = useConfirm()
@@ -52,8 +53,8 @@ async function saveNote() {
   }
 }
 
-function openPdf(target: { id: number }) {
-  window.open(`/api/papers/${target.id}/pdf`, '_blank', 'noopener')
+function openPdf(target: { id: number; title: string }) {
+  emit('read', { id: target.id, title: target.title })
 }
 
 function askRemove(event: Event) {
