@@ -2,6 +2,60 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M3-T8 서재 논문의 OpenAlex 연결과 인용 데이터 가져오기·갱신 구현
+
+- 시작일: 2026-11-15
+- 완료일: 2026-11-15
+- 근거 문서: [인용 데이터 설계](design/Citations.md)
+- 참고 자료: 없음
+
+### 계획
+- 인용 데이터 설계를 구현 수준(모듈, 갱신 순서, 드라이브 보관, API, 테스트)으로 고친다.
+- 마이그레이션 0004(`openalex_id`), 연결, 가져오기, 캐시 파일, 백그라운드 갱신, 드라이브 보관, 상태 API와 설정 페이지의 인용 데이터 칸을 구현한다.
+
+### 진행 기록
+- 2026-11-15: 사용자가 앞으로 태스크가 끝날 때마다 다음 태스크를 정해 권장안대로 이어서 진행하고, PR 10개까지 연속으로 하며, 사용자가 할 일은 이슈로 남기라고 했다. PR #30(I14)이 아직 병합되지 않아 그 브랜치에서 작업 브랜치를 만들었다.
+- 2026-11-15: 인용 데이터 설계를 구현 수준으로 고쳤다. 구글 드라이브 동기화 설계에 캐시 파일 보관을, 서재 데이터 설계에 `openalex_id`와 마이그레이션 0004를, 사용자 설정 설계에 인용 데이터 칸을 더했다.
+- 2026-11-15: 마이그레이션 0004와 `PaperData.openalex_id`, 드라이브 캐시 파일 올리기·받기, 인용 데이터 모듈(연결, 가져오기, 캐시 파일, 백그라운드 갱신, 상태 API)을 구현했다. 실행 명령이 만든 앱만 갱신 스레드를 띄우게 했다. 화면은 검색 결과의 OpenAlex ID를 함께 보내고, 설정 페이지에 인용 데이터 칸을 더했다.
+- 2026-11-15: 공동 인용 수가 같은 논문의 순서가 실행마다 달라 테스트가 가끔 실패했다. 같은 수는 ID 순으로 정렬해 고쳤다.
+- 2026-11-15: 임시 서재에 'Attention Is All You Need'를 DOI로 넣고 실제 OpenAlex로 갱신을 한 번 돌렸다. W2626778328로 연결되고, 참고문헌 35건과 피인용 10건이 저장되었으며, 피인용 많은 순 첫 세 건이 조사 때와 같았다.
+- 2026-11-15: 사용자가 해야 할 일인 Render의 `OPENALEX_API_KEY` 확인을 이슈 I15로 등록했다.
+
+### 결정 사항
+- 인용 데이터 캐시는 Alembic 대신 `user_version`으로 버전을 관리하고, 버전이 다르면 다시 만든다. 다시 받을 수 있는 캐시이기 때문이다([인용 데이터 설계](design/Citations.md#4-저장)).
+- 갱신 스레드는 실행 명령이 만든 앱에서만 띄운다. 테스트가 실제 OpenAlex를 부르지 않게 하기 위해서다([인용 데이터 설계](design/Citations.md#5-갱신)).
+- 갱신은 시작할 때, 1시간마다, 논문을 담을 때 한다. 찾지 못한 DOI는 7일 동안 다시 찾지 않는다.
+- 함께 인용된 논문의 서지 정보는 가져오지 않고 M3-T5에서 보여 줄 때 받는다. 요청 수를 줄이기 위해서다.
+
+### 변경 파일
+- `docs/design/Citations.md`
+- `docs/design/DriveSync.md`
+- `docs/design/Library.md`
+- `docs/design/Settings.md`
+- `src/jjabtero/citations.py`
+- `src/jjabtero/migrations/versions/0004_openalex_id.py`
+- `src/jjabtero/models.py`
+- `src/jjabtero/library.py`
+- `src/jjabtero/papers_api.py`
+- `src/jjabtero/drive_sync.py`
+- `src/jjabtero/app.py`
+- `src/jjabtero/cli.py`
+- `tests/test_citations.py`
+- `frontend/src/api.ts`
+- `frontend/src/api.test.ts`
+- `frontend/src/CitationStatusPanel.vue`
+- `frontend/src/SettingsView.vue`
+- `docs/Roadmap.md`
+- `docs/Issue.md`
+- `docs/Done.md`
+
+### 결과
+- 서재 논문이 OpenAlex에 연결되고, 참고문헌과 공개 후 1년 안 피인용(피인용 많은 순 최대 `citing_limit`건), 서지 결합 수, 공동 인용 수가 `citations.db`에 쌓인다. 캐시는 드라이브에 따로 보관된다. 설정 페이지에서 상태를 보고 새로 받을 수 있다. 가져온 논문은 서재에 추가되지 않는다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과(백엔드 새 테스트 14개, 프론트엔드 새 테스트 3개 포함).
+- `vue-tsc` 타입 검사와 `npm run build` 통과. 실제 OpenAlex로 임시 서재 갱신을 확인했다.
+
 ## I14 PDF 리더 마일스톤 계획
 
 - 시작일: 2026-11-15

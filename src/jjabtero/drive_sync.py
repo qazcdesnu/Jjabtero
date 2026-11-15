@@ -422,6 +422,46 @@ class DriveSync:
 
     # 백그라운드
 
+    # 캐시 파일
+
+    def put_cache(self, name: str, data: bytes) -> bool:
+        """서재와 같은 폴더에 캐시 파일을 올린다. 충돌을 따지지 않는다.
+
+        @doc: docs/design/DriveSync.md#4-드라이브-파일
+        @doc: docs/design/Citations.md#4-저장
+        """
+        if not self.is_connected():
+            return False
+        try:
+            with self._lock:
+                files = self._files()
+                folder_id = self._folder(files, self._load_state())
+                existing = files.find_file(folder_id, name)
+                if existing is None:
+                    files.create(folder_id, name, data)
+                else:
+                    files.update(existing.id, data)
+        except (DriveAuthError, DriveNotConfiguredError, DriveApiError, httpx2.HTTPError, ValueError):
+            return False
+        return True
+
+    def get_cache(self, name: str) -> bytes | None:
+        """서재와 같은 폴더의 캐시 파일 내용을 받는다. 없거나 실패하면 `None`이다.
+
+        @doc: docs/design/DriveSync.md#4-드라이브-파일
+        @doc: docs/design/Citations.md#4-저장
+        """
+        if not self.is_connected():
+            return None
+        try:
+            with self._lock:
+                files = self._files()
+                folder_id = self._folder(files, self._load_state())
+                existing = files.find_file(folder_id, name)
+                return None if existing is None else files.download(existing.id)
+        except (DriveAuthError, DriveNotConfiguredError, DriveApiError, httpx2.HTTPError, ValueError):
+            return None
+
     def _cancel_timer(self) -> None:
         if self._timer is not None:
             self._timer.cancel()

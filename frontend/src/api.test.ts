@@ -4,6 +4,7 @@
 // @doc: docs/design/ReadingStatus.md#4-테스트
 // @doc: docs/design/DriveSync.md#9-테스트
 // @doc: docs/design/Settings.md#5-테스트
+// @doc: docs/design/Citations.md#7-테스트
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -23,6 +24,8 @@ import {
   updateReading,
   fetchSettings,
   saveSettings,
+  fetchCitationStatus,
+  refreshCitations,
   type SearchResult,
 } from './api'
 
@@ -128,6 +131,7 @@ describe('toPaperInput', () => {
       doi: '10.48550/arxiv.1706.03762',
       url: 'https://arxiv.org/abs/1706.03762',
       tags: ['nlp', 'transformer'],
+      openalex_id: 'W1',
     })
   })
 })
@@ -257,3 +261,30 @@ describe('saveSettings', () => {
     await expect(saveSettings({ citing_limit: 0 })).rejects.toThrow('1~1000 사이')
   })
 })
+
+describe('toPaperInput의 OpenAlex ID', () => {
+  it('OpenAlex 결과면 source_id를, 아니면 null을 넣는다', () => {
+    const base = { source: 'openalex', source_id: 'https://openalex.org/W1', title: 't', authors: [], item_type: 'other', year: null, venue: null, doi: null, url: null, library_paper_id: null }
+    expect(toPaperInput(base, []).openalex_id).toBe('https://openalex.org/W1')
+    expect(toPaperInput({ ...base, source: 'arxiv', source_id: '1706.03762' }, []).openalex_id).toBeNull()
+  })
+})
+
+describe('인용 데이터 API', () => {
+  it('상태를 읽고 새로 받기를 POST로 보낸다', async () => {
+    const status = { papers: 1, linked: 1, not_found: 0, fetched: 1, running: false, last_run: null, error: '' }
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify(status)))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchCitationStatus()).resolves.toEqual(status)
+    await refreshCitations()
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/citations/status', undefined)
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/citations/refresh', { method: 'POST' })
+  })
+
+  it('실패하면 상태 코드를 담은 오류를 던진다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 500 })))
+    await expect(fetchCitationStatus()).rejects.toThrow('500')
+  })
+})
+

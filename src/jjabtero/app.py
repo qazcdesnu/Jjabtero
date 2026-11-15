@@ -28,6 +28,8 @@ from jjabtero.auth import (
     require_login,
 )
 from jjabtero.auth import router as auth_router
+from jjabtero.citations import CACHE_FILE, CitationSync
+from jjabtero.citations import router as citations_router
 from jjabtero.db import create_db_engine, default_db_path, upgrade_database
 from jjabtero.drive_api import router as drive_router
 from jjabtero.drive_sync import (
@@ -78,6 +80,7 @@ def create_app(
     drive_files: Callable[[httpx2.Client, Callable[[], str]], FilesLike] | None = None,
     auth: AuthSettings | None = None,
     wait_initial_sync: bool | None = None,
+    run_citations: bool = False,
 ) -> FastAPI:
     """FastAPI 앱을 만든다.
 
@@ -87,6 +90,7 @@ def create_app(
     @doc: docs/design/Auth.md#3-세션
     @doc: docs/design/DriveSync.md#8-서버-환경
     @doc: docs/design/PublicPages.md#1-제공-방식
+    @doc: docs/design/Citations.md#5-갱신
     """
     settings = auth or auth_settings_from_env()
     settings.validate()
@@ -94,6 +98,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
+        app.state.citations.stop()
         app.state.drive.flush()
 
     app = FastAPI(title="Jjabtero", version=__version__, lifespan=lifespan)
@@ -124,12 +129,18 @@ def create_app(
     if wait_initial_sync is None:
         wait_initial_sync = os.environ.get("JJABTERO_INITIAL_SYNC") == "wait"
     app.state.drive.start(wait=wait_initial_sync)
+    app.state.citations = CitationSync(
+        app.state.engine, path.parent / CACHE_FILE, app.state.http_client, app.state.drive
+    )
+    if run_citations:
+        app.state.citations.start()
     app.include_router(_api)
     app.include_router(papers_router)
     app.include_router(drive_router)
     app.include_router(auth_router)
     app.include_router(public_pages_router)
     app.include_router(settings_router)
+    app.include_router(citations_router)
     # 정적 파일 마운트는 "/" 전체를 차지하므로 API 라우터 다음에 둔다.
     if frontend_dist.is_dir():
         app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")

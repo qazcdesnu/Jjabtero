@@ -60,7 +60,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             f"{args.host}로 열려면 JJABTERO_ALLOWED_EMAIL과 JJABTERO_SESSION_SECRET으로 로그인을 켜야 합니다."
         )
     try:
-        app = create_app(auth=settings)
+        app = create_app(auth=settings, run_citations=True)
     except AuthConfigError as error:
         parser.error(str(error))
     uvicorn.run(

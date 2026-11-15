@@ -60,6 +60,7 @@ class PaperData(BaseModel):
     """논문을 만들거나 고칠 때의 입력.
 
     @doc: docs/design/Library.md#4-저장-함수
+    @doc: docs/design/Citations.md#2-서재-논문과-openalex-연결
     """
 
     title: str
@@ -70,6 +71,7 @@ class PaperData(BaseModel):
     doi: str | None = None
     url: str | None = None
     tags: list[str] = []
+    openalex_id: str | None = None
 
     @field_validator("title")
     @classmethod
@@ -101,6 +103,16 @@ class PaperData(BaseModel):
     def _clean_optional(cls, value: str | None) -> str | None:
         return _strip_or_none(value)
 
+    @field_validator("openalex_id")
+    @classmethod
+    def _clean_openalex_id(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        work_id = value.strip().removeprefix("https://openalex.org/")
+        if not re.fullmatch(r"W\d+", work_id):
+            raise ValueError(f"OpenAlex 작업 ID가 아닙니다: {value}")
+        return work_id
+
     @field_validator("doi")
     @classmethod
     def _clean_doi(cls, value: str | None) -> str | None:
@@ -123,6 +135,8 @@ def _apply(session: Session, paper: Paper, data: PaperData) -> None:
     paper.venue = data.venue
     paper.doi = data.doi
     paper.url = data.url
+    if data.openalex_id is not None:
+        paper.openalex_id = data.openalex_id
     # 같은 이름이 한 입력에 두 번 나와도 저자 행을 하나만 만들도록 이번 호출 안에서 기억한다.
     authors: dict[str, Author] = {}
     for name in data.authors:

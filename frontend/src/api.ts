@@ -49,6 +49,8 @@ export interface PaperInput {
   doi: string | null
   url: string | null
   tags: string[]
+  // @doc: docs/design/Citations.md#2-서재-논문과-openalex-연결
+  openalex_id?: string | null
 }
 
 // @doc: docs/design/PaperSearch.md#4-화면
@@ -111,6 +113,7 @@ export function toPaperInput(result: SearchResult, tags: string[]): PaperInput {
     doi: result.doi,
     url: result.url,
     tags: [...new Set(tags.map((tag) => tag.trim()).filter((tag) => tag !== ''))],
+    openalex_id: result.source === 'openalex' ? result.source_id : null,
   }
 }
 
@@ -245,4 +248,33 @@ export async function saveSettings(changes: Record<string, number>): Promise<Set
     throw new Error(`설정 저장 실패: ${response.status}`)
   }
   return (await response.json()) as Setting[]
+}
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export interface CitationStatus {
+  papers: number
+  linked: number
+  not_found: number
+  fetched: number
+  running: boolean
+  last_run: string | null
+  error: string
+}
+
+async function citationRequest(path: string, init?: RequestInit): Promise<CitationStatus> {
+  const response = await fetch(path, init)
+  if (!response.ok) {
+    throw new Error(`인용 데이터 요청 실패: ${response.status}`)
+  }
+  return (await response.json()) as CitationStatus
+}
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export function fetchCitationStatus(): Promise<CitationStatus> {
+  return citationRequest('/api/citations/status')
+}
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export function refreshCitations(): Promise<CitationStatus> {
+  return citationRequest('/api/citations/refresh', { method: 'POST' })
 }
