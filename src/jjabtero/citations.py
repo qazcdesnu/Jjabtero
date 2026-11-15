@@ -1017,6 +1017,7 @@ def recommend_works(
     서재 논문 A마다 `related_works`의 점수를 구해 같은 논문끼리 더한다. 여러 서재 논문과 이어질수록 위로 온다.
 
     @doc: docs/design/Citations.md#6-api와-화면
+    @doc: docs/design/CitationGraph.md#2-그래프-데이터
     """
     found: dict[str, Recommendation] = {}
     for paper, rows in rows_by_paper.items():
