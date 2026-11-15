@@ -2,6 +2,50 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md), [M3 인용 기반 연결·추천](Done-M3.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## I17 논문 인용 양식(CS에서 자주 쓰는 5~10가지)을 골라 복사하기
+
+- 시작일: 2026-11-15
+- 완료일: 2026-11-15
+- 근거 문서: [인용 양식 설계](design/CitationStyles.md)
+- 참고 자료: 없음
+
+### 계획
+- CS에서 자주 쓰는 인용 양식 8가지(BibTeX, IEEE, ACM, APA, MLA, Chicago, Harvard, Vancouver)의 규칙을 설계 문서에 적는다.
+- 서재 논문 정보로 양식별 글(일반 글과 기울임이 있는 HTML)을 만드는 순수 함수를 만든다.
+- 논문 상세에 "인용" 버튼과 양식 목록 창(양식마다 미리보기와 복사)을 둔다.
+- 테스트를 더하고 브라우저에서 확인한다.
+
+### 진행 기록
+- 2026-11-15: M6-T3 작업 중에 사용자가 요청했다(구글 스칼라처럼 5~10개). I16 다음에 하기로 하고, 병합되지 않은 가장 최근 브랜치 `i16-library-links`에서 작업 브랜치를 만들었다.
+- 2026-11-15: `citationStyles` 모듈(이름 나누기, 여덟 양식, BibTeX, 복사)과 인용 창(`CiteDialog.vue`)을 만들고 논문 상세에 "인용" 버튼을 두었다. primeicons에 따옴표 아이콘이 없어 복사 아이콘을 썼다.
+- 2026-11-15: 세 논문('Attention Is All You Need' 8저자 학회, LSTM 2저자 저널, BERT arXiv)으로 여덟 양식 글을 뽑아 보았다. Chicago는 저자가 둘일 때 `, and`가 빠져 고쳤다.
+- 2026-11-15: 시연 서버에서 브라우저로 확인했다. 창에 여덟 양식이 나왔고, APA 복사는 글과 기울임 HTML이 함께, BibTeX 복사는 글만 들어갔으며 버튼이 "복사됨"으로 바뀌었다. OpenAlex로 담은 Bahdanau 논문의 게재처가 "arXiv (Cornell University)"로 그대로 인용에 들어가, arXiv 저장소 이름은 게재처로 쓰지 않고 `arXiv preprint arXiv:<ID>`를 쓰게 고쳤다.
+
+### 결정 사항
+- 양식은 CS에서 많이 쓰는 BibTeX, IEEE, ACM과 구글 스칼라의 APA, MLA, Chicago, Harvard, Vancouver 여덟 가지다.
+- 인용 양식 라이브러리를 쓰지 않고 직접 만든다. 규칙이 짧고, 라이브러리는 첫 화면 번들을 크게 키우기 때문이다([인용 양식 설계](design/CitationStyles.md#1-범위)).
+- 제목 대소문자는 바꾸지 않는다. 고유 이름을 기계로 가려낼 수 없기 때문이다.
+- 글과 HTML을 함께 복사해 붙여 넣는 곳에 기울임이 남게 한다. BibTeX는 글로만 복사한다.
+
+### 변경 파일
+- `docs/Issue.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+- `docs/index.md`
+- `docs/design/CitationStyles.md`
+- `frontend/src/citationStyles.ts`
+- `frontend/src/citationStyles.test.ts`
+- `frontend/src/CiteDialog.vue`
+- `frontend/src/PaperDetail.vue`
+
+### 결과
+- 논문 상세의 "인용" 버튼으로 여덟 양식(BibTeX, IEEE, ACM, APA, MLA, Chicago, Harvard, Vancouver)의 인용 글을 보고 골라 복사한다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+- `npx vue-tsc --noEmit -p tsconfig.app.json`, `npm run build`: 통과.
+- 시연 서버에서 인용 창, APA·BibTeX 복사와 클립보드 내용을 브라우저로 확인했다. 브라우저 콘솔 오류는 없었다.
+
 ## I16 서재에 논문을 담으면 서재의 다른 논문들과의 인용·피인용 관계를 확인해 그래프에 정확히 보여 주기
 
 - 시작일: 2026-11-15
