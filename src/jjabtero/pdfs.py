@@ -70,6 +70,10 @@ def open_access_pdf_url(http: httpx2.Client, openalex_id: str | None, doi: str |
     @doc: docs/design/Reader.md#2-pdf-가져오기
     @doc: docs/design/ReaderCitations.md#4-논문-찾기
     """
+    match = _ARXIV_DOI.match(doi or "")
+    if match:
+        # arXiv 논문은 arXiv PDF가 가장 확실하다. OpenAlex는 다른 저장소의 사본 주소를 주기도 한다.
+        return f"https://arxiv.org/pdf/{match.group(1)}", "arxiv"
     if openalex_id:
         params = {"select": "best_oa_location,open_access"}
         api_key = os.environ.get("OPENALEX_API_KEY")
@@ -83,9 +87,6 @@ def open_access_pdf_url(http: httpx2.Client, openalex_id: str | None, doi: str |
                 # OpenAlex가 arXiv 소개 페이지를 주는 경우가 있어 PDF 주소로 바꾼다.
                 abstract = _ARXIV_ABS.match(url)
                 return (f"https://arxiv.org/pdf/{abstract.group(1)}" if abstract else url), "openalex"
-    match = _ARXIV_DOI.match(doi or "")
-    if match:
-        return f"https://arxiv.org/pdf/{match.group(1)}", "arxiv"
     return None
 
 

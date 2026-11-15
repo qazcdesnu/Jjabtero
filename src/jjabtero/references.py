@@ -43,6 +43,10 @@ SEARCH_TRIES = 2
 CACHE_SIZE = 1000
 
 _MARKER = re.compile(r"^\s*(\[[^\]]{1,12}\]|\(?\d{1,4}[.)])\s*")
+_DOI = re.compile(r"\b(10\.\d{4,9}/[^\s\"<>]+)", re.IGNORECASE)
+_ARXIV_URL = re.compile(r"arxiv\.org/(?:abs|pdf)/([a-z\-]+/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?", re.IGNORECASE)
+_ARXIV_ID = re.compile(r"\barxiv\s*:?\s*(\d{4}\.\d{4,5})(?:v\d+)?", re.IGNORECASE)
+_TRAILING_YEAR = re.compile(r"[,.]?\s*\(?(?:19|20)\d{2}[a-z]?\)?\s*$")
 _SPLIT = re.compile(r"(?<=[.?!])\s+")
 # 마침표로 끝나도 문장 끝이 아닌 것: 이름 머리글자(대문자 한 글자), 흔한 줄임말.
 # `et al.`은 대개 저자 목록의 끝이므로 문장 끝으로 본다.
@@ -53,6 +57,33 @@ _VENUE_WORDS = {
     "pages", "pp", "vol", "volume", "workshop", "symposium", "press", "springer", "ieee", "acm", "advances",
     "international", "annual", "meeting", "neurips", "nips", "icml", "iclr", "cvpr", "iccv", "eccv", "acl", "emnlp",
 }
+
+
+def reference_dois(text: str) -> list[str]:
+    """항목 글에 있는 DOI와 arXiv 주소·번호를 DOI로 돌려준다(arXiv는 `10.48550/arxiv.<번호>`). 겹치지 않게, 나온 순서대로다.
+
+    @doc: docs/design/ReaderCitations.md#4-논문-찾기
+    """
+    found: list[str] = []
+    for match in _DOI.finditer(text):
+        found.append(match.group(1).rstrip(".,;:)]}").lower())
+    for pattern in (_ARXIV_URL, _ARXIV_ID):
+        for match in pattern.finditer(text):
+            found.append(f"10.48550/arxiv.{match.group(1).lower()}")
+    return list(dict.fromkeys(found))
+
+
+def short_title(candidate: str) -> str | None:
+    """제목 후보의 본제목(콜론 앞, 낱말 2개 이상)을 돌려준다. 없으면 앞 네 낱말이다. 후보와 같으면 `None`이다.
+
+    줄바꿈 하이픈으로 붙은 낱말("Openended")이 뒤쪽에 있어 검색이 틀어질 때 짧은 본제목으로 다시 검색하기 위해서다.
+
+    @doc: docs/design/ReaderCitations.md#4-논문-찾기
+    """
+    head = candidate.split(":", 1)[0].strip()
+    words = head.split()
+    short = head if ":" in candidate and len(words) >= 2 else " ".join(candidate.split()[:4])
+    return short if short and short != candidate and len(short.split()) >= 2 else None
 
 
 def title_candidates(text: str) -> list[str]:
@@ -72,6 +103,10 @@ def title_candidates(text: str) -> list[str]:
             pieces.append(piece)
     scored = []
     for index, piece in enumerate(pieces):
+        if re.search(r"https?://|\bURL\b|\bdoi\s*:", piece, re.IGNORECASE):
+            continue
+        # 저자-연도 양식에서 제목 끝에 붙는 연도(", 2025b")는 검색을 방해하므로 뗀다.
+        piece = _TRAILING_YEAR.sub("", piece.rstrip(".")).strip() or piece
         words = normalize(piece).split()
         if len(words) < MIN_TITLE_WORDS:
             continue
@@ -93,7 +128,10 @@ def match_reference(text: str, candidates: list[dict[str, Any]]) -> tuple[dict[s
     """
     entry = normalize(text)
     padded = f" {entry} "
+    compact = entry.replace(" ", "")
     words = set(entry.split())
+    # 저자-연도 양식의 "2025b"처럼 연도 뒤에 붙은 글자는 떼고 연도를 비교한다.
+    years = {match.group(1) for match in re.finditer(r"\b((?:19|20)\d{2})[a-z]?\b", entry)}
     best: tuple[dict[str, Any], float] | None = None
     for candidate in candidates:
         title = normalize(candidate.get("title") or "")
@@ -102,11 +140,14 @@ def match_reference(text: str, candidates: list[dict[str, Any]]) -> tuple[dict[s
             continue
         if f" {title} " in padded:
             score = 1.0
+        elif title.replace(" ", "") in compact:
+            # 줄바꿈 하이픈으로 낱말이 붙은 경우("open-ended" → "openended")
+            score = 1.0
         else:
             score = sum(word in words for word in title_words) / len(title_words)
             if score < MATCH_MIN:
                 continue
-        if candidate.get("year") and str(candidate["year"]) in words:
+        if candidate.get("year") and str(candidate["year"]) in years:
             score += YEAR_BONUS
         if best is None or score > best[1]:
             best = (candidate, round(score, 4))
@@ -129,7 +170,7 @@ class ReferenceMatch(BaseModel):
     """
 
     state: Literal["found", "not_found"]
-    source: Literal["references", "search"] | None = None
+    source: Literal["identifier", "references", "search"] | None = None
     work: CitedWork | None = None
     has_pdf: bool = False
     pdf_url: str | None = None
@@ -150,7 +191,7 @@ def _search(sync: CitationSync, query: str) -> list[dict[str, Any]]:
 
 
 # 찾은 논문의 서지 정보, 찾은 경로, 공개 PDF 주소. 서재 상태는 바뀌므로 기억하지 않는다.
-_Found = tuple[dict[str, Any], Literal["references", "search"], str | None] | None
+_Found = tuple[dict[str, Any], Literal["identifier", "references", "search"], str | None] | None
 
 
 def _cache(request: Request) -> OrderedDict[tuple[int, str], _Found]:
@@ -206,20 +247,49 @@ def resolve_reference(paper_id: int, body: ResolveIn, request: Request) -> Refer
     )
 
 
+def _lookup_doi(sync: CitationSync, dois: list[str]) -> tuple[dict[str, Any], float] | None:
+    """DOI로 OpenAlex 작업을 찾아 서지 정보를 저장하고 돌려준다. 못 찾거나 실패하면 `None`이다.
+
+    @doc: docs/design/ReaderCitations.md#4-논문-찾기
+    """
+    stamp = sync.clock().isoformat()
+    for doi in dois:
+        try:
+            body = _get(sync.http, f"{OPENALEX_WORKS_URL}/doi:{doi}", {"select": _WORK_FIELDS})
+        except (OpenAlexBudgetError, httpx2.HTTPError):
+            return None
+        if body and body.get("id"):
+            row = _work_row(body, stamp)
+            sync.store.save_works([row])
+            return row, 1.0
+    return None
+
+
 def _find(sync: CitationSync, work_id: str | None, text: str) -> _Found:
-    """이 논문의 참고문헌에서, 없으면 OpenAlex 검색에서 찾고 공개 PDF 주소를 붙인다.
+    """항목 글의 DOI·arXiv 주소로, 다음은 이 논문의 참고문헌에서, 없으면 OpenAlex 검색에서 찾고 공개 PDF 주소를 붙인다.
 
     @doc: docs/design/ReaderCitations.md#4-논문-찾기
     """
     found = None
-    source: Literal["references", "search"] = "references"
-    if work_id:
-        _, references, _ = sync.store.paper_lists(work_id)
+    source: Literal["identifier", "references", "search"] = "identifier"
+    references = sync.store.paper_lists(work_id)[1] if work_id else []
+    # 항목 글에 DOI나 arXiv 주소가 있으면 그것이 가장 확실하다.
+    dois = reference_dois(text)
+    for row in references:
+        if dois and _cited_work(row, {}).doi in dois:
+            found = ({**row, "id": row["work"]}, 1.0)
+            break
+    if found is None and dois:
+        found = _lookup_doi(sync, dois)
+    if found is None:
+        source = "references"
         found = match_reference(text, [{**row, "id": row["work"]} for row in references])
     if found is None:
         source = "search"
         # 글 전체로 검색하면 저자·게재처 낱말 때문에 엉뚱한 결과가 나오므로 제목일 만한 조각으로 검색한다.
-        for query in title_candidates(text)[:SEARCH_TRIES]:
+        candidates = title_candidates(text)[:SEARCH_TRIES]
+        shorter = short_title(candidates[0]) if candidates else None
+        for query in [*candidates, *([shorter] if shorter else [])]:
             try:
                 found = match_reference(text, _search(sync, query))
             except (OpenAlexBudgetError, httpx2.HTTPError) as error:
@@ -230,8 +300,10 @@ def _find(sync: CitationSync, work_id: str | None, text: str) -> _Found:
         return None
     row = found[0]
     doi = _cited_work({**row, "work": row["id"]}, {}).doi
+    arxiv = next((item for item in dois if item.startswith("10.48550/arxiv.")), None)
     try:
-        located = open_access_pdf_url(sync.http, row["id"], doi)
+        # 항목 글에 arXiv 번호가 있으면 그 arXiv PDF를 쓴다. OpenAlex가 같은 논문의 다른 판 기록을 줄 수 있기 때문이다.
+        located = open_access_pdf_url(sync.http, row["id"], arxiv or doi)
     except httpx2.HTTPError:
         located = None
     return row, source, located[0] if located else None

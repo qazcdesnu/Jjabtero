@@ -206,3 +206,27 @@ def test_check_endpoint(tmp_path: Path) -> None:
     a.post("/api/papers", json={"title": "A2"})
     a.app.state.drive.sync()
     assert b.post("/api/drive/check").json()["data_version"] == version + 1
+
+
+def test_simultaneous_writes_on_two_apps_are_merged(tmp_path: Path) -> None:
+    """서버가 논문을 담은 직후, 이 컴퓨터가 드라이브를 다시 보지 않고 읽던 위치를 저장해도 합쳐 충돌하지 않는다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    drive = FakeDrive()
+    computer, _ = make_app(tmp_path / "computer", drive, connected=True)
+    computer.app.state.drive.schedule_push = lambda: None
+    paper_id = computer.post("/api/papers", json={"title": "First"}).json()["id"]
+    computer.app.state.drive.sync()
+    server, _ = make_app(tmp_path / "server", drive, connected=True)
+    server.app.state.drive.schedule_push = lambda: None
+    server.app.state.drive.sync()
+    server.post("/api/papers", json={"title": "Added on web"})
+    server.app.state.drive.sync()
+
+    computer.put(f"/api/papers/{paper_id}/position", json={"page": 3, "offset": 0.2, "zoom": 1.0})
+    assert computer.app.state.drive.sync().state == "idle"
+    assert sorted(paper["title"] for paper in computer.get("/api/papers").json()) == ["Added on web", "First"]
+    assert computer.get(f"/api/papers/{paper_id}/position").json()["page"] == 3
+    assert server.app.state.drive.check().state == "idle"
+    assert server.get(f"/api/papers/{paper_id}/position").json()["page"] == 3

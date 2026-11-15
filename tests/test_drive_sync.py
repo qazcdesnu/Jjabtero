@@ -54,6 +54,16 @@ def add(engine: Engine, title: str) -> None:
         add_paper(session, PaperData(title=title))
 
 
+def clash(first: DriveSync, second: DriveSync) -> None:
+    """두 서재에 자동으로 합칠 수 없는 변경(같은 설정을 다른 값으로)을 만든다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    for sync, value in ((first, "20"), (second, "50")):
+        with sync.engine.begin() as connection:
+            connection.execute(text("INSERT INTO settings (key, value) VALUES ('citing_limit', :value)"), {"value": value})
+
+
 def titles(engine: Engine) -> list[str]:
     """서재 논문 제목을 이름순으로 돌려준다.
 
@@ -143,7 +153,7 @@ def test_first_connect_with_local_papers_is_conflict(tmp_path: Path, drive: Fake
 
 
 def test_both_changed_is_conflict_and_nothing_overwritten(tmp_path: Path, drive: FakeDrive) -> None:
-    """둘 다 바뀌면 충돌이고, 다시 동기화해도 덮어쓰지 않으며 자동 올리기도 하지 않는다.
+    """둘 다 바뀌었고 자동으로 합칠 수 없으면 충돌이고, 다시 동기화해도 덮어쓰지 않으며 자동 올리기도 하지 않는다.
 
     @doc: docs/design/DriveSync.md#9-테스트
     """
@@ -153,9 +163,11 @@ def test_both_changed_is_conflict_and_nothing_overwritten(tmp_path: Path, drive:
     b.sync()
     add(a.engine, "A1")
     add(b.engine, "B1")
+    clash(a, b)
     b.sync()
+    first = a.sync()
+    assert first.state == "conflict" and "자동으로 합치지 못했습니다" in first.message
     drive.calls.clear()
-    assert a.sync().state == "conflict"
     assert a.sync().state == "conflict"
     a.schedule_push()
     assert a.status().pending is False
@@ -174,6 +186,7 @@ def test_resolve_remote_backs_up_local(tmp_path: Path, drive: FakeDrive) -> None
     b.sync()
     add(a.engine, "A1")
     add(b.engine, "B1")
+    clash(a, b)
     b.sync()
     a.sync()
     status = a.resolve("remote")
@@ -195,6 +208,7 @@ def test_resolve_local_backs_up_remote(tmp_path: Path, drive: FakeDrive) -> None
     b.sync()
     add(a.engine, "A1")
     add(b.engine, "B1")
+    clash(a, b)
     b.sync()
     a.sync()
     assert a.resolve("local").state == "idle"
@@ -215,26 +229,50 @@ def test_resolve_without_conflict_does_nothing(tmp_path: Path, drive: FakeDrive)
     assert drive.calls == []
 
 
-def test_remote_changed_just_before_upload_is_conflict(tmp_path: Path, drive: FakeDrive) -> None:
-    """올리기 직전에 드라이브 내용이 바뀌었으면 올리지 않고 충돌로 바꾼다.
+def test_remote_changed_just_before_upload_is_merged(tmp_path: Path, drive: FakeDrive) -> None:
+    """올리기 직전에 다른 컴퓨터가 올렸으면 덮어쓰지 않고 합친다. 두 컴퓨터의 논문이 모두 남는다.
 
     @doc: docs/design/DriveSync.md#9-테스트
     """
     a = computer(tmp_path, "a", drive)
     a.sync()
+    b = computer(tmp_path, "b", drive)
+    b.sync()
     add(a.engine, "A1")
+    add(b.engine, "B1")
     original_get = drive.get
     calls = {"count": 0}
 
     def racing_get(file_id: str):
         calls["count"] += 1
         if calls["count"] == 3:
-            drive.files[file_id]["data"] += b"changed elsewhere"
+            drive.files[file_id]["data"] = snapshot_db(b.engine)
         return original_get(file_id)
 
-    drive.get = racing_get
-    assert a.sync().state == "conflict"
+    drive.get = racing_get  # type: ignore[method-assign]
+    assert a.sync().state == "idle"
+    drive.get = original_get  # type: ignore[method-assign]
+    assert titles(a.engine) == ["A1", "B1"]
+    c = computer(tmp_path, "c", drive)
+    c.sync()
+    assert titles(c.engine) == ["A1", "B1"]
+
+
+def test_broken_remote_copy_is_conflict(tmp_path: Path, drive: FakeDrive) -> None:
+    """둘 다 바뀌었는데 드라이브 사본이 깨져 합칠 수 없으면 충돌이고, 아무것도 올리지 않는다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    a = computer(tmp_path, "a", drive)
+    a.sync()
+    add(a.engine, "A1")
+    file_id = a._load_state().file_id
+    drive.files[file_id]["data"] = b"not a database"
+    drive.calls.clear()
+    status = a.sync()
+    assert status.state == "conflict" and "자동으로 합치지 못했습니다" in status.message
     assert "update" not in drive.calls
+    assert titles(a.engine) == ["A1"]
 
 
 def test_trashed_remote_file_is_uploaded_again(tmp_path: Path, drive: FakeDrive) -> None:
@@ -438,8 +476,8 @@ def test_schema_upgrade_is_not_counted_as_local_change(tmp_path: Path, drive: Fa
     assert titles(old.engine) == ["Added on web", "Old"]
 
 
-def test_plain_schema_upgrade_would_conflict(tmp_path: Path, drive: FakeDrive) -> None:
-    """(이전 동작) 상태를 이어받지 않고 스키마만 올리면 드라이브도 바뀐 경우 충돌이 된다.
+def test_plain_schema_upgrade_is_merged(tmp_path: Path, drive: FakeDrive) -> None:
+    """상태를 이어받지 않고 스키마만 올려 둘 다 바뀐 것으로 보여도, 기준 사본으로 합쳐 충돌하지 않는다.
 
     @doc: docs/design/DriveSync.md#9-테스트
     """
@@ -450,7 +488,8 @@ def test_plain_schema_upgrade_would_conflict(tmp_path: Path, drive: FakeDrive) -
     add(web.engine, "Added on web")
     web.sync()
     upgrade_database(old.engine)
-    assert old.sync().state == "conflict"
+    assert old.sync().state == "idle"
+    assert titles(old.engine) == ["Added on web", "Old"]
 
 
 def test_upgrade_keeping_sync_leaves_real_local_change(tmp_path: Path, drive: FakeDrive) -> None:
@@ -589,3 +628,92 @@ def test_download_records_hash_of_restored_copy(tmp_path: Path, drive: FakeDrive
     b = computer(tmp_path, "b", drive)
     b.sync()
     assert content_hash(b.engine) == b._load_state().local_hash
+
+
+def test_both_changed_is_merged_with_backups(tmp_path: Path, drive: FakeDrive) -> None:
+    """두 컴퓨터가 각자 논문을 넣으면 자동으로 합쳐 둘 다 남기고, 합치기 전 양쪽 사본을 백업하며 기준 사본을 바꾼다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    a = computer(tmp_path, "a", drive)
+    add(a.engine, "Base")
+    a.sync()
+    b = computer(tmp_path, "b", drive)
+    b.sync()
+    add(a.engine, "A1")
+    add(b.engine, "B1")
+    b.sync()
+    before = a.status().data_version
+    status = a.sync()
+    assert status.state == "idle" and status.data_version == before + 1
+    assert titles(a.engine) == ["A1", "B1", "Base"]
+    assert {path.name.rsplit("-", 2)[-2] + "-" + path.name.rsplit("-", 1)[-1] for path in a.paths.backups.glob("*.db")} == {
+        "merge-local.db",
+        "merge-remote.db",
+    }
+    assert a.paths.base.read_bytes() == drive.files[a._load_state().file_id]["data"]
+    assert b.check().state == "idle"
+    assert titles(b.engine) == ["A1", "B1", "Base"]
+
+
+def test_without_base_copy_is_conflict(tmp_path: Path, drive: FakeDrive) -> None:
+    """기준 사본이 없으면(예: 이 기능 이전의 동기화) 합치지 않고 충돌로 둔다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    a = computer(tmp_path, "a", drive)
+    a.sync()
+    b = computer(tmp_path, "b", drive)
+    b.sync()
+    add(a.engine, "A1")
+    add(b.engine, "B1")
+    b.sync()
+    a.paths.base.unlink()
+    status = a.sync()
+    assert status.state == "conflict" and "기준 사본이 없어" in status.message
+
+
+def test_local_write_during_merge_is_not_overwritten(tmp_path: Path, drive: FakeDrive) -> None:
+    """합치는 사이 이쪽에 쓰기가 들어오면 덮어쓰지 않고, 다음 동기화에서 그것까지 합친다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    a = computer(tmp_path, "a", drive)
+    a.sync()
+    b = computer(tmp_path, "b", drive)
+    b.sync()
+    add(a.engine, "A1")
+    add(b.engine, "B1")
+    b.sync()
+    original = drive.download
+    state = {"done": False}
+
+    def download_with_write(file_id: str) -> bytes:
+        data = original(file_id)
+        if not state["done"]:
+            state["done"] = True
+            add(a.engine, "During merge")
+        return data
+
+    drive.download = download_with_write  # type: ignore[method-assign]
+    assert a.sync().state == "idle"
+    assert titles(a.engine) == ["A1", "During merge"]
+    drive.download = original  # type: ignore[method-assign]
+    assert a.sync().state == "idle"
+    assert titles(a.engine) == ["A1", "B1", "During merge"]
+
+
+def test_merge_backups_are_pruned(tmp_path: Path, drive: FakeDrive) -> None:
+    """합치기 백업은 가장 최근 20개만 남긴다. 충돌 풀기 백업은 지우지 않는다.
+
+    @doc: docs/design/DriveSync.md#9-테스트
+    """
+    a = computer(tmp_path, "a", drive)
+    a.paths.backups.mkdir(parents=True)
+    for index in range(25):
+        (a.paths.backups / f"library-20260101-{index:06d}-merge-local.db").write_bytes(b"x")
+    (a.paths.backups / "library-20250101-000000-local.db").write_bytes(b"x")
+    a._prune_merge_backups()
+    kept = sorted(path.name for path in a.paths.backups.glob("*merge*"))
+    assert len(kept) == 20 and kept[0] == "library-20260101-000005-merge-local.db"
+    assert (a.paths.backups / "library-20250101-000000-local.db").exists()

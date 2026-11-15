@@ -173,3 +173,89 @@ def test_resolve_falls_back_to_search_and_reports_misses(tmp_path: Path) -> None
     assert openalex.searches[1:] == ["unknown title here"]
     assert client.post("/api/papers/99/references/resolve", json={"text": GAN}).status_code == 404
     assert client.post(f"/api/papers/{paper_id}/references/resolve", json={"text": ""}).status_code == 422
+
+
+DGM = (
+    "Jenny Zhang, Shengran Hu, Cong Lu, Robert Lange, and Jeff Clune. Darwin godel machine: Openended "
+    "evolution of self-improving agents, 2025b. URL https://arxiv.org/abs/2505.22954."
+)
+
+
+def test_reference_dois_and_cleaned_candidates() -> None:
+    """항목 글의 DOI와 arXiv 주소·번호를 DOI로 꺼내고, 제목 후보에서 끝의 연도와 주소 조각을 뺀다.
+
+    @doc: docs/design/ReaderCitations.md#4-논문-찾기
+    """
+    from jjabtero.references import reference_dois, short_title
+
+    assert reference_dois(DGM) == ["10.48550/arxiv.2505.22954"]
+    assert reference_dois("X. doi:10.1145/3442188.3445922. arXiv:1706.03762v5") == [
+        "10.1145/3442188.3445922",
+        "10.48550/arxiv.1706.03762",
+    ]
+    assert title_candidates(DGM)[0] == "Darwin godel machine: Openended evolution of self-improving agents"
+    assert all("http" not in candidate for candidate in title_candidates(DGM))
+    assert short_title("Darwin godel machine: Openended evolution of self-improving agents") == "Darwin godel machine"
+    assert short_title("Long short-term memory") is None
+
+
+def test_match_reference_handles_joined_hyphen_words_and_year_letters() -> None:
+    """줄바꿈 하이픈으로 붙은 낱말("Openended")도 제목과 맞고, "2025b"의 연도도 가산점에 센다.
+
+    @doc: docs/design/ReaderCitations.md#4-논문-찾기
+    """
+    candidates = [
+        {"id": "W1", "title": "Darwin Gödel Machine: Open-Ended Evolution of Self-Improving Agents", "year": 2025},
+        {"id": "W2", "title": "Darwin Gödel Machine: Open-Ended Evolution of Self-Improving Agents", "year": 2024},
+    ]
+    found, score = match_reference(DGM, candidates)
+    assert (found["id"], score) == ("W1", 1.05)
+
+
+class FakeWithIdentifier(FakeOpenAlex):
+    """DOI 조회(`/works/doi:…`)에도 답하는 가짜 OpenAlex.
+
+    @doc: docs/design/ReaderCitations.md#4-논문-찾기
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.doi_lookups: list[str] = []
+
+    def __call__(self, request: httpx2.Request) -> httpx2.Response:
+        path = request.url.path
+        if path.startswith("/works/doi:"):
+            self.doi_lookups.append(path.removeprefix("/works/doi:"))
+            if path.endswith("2505.22954"):
+                return httpx2.Response(200, json={**work("W1"), "id": "https://openalex.org/W77", "display_name": "Darwin Gödel Machine: Open-Ended Evolution of Self-Improving Agents", "doi": "https://doi.org/10.9999/mirror"})
+            return httpx2.Response(404, json={})
+        return super().__call__(request)
+
+
+def test_resolve_by_identifier_uses_arxiv_pdf(tmp_path: Path) -> None:
+    """항목 글에 arXiv 주소가 있으면 검색 없이 그 번호로 찾고, 공개 PDF는 arXiv PDF다.
+
+    @doc: docs/design/ReaderCitations.md#4-논문-찾기
+    """
+    openalex = FakeWithIdentifier()
+    client, _ = make_client(tmp_path, openalex)
+    paper_id = client.post("/api/papers", json={"title": "Base"}).json()["id"]
+    body = client.post(f"/api/papers/{paper_id}/references/resolve", json={"text": DGM}).json()
+    assert (body["state"], body["source"], body["work"]["openalex_id"]) == ("found", "identifier", "W77")
+    assert body["pdf_url"] == "https://arxiv.org/pdf/2505.22954"
+    assert openalex.doi_lookups == ["10.48550/arxiv.2505.22954"] and openalex.searches == []
+
+
+def test_resolve_identifier_in_own_references_needs_no_lookup(tmp_path: Path) -> None:
+    """항목 글의 DOI가 이 논문의 참고문헌에 있으면 OpenAlex를 다시 부르지 않고 그것을 쓴다.
+
+    @doc: docs/design/ReaderCitations.md#4-논문-찾기
+    """
+    openalex = FakeWithIdentifier()
+    client, app = make_client(tmp_path, openalex)
+    paper_id = client.post("/api/papers", json={"title": "Base", "openalex_id": A}).json()["id"]
+    app.state.citations.run_once()
+    text = "D. Bahdanau et al. Some garbled title. arXiv:1409.0473, 2014."
+    body = client.post(f"/api/papers/{paper_id}/references/resolve", json={"text": text}).json()
+    assert (body["source"], body["work"]["openalex_id"]) == ("identifier", "W2")
+    assert openalex.doi_lookups == []
