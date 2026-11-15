@@ -73,18 +73,18 @@ class DriveFiles:
         files = response.json().get("files", [])
         return _remote(files[0]) if files else None
 
-    def find_folder(self, name: str) -> RemoteFile | None:
-        """내 드라이브 맨 위에서 폴더를 찾는다.
+    def find_folder(self, name: str, parent: str = "root") -> RemoteFile | None:
+        """폴더(기본은 내 드라이브 맨 위) 안에서 폴더를 찾는다.
 
         @doc: docs/design/DriveSync.md#4-드라이브-파일
         """
         return self._find(
             f"name = '{_quote(name)}' and mimeType = '{FOLDER_MIME}' "
-            "and 'root' in parents and trashed = false"
+            f"and '{_quote(parent)}' in parents and trashed = false"
         )
 
-    def create_folder(self, name: str) -> RemoteFile:
-        """내 드라이브 맨 위에 폴더를 만든다.
+    def create_folder(self, name: str, parent: str = "root") -> RemoteFile:
+        """폴더(기본은 내 드라이브 맨 위) 안에 폴더를 만든다.
 
         @doc: docs/design/DriveSync.md#4-드라이브-파일
         """
@@ -92,7 +92,7 @@ class DriveFiles:
             "POST",
             FILES_URL,
             params={"fields": _FIELDS},
-            json={"name": name, "mimeType": FOLDER_MIME, "parents": ["root"]},
+            json={"name": name, "mimeType": FOLDER_MIME, "parents": [parent]},
         )
         return _remote(response.json())
 

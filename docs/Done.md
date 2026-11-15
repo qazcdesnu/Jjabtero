@@ -2,6 +2,56 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M4-T2 PDF 가져오기(공개 PDF 자동 받기, 직접 올리기)와 드라이브 보관 구현
+
+- 시작일: 2026-11-15
+- 완료일: 2026-11-15
+- 근거 문서: [PDF 리더 설계](design/Reader.md#2-pdf-가져오기)
+- 참고 자료: 없음
+
+### 계획
+- 드라이브 하위 폴더, 로컬 사본, `paper_pdfs`(마이그레이션 0005), PDF 받기·올리기·내려주기 API, 논문 상세의 PDF 칸을 구현한다.
+
+### 진행 기록
+- 2026-11-15: M4-T1을 마치고 권장 순서대로 시작했다. PR #32(M4-T1)가 아직 병합되지 않아 그 브랜치에서 작업 브랜치를 만들었다.
+- 2026-11-15: 드라이브 폴더 찾기·만들기에 부모 폴더 인자를 더하고, 하위 폴더에 파일을 올리고 ID로 받는 `put_file`, `download_file`을 더했다. `PaperPdf` 모델과 마이그레이션 0005, PDF 모듈(공개 PDF 주소 찾기, 받기, 검사, 로컬·드라이브 보관, API)을 구현하고 테스트를 더했다. 논문 응답에 `has_pdf`를 더했다.
+- 2026-11-15: 화면에 PDF 칸(받기, 올리기·바꾸기, 읽기)을 더했다. 리더가 생기기 전이라 "읽기"는 PDF를 새 탭에서 연다.
+- 2026-11-15: 임시 데이터 폴더로 띄운 서버에 'Attention Is All You Need'(arXiv DOI)를 넣고 브라우저에서 "PDF 받기"를 눌렀다. arXiv에서 2.2MB PDF를 받아 로컬 `pdfs/<SHA-256>.pdf`에 저장하고 목록의 `has_pdf`가 참이 되는 것을 확인했다.
+- 2026-11-15: 문서를 구현에 맞췄다. PDF 리더 설계에 코드 링크와 테스트 절을, 서재 데이터 설계에 `paper_pdfs`와 마이그레이션 0005를, 구글 드라이브 동기화 설계에 하위 폴더 파일을 더했다.
+
+### 결정 사항
+- 드라이브의 같은 이름(같은 내용 해시) 파일은 다시 올리지 않는다. 이름이 내용 해시이기 때문이다.
+- 올리기는 본문 전체를 PDF 내용으로 받는 `PUT`이다. 여러 부분(multipart) 양식 처리 의존성을 더하지 않기 위해서다.
+
+### 변경 파일
+- `docs/design/Reader.md`
+- `docs/design/Library.md`
+- `docs/design/DriveSync.md`
+- `src/jjabtero/pdfs.py`
+- `src/jjabtero/models.py`
+- `src/jjabtero/migrations/versions/0005_paper_pdfs.py`
+- `src/jjabtero/drive.py`
+- `src/jjabtero/drive_sync.py`
+- `src/jjabtero/papers_api.py`
+- `src/jjabtero/app.py`
+- `tests/test_pdfs.py`
+- `tests/fakes.py`
+- `frontend/src/api.ts`
+- `frontend/src/api.test.ts`
+- `frontend/src/pdfState.ts`
+- `frontend/src/pdfState.test.ts`
+- `frontend/src/PdfPanel.vue`
+- `frontend/src/PaperDetail.vue`
+- `docs/Roadmap.md`
+- `docs/Done.md`
+
+### 결과
+- 논문 상세에서 공개 PDF를 받거나 PDF를 올릴 수 있다. PDF는 로컬 사본과 드라이브 `Jjabtero/pdfs/`에 보관되고, 다른 컴퓨터나 재시작한 서버는 드라이브에서 받는다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과(백엔드 새 테스트 11개, 프론트엔드 새 테스트 5개 포함).
+- `vue-tsc` 타입 검사와 `npm run build` 통과. 브라우저에서 실제 arXiv PDF 받기를 확인했다.
+
 ## M4-T1 PDF 리더 설계(뷰어 라이브러리, PDF 가져오기와 드라이브 보관, 서버 전달, 주석 데이터)
 
 - 시작일: 2026-11-15

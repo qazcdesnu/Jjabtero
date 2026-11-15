@@ -40,6 +40,8 @@ from jjabtero.drive_sync import (
     seed_token_from_env,
 )
 from jjabtero.papers_api import router as papers_router
+from jjabtero.pdfs import PdfStore
+from jjabtero.pdfs import router as pdfs_router
 from jjabtero.public_pages import router as public_pages_router
 from jjabtero.settings import router as settings_router
 
@@ -91,6 +93,7 @@ def create_app(
     @doc: docs/design/DriveSync.md#8-서버-환경
     @doc: docs/design/PublicPages.md#1-제공-방식
     @doc: docs/design/Citations.md#5-갱신
+    @doc: docs/design/Reader.md#3-보관
     """
     settings = auth or auth_settings_from_env()
     settings.validate()
@@ -134,6 +137,7 @@ def create_app(
     )
     if run_citations:
         app.state.citations.start()
+    app.state.pdfs = PdfStore(path.parent / "pdfs", app.state.drive)
     app.include_router(_api)
     app.include_router(papers_router)
     app.include_router(drive_router)
@@ -141,6 +145,7 @@ def create_app(
     app.include_router(public_pages_router)
     app.include_router(settings_router)
     app.include_router(citations_router)
+    app.include_router(pdfs_router)
     # 정적 파일 마운트는 "/" 전체를 차지하므로 API 라우터 다음에 둔다.
     if frontend_dist.is_dir():
         app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")

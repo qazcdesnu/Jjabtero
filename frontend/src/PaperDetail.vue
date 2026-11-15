@@ -1,4 +1,5 @@
 <!-- @doc: docs/design/LibraryView.md#3-화면 -->
+<!-- @doc: docs/design/Reader.md#6-화면 -->
 <!-- @doc: docs/design/ReadingStatus.md#3-화면 -->
 <script setup lang="ts">
 import Button from 'primevue/button'
@@ -11,6 +12,7 @@ import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref, watch } from 'vue'
 import { ITEM_TYPE_LABELS, READ_STATUSES, formatDate } from './labels'
 import { createLibraryState } from './libraryState'
+import PdfPanel from './PdfPanel.vue'
 
 const props = defineProps<{ library: ReturnType<typeof createLibraryState> }>()
 const paper = computed(() => props.library.selected.value)
@@ -48,6 +50,10 @@ async function saveNote() {
   } finally {
     savingNote.value = false
   }
+}
+
+function openPdf(target: { id: number }) {
+  window.open(`/api/papers/${target.id}/pdf`, '_blank', 'noopener')
 }
 
 function askRemove(event: Event) {
@@ -117,6 +123,8 @@ function askRemove(event: Event) {
       <dt class="text-surface-500">추가일</dt>
       <dd class="tabular-nums">{{ formatDate(paper.created_at) }}</dd>
     </dl>
+
+    <PdfPanel :paper="paper" @changed="library.load()" @read="openPdf" />
 
     <div class="flex flex-col gap-2">
       <label for="note" class="text-sm text-surface-500">메모</label>

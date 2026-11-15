@@ -180,8 +180,8 @@ class FilesLike(Protocol):
     @doc: docs/design/DriveSync.md#4-드라이브-파일
     """
 
-    def find_folder(self, name: str) -> RemoteFile | None: ...
-    def create_folder(self, name: str) -> RemoteFile: ...
+    def find_folder(self, name: str, parent: str = "root") -> RemoteFile | None: ...
+    def create_folder(self, name: str, parent: str = "root") -> RemoteFile: ...
     def find_file(self, folder_id: str, name: str) -> RemoteFile | None: ...
     def get(self, file_id: str) -> RemoteFile | None: ...
     def download(self, file_id: str) -> bytes: ...
@@ -459,6 +459,38 @@ class DriveSync:
                 folder_id = self._folder(files, self._load_state())
                 existing = files.find_file(folder_id, name)
                 return None if existing is None else files.download(existing.id)
+        except (DriveAuthError, DriveNotConfiguredError, DriveApiError, httpx2.HTTPError, ValueError):
+            return None
+
+    def put_file(self, subfolder: str, name: str, data: bytes) -> str | None:
+        """서재 폴더 아래 하위 폴더에 파일을 올리고 파일 ID를 돌려준다. 같은 이름이 있으면 그 ID다.
+
+        @doc: docs/design/DriveSync.md#4-드라이브-파일
+        @doc: docs/design/Reader.md#3-보관
+        """
+        if not self.is_connected():
+            return None
+        try:
+            with self._lock:
+                files = self._files()
+                folder_id = self._folder(files, self._load_state())
+                child = files.find_folder(subfolder, folder_id) or files.create_folder(subfolder, folder_id)
+                existing = files.find_file(child.id, name)
+                return existing.id if existing is not None else files.create(child.id, name, data).id
+        except (DriveAuthError, DriveNotConfiguredError, DriveApiError, httpx2.HTTPError, ValueError):
+            return None
+
+    def download_file(self, file_id: str) -> bytes | None:
+        """파일 ID로 내용을 받는다. 없거나 실패하면 `None`이다.
+
+        @doc: docs/design/DriveSync.md#4-드라이브-파일
+        @doc: docs/design/Reader.md#3-보관
+        """
+        if not self.is_connected():
+            return None
+        try:
+            with self._lock:
+                return self._files().download(file_id)
         except (DriveAuthError, DriveNotConfiguredError, DriveApiError, httpx2.HTTPError, ValueError):
             return None
 

@@ -103,24 +103,26 @@ class FakeDrive:
         checksum = "" if item["folder"] else hashlib.md5(item["data"]).hexdigest()
         return RemoteFile(id=file_id, checksum=checksum)
 
-    def find_folder(self, name: str):
-        """이름이 같은 폴더를 찾는다.
+    def find_folder(self, name: str, parent: str = "root"):
+        """부모 폴더 안에서 이름이 같은 폴더를 찾는다.
 
         @doc: docs/design/DriveSync.md#9-테스트
         """
+        owner = None if parent == "root" else parent
         for file_id, item in self.files.items():
-            if item["folder"] and item["name"] == name and not item["trashed"]:
+            if item["folder"] and item["name"] == name and item["parent"] == owner and not item["trashed"]:
                 return self._remote(file_id)
         return None
 
-    def create_folder(self, name: str):
-        """폴더를 만든다.
+    def create_folder(self, name: str, parent: str = "root"):
+        """부모 폴더 안에 폴더를 만든다.
 
         @doc: docs/design/DriveSync.md#9-테스트
         """
         self.calls.append("create_folder")
         file_id = self._new_id()
-        self.files[file_id] = {"name": name, "folder": True, "parent": None, "data": b"", "trashed": False}
+        owner = None if parent == "root" else parent
+        self.files[file_id] = {"name": name, "folder": True, "parent": owner, "data": b"", "trashed": False}
         return self._remote(file_id)
 
     def find_file(self, folder_id: str, name: str):

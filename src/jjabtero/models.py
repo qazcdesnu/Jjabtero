@@ -113,6 +113,7 @@ class Paper(Base):
         cascade="all, delete-orphan",
     )
     tags: Mapped[list[Tag]] = relationship(secondary=paper_tags)
+    pdf: Mapped["PaperPdf | None"] = relationship(cascade="all, delete-orphan", passive_deletes=True)
 
     @property
     def author_names(self) -> list[str]:
@@ -141,3 +142,23 @@ class Setting(Base):
 
     key: Mapped[str] = mapped_column(String, primary_key=True)
     value: Mapped[str] = mapped_column(String)
+
+
+class PaperPdf(Base):
+    """논문의 PDF. 내용은 드라이브와 로컬 사본에 있고, 여기에는 연결만 둔다.
+
+    @doc: docs/design/Reader.md#4-데이터
+    @doc: docs/design/Library.md#1-데이터-모델
+    """
+
+    __tablename__ = "paper_pdfs"
+
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), primary_key=True)
+    sha256: Mapped[str] = mapped_column(String)
+    size: Mapped[int] = mapped_column(Integer)
+    source: Mapped[str] = mapped_column(String)
+    source_url: Mapped[str | None] = mapped_column(String)
+    drive_file_id: Mapped[str | None] = mapped_column(String)
+    page_count: Mapped[int | None] = mapped_column(Integer)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
