@@ -571,7 +571,7 @@ export async function fetchCitationGraph(outside = 0): Promise<CitationGraph> {
 // @doc: docs/design/ReaderCitations.md#4-논문-찾기
 export interface ReferenceMatch {
   state: 'found' | 'not_found'
-  source: 'references' | 'search' | null
+  source: 'identifier' | 'references' | 'search' | null
   work: CitedWork | null
   has_pdf: boolean
   pdf_url: string | null

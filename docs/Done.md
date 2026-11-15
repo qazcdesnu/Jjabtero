@@ -2,6 +2,50 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md), [M3 인용 기반 연결·추천](Done-M3.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## H3 리더 인용 미리보기가 줄바꿈 하이픈으로 붙은 제목(Openended)과 항목 글의 arXiv 주소를 못 써 참고문헌을 찾지 못함
+
+- 시작일: 2026-11-15
+- 완료일: 2026-11-15
+- 근거 문서: [리더 인용 미리보기 설계](design/ReaderCitations.md#4-논문-찾기)
+- 참고 자료: 없음
+
+### 계획
+- 항목 글의 DOI·arXiv 주소로 먼저 찾는다(이 논문의 참고문헌, 없으면 OpenAlex).
+- 빈칸을 뺀 제목이 빈칸을 뺀 항목 글 안에 있으면 맞은 것으로 보고, 연도 뒤의 글자(`2025b`)를 떼고 연도를 비교한다.
+- 제목 후보에서 끝의 연도와 주소 조각을 뺀다.
+- 사용자가 알려 준 항목 글로 테스트하고 실제 OpenAlex로 확인한다.
+
+### 진행 기록
+- 2026-11-15: I21 작업 중 사용자가 알려 준 항목 글("Jenny Zhang, … Darwin godel machine: Openended evolution of self-improving agents, 2025b. URL https://arxiv.org/abs/2505.22954.")로 원인을 확인했다. 제목 낱말 비율이 0.8(open, ended가 없음)로 기준 0.85에 못 미쳤고, 첫 제목 후보에 "2025b"와 "openended"가 들어가 OpenAlex 검색이 관계없는 논문만 주었으며, 두 번째 후보는 주소 조각이었다. 항목 글의 arXiv 주소는 쓰지 않았다.
+- 2026-11-15: I21을 마친 뒤 병합되지 않은 가장 최근 브랜치 `i21-drive-merge`에서 작업 브랜치를 만들었다.
+- 2026-11-15: 식별자 단계(`reference_dois`, `_lookup_doi`), 빈칸을 뺀 제목 비교, 연도 글자 떼기, 제목 후보에서 주소 조각과 끝 연도 빼기를 만들었다. 시연 서버와 실제 OpenAlex로 그 항목 글을 찾았다(경로 `identifier`, `W4412505633`).
+- 2026-11-15: 같은 항목 글에서 주소를 뺀 것은 여전히 찾지 못했다. "Openended" 때문에 제목 검색이 틀어졌다. 본제목("Darwin godel machine")으로 한 번 더 검색하게 하자 찾았다(경로 `search`).
+- 2026-11-15: 찾은 논문의 공개 PDF 주소가 낯선 미러 사이트였다. OpenAlex가 이 논문을 arXiv DOI가 아닌 다른 DOI의 기록으로 주었다. arXiv DOI면 arXiv PDF를 먼저 쓰고, 항목 글에 arXiv 번호가 있으면 그 arXiv PDF를 쓰게 했다. PDF 받기에도 같은 순서가 적용된다.
+
+### 결정 사항
+- 식별자를 제목보다 먼저 본다. 항목 글에 DOI나 arXiv 번호가 있으면 그것이 가장 확실하기 때문이다.
+- 붙은 낱말은 빈칸을 모두 뺀 비교로 맞춘다. 줄바꿈 하이픈이 원래 낱말 안의 하이픈인지 줄 끝 하이픈인지 글 조각만으로는 알 수 없기 때문이다.
+- arXiv 논문의 PDF는 arXiv에서 받는다. OpenAlex가 주는 다른 저장소 주소보다 확실하다.
+
+### 변경 파일
+- `docs/Issue.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+- `docs/design/ReaderCitations.md`
+- `docs/design/Reader.md`
+- `src/jjabtero/references.py`
+- `src/jjabtero/pdfs.py`
+- `tests/test_references.py`
+- `frontend/src/api.ts`
+
+### 결과
+- 항목 글에 DOI나 arXiv 주소가 있으면 그것으로 바로 찾는다. 줄바꿈 하이픈으로 붙은 제목과 `2025b` 같은 연도도 맞춘다. 사용자가 알려 준 'Darwin Gödel Machine' 항목 글은 주소가 있든 없든 찾고, 공개 PDF는 arXiv PDF다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+- `npx vue-tsc --noEmit -p tsconfig.app.json`, `npm run build`: 통과.
+- 시연 서버와 실제 OpenAlex로 그 항목 글(주소 있음, 주소 없음)과 기존 LSTM 항목 글을 확인했다.
+
 ## I21 드라이브 동기화에서 양쪽이 모두 바뀌었을 때 겹치지 않는 변경을 자동으로 합치기
 
 - 시작일: 2026-11-15
