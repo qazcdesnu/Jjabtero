@@ -28,7 +28,23 @@
 
 **링크가 없는 PDF**(M6-T4)
 
-- 출판사 PDF 등 링크가 없으면 글자 층에서 인용 표시 모양(`[숫자]`, `[숫자, 숫자]`, `[숫자–숫자]`, `(저자 et al., 연도)` 등)을 찾고, 참고문헌 절(제목 "References", "Bibliography", "참고문헌" 뒤)에서 번호나 저자·연도가 맞는 항목을 찾는다. 자세한 규칙은 M6-T4에서 정해 이 문서에 더한다.
+출판사 PDF처럼 인용 링크가 없으면 글자만으로 참고문헌 항목과 본문 인용 표시를 찾는다([textCitations 모듈](../../frontend/src/textCitations.ts)). 'Attention Is All You Need'(번호 양식)와 'Darwin Gödel Machine'(저자-연도 양식, 72쪽)의 arXiv PDF에서 링크 주석을 지워 조사하고 확인했다(2026-11-15).
+
+- **언제 쓰나**: 문서의 어느 쪽에도 `cite.` 링크가 없을 때만 쓴다. 링크가 있는 PDF에서 수식의 `[0, 1]` 같은 글을 인용으로 잘못 잡지 않기 위해서다. 처음 필요할 때 모든 쪽의 링크를 한 번 확인하고, 참고문헌 항목 목록을 한 번 만들어 둔다.
+- **줄 만들기**([pageLines](../../frontend/src/textCitations.ts#pageLines), [PageText](../../frontend/src/textCitations.ts#PageText), [TextLine](../../frontend/src/textCitations.ts#TextLine)): 기준선이 2pt 안인 조각을 왼쪽부터 잇되, 40pt 넘게 떨어진 조각은 다른 단으로 보고 나눈다. 조각 사이가 떨어져 있으면 빈칸을 넣는다. 위아래 끝 6% 안의 줄(머리말, 꼬리말)과 숫자뿐인 줄(쪽 번호)은 뺀다.
+- **참고문헌 절**: 문서 끝에서부터 "References", "Bibliography", "참고문헌" 제목 줄(앞의 절 번호 허용)을 찾는다([hasReferenceHeading](../../frontend/src/textCitations.ts#hasReferenceHeading)). 작은 대문자 제목은 "R"과 "EFERENCES"처럼 조각나 있어 빈칸을 빼고도 본다(DGM). 그 쪽부터 끝까지가 대상이다.
+- **항목 나누기**([referenceEntries](../../frontend/src/textCitations.ts#referenceEntries), [ReferenceEntry](../../frontend/src/textCitations.ts#ReferenceEntry)): 두 단이면 쪽마다 왼쪽 단(가장 왼쪽 줄에서 150pt 안)을 다 읽고 오른쪽 단을 읽는다.
+  - 번호 양식: 세 줄 이상이 `[n]`이나 `n. `로 시작하면 번호 양식이다. 번호로 시작하는 줄이 항목의 첫 줄이고, 번호를 기억한다. Attention은 항목 첫 줄이 113pt, 이어지는 줄이 129.6pt였다.
+  - 내어쓰기 양식: 쪽·단마다 가장 왼쪽 줄(1.5pt 안)이 항목의 첫 줄이다. DGM은 108pt와 118pt였다.
+  - 줄 끝 하이픈으로 끊긴 낱말은 붙인다.
+  - **끝**: 부록 제목("Appendix", "Supplementary", 또는 `A APPENDIX`처럼 대문자 한 글자 뒤 모두 대문자인 짧은 줄)이 나오거나, 번호 양식에서 들여쓰지 않은 이어지는 줄이 나오거나, 같은 쪽에서 줄 사이가 줄 높이의 3.5배보다 벌어지면 목록이 끝난 것으로 본다. Attention의 마지막 항목이 뒤쪽 그림 부록(13~15쪽)의 글까지 끌어가서 더했다.
+  - 항목마다 첫 저자의 성([firstSurname](../../frontend/src/textCitations.ts#firstSurname): `성, 이름`이면 쉼표 앞, `이름 성`이면 첫 저자의 마지막 낱말, 악센트를 뗀 소문자)과 항목에 나오는 연도들을 둔다.
+- **본문 인용 표시**([findMarkers](../../frontend/src/textCitations.ts#findMarkers), [TextMarker](../../frontend/src/textCitations.ts#TextMarker)): 참고문헌 영역 안([inReferences](../../frontend/src/textCitations.ts#inReferences))은 건너뛴다. 목록의 `[5]` 같은 항목 번호를 인용으로 잡지 않기 위해서다.
+  - 번호 양식: `[2]`, `[1, 3]`, `[1–4]` 안의 숫자마다 그 번호의 항목과 잇는다. 범위는 양 끝 숫자만 잇는다.
+  - 저자-연도 양식: `Zhang et al., 2025b`, `Darwin, 2023`, `Smith and Jones (2020)`처럼 대문자로 시작하는 성 뒤의 연도(글자 포함)를 찾아, 성과 연도가 같은 항목과 잇는다([authorYearEntry](../../frontend/src/textCitations.ts#authorYearEntry)). 같은 성·연도가 여럿이면 항목 글에 `2025b`가 그대로 있으면 그것, 없으면 참고문헌 순서(a가 첫째)다. 맞는 항목이 없는 글은 인용 표시가 아니다. 이것이 잘못 잡힘을 걸러 낸다.
+  - 표시 영역은 조각 안의 글자 위치를 조각 너비에 비례해 잡는다(글꼴마다 너비가 달라 몇 pt 어긋날 수 있다).
+- 찾은 표시는 링크와 같은 [CitationLink](../../frontend/src/citationLinks.ts#CitationLink)로 둔다. 목적지는 `text:<항목 번호>`이고, 항목 글은 이미 있으므로 3절의 계산 없이 그 글(600자까지)을 쓴다. 누르면 그 항목의 쪽과 위치로 간다.
+- 결과: 링크를 지운 Attention에서 항목 40개와 본문 표시 76개, DGM에서 항목 184개와 본문 표시 215개를 찾았다. 브라우저에서 Attention의 `[13]`은 LSTM 논문을, DGM의 `(Darwin, 2023)`은 그 항목을 상자에 보였고, 누르면 참고문헌 쪽으로 갔다. DGM의 그 항목은 책이라 OpenAlex에서 논문을 찾지 못해 "찾지 못했습니다"와 항목 글을 보였다.
 
 ## 3. 참고문헌 항목 읽기
 
@@ -93,8 +109,9 @@
 
 - [test_references](../../tests/test_references.py)는 글 다듬기, 항목 글의 DOI·arXiv 식별자, 제목 후보 고르기(번호 표시, 이름 머리글자, `et al.`, APA 형식, 끝의 연도와 주소 조각 빼기, 본제목), 붙은 낱말과 `2025b` 연도 맞추기, 식별자로 찾기(OpenAlex 조회와 arXiv PDF, 이 논문의 참고문헌에 있으면 조회 없음), 맞추기 규칙(제목 그대로, 낱말 비율, 짧은 제목 빼기, 비슷한 낱말 빼기, 연도), API(참고문헌에서 찾기와 공개 PDF 주소, arXiv DOI, 서재에 담은 뒤의 서재 논문 ID, 검색으로 찾기, 같은 글은 다시 검색하지 않기, 찾지 못함, 없는 논문, 빈 글)를 가짜 OpenAlex로 확인한다.
 - [citationLinks.test](../../frontend/src/citationLinks.test.ts)는 인용 목적지 고르기, 링크 영역 비율, 목적지 좌표 읽기(`XYZ`, `FitH`, 그 밖), 항목 글 읽기(같은 단, 오른쪽 단, 아래 목적지가 없을 때, 좌표가 없을 때, 떨어진 조각 사이 빈칸, 하이픈, 600자)를 확인한다.
+- [textCitations.test](../../frontend/src/textCitations.test.ts)는 줄 만들기(조각 잇기, 단 나누기), 번호 양식 항목 나누기(하이픈, 들여쓰지 않은 줄에서 끝), 내어쓰기 양식(조각난 대문자 제목, 부록 제목에서 끝), 제목이 없을 때, 첫 저자 성, 같은 성·연도의 글자 고르기, 본문 표시(번호와 위치, 없는 번호, 참고문헌 영역 건너뛰기, 저자-연도)를 확인한다.
 - [referencePreview.test](../../frontend/src/referencePreview.test.ts)는 새 탭 주소 고르기, 1초 기다림과 스치기, 링크에서 상자로 옮겨 가기와 0.3초 뒤 닫기, 같은 링크를 다시 찾지 않기, 실패 표시와 다시 시도, 서재에 담고 PDF 받기, 이미 있는 논문, PDF를 못 받았을 때의 알림을 가짜 타이머로 확인한다.
 
 ## 7. 미결정 사항
 
-- 링크가 없는 PDF의 인용 표시 모양과 참고문헌 절 찾기 규칙(M6-T4에서 정한다).
+- 없음. 내어쓰기도 번호도 없는 참고문헌(항목 사이를 빈 줄로만 나누는 양식)은 지금 나누지 못한다. 쓰다가 만나면 이슈로 더한다.

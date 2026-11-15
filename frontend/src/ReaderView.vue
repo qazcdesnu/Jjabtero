@@ -46,6 +46,7 @@ import {
   type TextPiece,
 } from './citationLinks'
 import { createReferencePreview } from './referencePreview'
+import { findMarkers, hasReferenceHeading, referenceEntries, type PageText, type ReferenceEntry } from './textCitations'
 import ReferencePreview from './ReferencePreview.vue'
 import {
   clampPage,
@@ -95,8 +96,11 @@ const dragPreview = computed(() => (dragging.value ? dragRect(dragging.value.sta
 
 // 인용 링크(쪽마다)와 참고문헌 목적지. 링크 위에 요소를 겹치지 않고 마우스 위치로 확인한다.
 const citationLinks = new Map<number, CitationLink[]>()
-const pageTexts = new Map<number, Promise<{ pieces: TextPiece[]; right: number }>>()
+const pageTexts = new Map<number, Promise<{ pieces: TextPiece[]; right: number; view: number[] }>>()
 let anchorsPromise: Promise<Map<string, Anchor>> | null = null
+// 링크가 없는 PDF는 글자로 참고문헌과 인용 표시를 찾는다. 문서에 인용 링크가 하나라도 있으면 쓰지 않는다.
+let textIndexPromise: Promise<ReferenceEntry[]> | null = null
+const TEXT_DEST = 'text:'
 const hoveredLink = ref<CitationLink | null>(null)
 const preview = createReferencePreview(props.paperId, entryText, () => emit('added'))
 
@@ -114,7 +118,43 @@ async function readCitationLinks(page: number): Promise<void> {
     const rect = linkRect(corners, viewport.width, viewport.height)
     found.push({ page, dest: annotation.dest, rects: [rect] })
   }
+  if (found.length === 0) {
+    const entries = await readTextIndex()
+    if (entries.length) {
+      const text = await readPageText(page)
+      for (const marker of findMarkers(asPageText(page, text), entries)) {
+        found.push({ page, dest: `${TEXT_DEST}${marker.entry}`, rects: marker.rects })
+      }
+    }
+  }
   citationLinks.set(page, found)
+}
+
+function asPageText(page: number, text: { pieces: TextPiece[]; view: number[] }): PageText {
+  return {
+    page,
+    view: text.view,
+    pieces: text.pieces.map((piece) => ({ ...piece, width: piece.width ?? 0, height: piece.height ?? 0 })),
+  }
+}
+
+function readTextIndex(): Promise<ReferenceEntry[]> {
+  textIndexPromise ??= (async () => {
+    const pdf = doc.value!
+    for (let page = 1; page <= pdf.numPages; page += 1) {
+      const annotations = await (await pdf.getPage(page)).getAnnotations()
+      if (annotations.some((annotation) => annotation.subtype === 'Link' && isCitationDest(annotation.dest))) return []
+    }
+    // 참고문헌은 대개 끝에 있으므로 뒤에서부터 제목을 찾는다.
+    for (let page = pdf.numPages; page >= 1; page -= 1) {
+      if (!hasReferenceHeading(asPageText(page, await readPageText(page)))) continue
+      const pages: PageText[] = []
+      for (let next = page; next <= pdf.numPages; next += 1) pages.push(asPageText(next, await readPageText(next)))
+      return referenceEntries(pages)
+    }
+    return []
+  })()
+  return textIndexPromise
 }
 
 function readAnchors(): Promise<Map<string, Anchor>> {
@@ -144,10 +184,18 @@ function readPageText(page: number) {
       const content = await pdfPage.getTextContent()
       const pieces = content.items.flatMap((item) =>
         'str' in item
-          ? [{ str: item.str, x: item.transform[4] as number, y: item.transform[5] as number, width: item.width }]
+          ? [
+              {
+                str: item.str,
+                x: item.transform[4] as number,
+                y: item.transform[5] as number,
+                width: item.width,
+                height: item.height,
+              },
+            ]
           : [],
       )
-      return { pieces, right: pdfPage.view[2] }
+      return { pieces, right: pdfPage.view[2], view: pdfPage.view }
     })()
     pageTexts.set(page, found)
   }
@@ -155,6 +203,10 @@ function readPageText(page: number) {
 }
 
 async function entryText(dest: string): Promise<string> {
+  if (dest.startsWith(TEXT_DEST)) {
+    const entry = (await readTextIndex())[Number(dest.slice(TEXT_DEST.length))]
+    return entry ? entry.text.slice(0, 600) : ''
+  }
   const anchors = await readAnchors()
   const anchor = anchors.get(dest)
   if (!anchor) return ''
@@ -163,6 +215,16 @@ async function entryText(dest: string): Promise<string> {
 }
 
 async function goToDest(dest: string) {
+  if (dest.startsWith(TEXT_DEST)) {
+    const entry = (await readTextIndex())[Number(dest.slice(TEXT_DEST.length))]
+    const element = scroller.value
+    if (!entry || !element) return
+    const [, bottom, , top] = (await doc.value!.getPage(entry.page)).view
+    const offset = (top - entry.y) / (top - bottom || 1)
+    element.scrollTop = Math.max(tops.value[entry.page - 1] + offset * heights.value[entry.page - 1] - 40, 0)
+    update()
+    return
+  }
   const element = scroller.value
   const anchor = (await readAnchors()).get(dest)
   if (!element || !anchor) return
