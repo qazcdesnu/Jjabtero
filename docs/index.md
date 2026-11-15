@@ -45,6 +45,7 @@
 | [로그인 설계](design/Auth.md) | 구글 로그인으로 본인 계정만 허용, 세션, 막는 범위, 로그인 화면 | M2-T2 |
 | [배포 설계](design/Deployment.md) | Render 배포의 주소(jjabtero.qazcde.kr), 공개 범위, 비밀 값, 동의 화면 게시 | M2-T1 |
 | [인용 데이터 설계](design/Citations.md) | OpenAlex 조사, 서재 논문의 OpenAlex ID 연결, 피인용을 가져오는 범위(공개 후 1년, 피인용 많은 순 최대 건수), 인용 캐시 파일 | M3-T2 |
+| [서재 인용 그래프 설계](design/CitationGraph.md) | 시각화 라이브러리(ECharts), 서재 논문 사이 인용·가까움 그래프 데이터, API, 연도 순·자유 배치 화면 | M3-T7 |
 | [사용자 설정 설계](design/Settings.md) | 앱 안에서 바꾸는 설정 항목, 저장, API와 설정 창 | M3-T2 |
 | [PDF 리더 설계](design/Reader.md) | pdf.js 뷰어, PDF 가져오기(공개 PDF, 올리기)와 드라이브 보관, 읽던 위치·하이라이트·영역 메모 데이터, API, 화면 | M4-T1 |
 | [공개 페이지 설계](design/PublicPages.md) | 로그인 없이 여는 앱 소개·개인정보처리방침 페이지, 검색 노출 막기 | M2-T5 |

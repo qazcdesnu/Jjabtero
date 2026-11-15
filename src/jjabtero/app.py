@@ -28,6 +28,7 @@ from jjabtero.auth import (
     require_login,
 )
 from jjabtero.auth import router as auth_router
+from jjabtero.citation_graph import router as citation_graph_router
 from jjabtero.citations import CACHE_FILE, CitationSync
 from jjabtero.citations import paper_router as paper_citations_router
 from jjabtero.citations import router as citations_router
@@ -148,6 +149,7 @@ def create_app(
     app.include_router(public_pages_router)
     app.include_router(settings_router)
     app.include_router(citations_router)
+    app.include_router(citation_graph_router)
     app.include_router(paper_citations_router)
     app.include_router(pdfs_router)
     app.include_router(reading_router)

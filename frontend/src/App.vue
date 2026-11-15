@@ -7,6 +7,7 @@
 <!-- @doc: docs/design/Settings.md#4-화면 -->
 <!-- @doc: docs/design/Reader.md#6-화면 -->
 <!-- @doc: docs/design/Citations.md#6-api와-화면 -->
+<!-- @doc: docs/design/CitationGraph.md#4-화면 -->
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Splitter from 'primevue/splitter'
@@ -30,6 +31,8 @@ import RecommendView from './RecommendView.vue'
 
 // pdf.js가 무거우므로 리더는 처음 열 때 불러온다.
 const ReaderView = defineAsyncComponent(() => import('./ReaderView.vue'))
+// ECharts도 무거우므로 그래프 화면을 처음 열 때 불러온다.
+const GraphView = defineAsyncComponent(() => import('./GraphView.vue'))
 import Sidebar from './Sidebar.vue'
 
 const view = ref<string>(DEFAULT_VIEW)
@@ -46,6 +49,12 @@ watch(view, (name) => {
   reading.value = null
   if (name === 'library') library.load()
 })
+// 그래프에서 고른 서재 논문을 서재 화면에서 연다. 필터에 가려지지 않게 필터를 푼다.
+function openInLibrary(paperId: number) {
+  library.clearFilter()
+  library.state.selectedId = paperId
+  view.value = 'library'
+}
 const health = ref<Health | null>(null)
 const healthFailed = ref(false)
 
@@ -101,13 +110,14 @@ onMounted(async () => {
         <ReaderView :key="reading.id" :paper-id="reading.id" :title="reading.title" @close="reading = null" />
       </SplitterPanel>
     </Splitter>
-    <Splitter v-else-if="view === 'settings' || view === 'recommend'" key="wide" class="min-h-0 flex-1 rounded-none border-0">
+    <Splitter v-else-if="view === 'settings' || view === 'recommend' || view === 'graph'" key="wide" class="min-h-0 flex-1 rounded-none border-0">
       <SplitterPanel :size="15" :min-size="10" class="overflow-auto">
         <Sidebar v-model="view" :library="library" />
       </SplitterPanel>
       <SplitterPanel :size="85" :min-size="50" class="overflow-auto">
         <SettingsView v-if="view === 'settings'" />
-        <RecommendView v-else @added="library.load()" />
+        <RecommendView v-else-if="view === 'recommend'" @added="library.load()" />
+        <GraphView v-else @added="library.load()" @open="openInLibrary" />
       </SplitterPanel>
     </Splitter>
     <Splitter v-else key="main" class="min-h-0 flex-1 rounded-none border-0">

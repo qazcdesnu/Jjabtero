@@ -76,6 +76,7 @@ Python 버전은 `.python-version`과 `pyproject.toml`의 `requires-python`(`>=3
 | 패키지 관리 | npm |
 | UI | PrimeVue 4.5.5(Aura 테마, primeicons), Tailwind CSS 4 ([UI 기반 설계](design/UiLayout.md)) |
 | PDF 렌더링 | pdf.js(`pdfjs-dist` 6.4.299, [PDF 리더 설계](design/Reader.md#1-뷰어-라이브러리)) |
+| 시각화 | Apache ECharts(`echarts` 6.1.0, 인용 그래프와 통계 차트, [서재 인용 그래프 설계](design/CitationGraph.md#1-시각화-라이브러리)) |
 | 테스트 | Vitest |
 
 ## 4. 스타일
@@ -98,6 +99,5 @@ Python 버전은 `.python-version`과 `pyproject.toml`의 `requires-python`(`>=3
 
 아래 항목은 아직 정하지 않았다. 정하면 이 문서에 반영하고 이 목록에서 지운다.
 
-- 시각화 라이브러리(통계 차트, 인용 그래프).
 - 백엔드 API의 타입을 프론트엔드와 공유하는 방식(예: OpenAPI 명세에서 TypeScript 타입 생성).
 - Node.js 버전과 프론트엔드 린터·포매터.

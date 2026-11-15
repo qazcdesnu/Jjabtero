@@ -518,3 +518,43 @@ export async function fetchRecommendations(): Promise<Recommendations> {
   }
   return (await response.json()) as Recommendations
 }
+
+// @doc: docs/design/CitationGraph.md#4-화면
+export interface GraphNode {
+  id: string
+  paper_id: number | null
+  openalex_id: string | null
+  title: string
+  item_type: string
+  authors: string[]
+  year: number | null
+  venue: string | null
+  doi: string | null
+  cited_by_count: number | null
+  has_data: boolean
+  score: number | null
+}
+
+// @doc: docs/design/CitationGraph.md#4-화면
+export interface GraphEdge {
+  source: string
+  target: string
+  kind: 'cites' | 'related'
+  shared_refs: number
+  cocited: number
+}
+
+// @doc: docs/design/CitationGraph.md#4-화면
+export interface CitationGraph {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+}
+
+// @doc: docs/design/CitationGraph.md#4-화면
+export async function fetchCitationGraph(outside = 0): Promise<CitationGraph> {
+  const response = await fetch(`/api/citations/graph?outside=${outside}`)
+  if (!response.ok) {
+    throw new Error(`인용 그래프 불러오기 실패: ${response.status}`)
+  }
+  return (await response.json()) as CitationGraph
+}
