@@ -30,4 +30,6 @@
 - [x] I12 실행 명령이 `.env` 파일에서 환경 변수 읽기
 - [x] I13 피인용 기간을 논문 공개 후 1년, 고르는 순서를 피인용 많은 순으로 변경
 - [x] I14 PDF 리더 마일스톤 계획
-- [ ] I15 (사용자) Render 환경 변수 `OPENALEX_API_KEY`에 OpenAlex 키 넣기 확인
+- [x] I15 (사용자) Render 환경 변수 `OPENALEX_API_KEY`에 OpenAlex 키 넣기 확인
+  - 경량: 사용자가 Render 환경 변수 `OPENALEX_API_KEY`에 키가 들어 있음을 확인했다.
+  - 완료일: 2026-11-15
