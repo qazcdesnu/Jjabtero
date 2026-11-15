@@ -93,7 +93,11 @@
   - `state`: `no_doi`(DOI가 없어 연결할 수 없음), `not_found`(7일 안에 찾지 못함), `pending`(연결 전이거나 아직 가져오지 않음), `ready`.
   - `ready`면 피인용 기간(시작·끝), 기간 안 피인용 전체 건수, 그때의 `citing_limit`, 가져온 시각과 함께 참고문헌과 피인용 목록을 준다. 둘 다 피인용 많은 순이다([CitationStore.paper_lists](../../src/jjabtero/citations.py#CitationStore.paper_lists)).
   - 목록의 항목은 [CitedWork](../../src/jjabtero/citations.py#CitedWork)(OpenAlex ID, 제목, 저자, 항목 종류, 연도, 게재처, DOI, 피인용 수, 피인용 항목은 공유 참고문헌 수)이고, OpenAlex ID나 DOI가 같은 서재 논문이 있으면 그 ID(`library_paper_id`)를 담는다.
-- 논문 상세에 "인용" 칸([CitationLists](../../frontend/src/CitationLists.vue))을 둔다. "피인용 n"과 "참고문헌 n"을 바꿔 보고, 피인용은 기간과 "n편 가운데 피인용 많은 순 m편"을 알린다. 항목마다 제목(DOI 또는 OpenAlex로 이어지는 링크), 저자·연도·게재처, 피인용 수, 공유 참고문헌 수를 보여 주고, 서재에 있으면 "서재에 있음", 없으면 "서재에 담기"를 둔다. 상태가 `ready`가 아니면 그 까닭을 한 줄로 알린다.
+- `GET /api/papers/{id}/related`는 [paper_related](../../src/jjabtero/citations.py#paper_related)가 처리하며 가까운 논문 목록 [PaperRelated](../../src/jjabtero/citations.py#PaperRelated)(상태, 가져온 피인용 수, 참고문헌 수, 항목)을 돌려준다. 항목은 [RelatedWork](../../src/jjabtero/citations.py#RelatedWork)로, `CitedWork`에 점수와 까닭(이 논문을 인용, 이 논문이 인용, 함께 인용된 횟수, 공유 참고문헌 수)을 더한 것이다.
+  - 후보는 이 논문의 참고문헌, 가져온 피인용, 함께 인용된 논문이다([CitationStore.relation_rows](../../src/jjabtero/citations.py#CitationStore.relation_rows)). 논문 자신은 뺀다.
+  - 점수([related_works](../../src/jjabtero/citations.py#related_works), 까닭은 [Relation](../../src/jjabtero/citations.py#Relation))는 직접 인용이면 0.5([DIRECT_WEIGHT](../../src/jjabtero/citations.py#DIRECT_WEIGHT)) + 함께 인용된 비율(공동 인용 수 / 가져온 피인용 수) + 공유 참고문헌 비율(공유 참고문헌 수 / 이 논문의 참고문헌 수)이다. 세 값 모두 0~1 근처라 어느 하나가 압도하지 않고, 화면에 까닭을 그대로 보여 줄 수 있다. 같은 점수는 ID 순이다. 상위 30편([RELATED_LIMIT](../../src/jjabtero/citations.py#RELATED_LIMIT))을 준다.
+  - 함께 인용된 논문은 서지 정보가 없으므로 이 API를 부를 때 없는 것만 OpenAlex에서 100건씩 받아 `works`에 둔다([lookup_works](../../src/jjabtero/citations.py#lookup_works), [CitationStore.works_by_id](../../src/jjabtero/citations.py#CitationStore.works_by_id), [CitationStore.save_works](../../src/jjabtero/citations.py#CitationStore.save_works)). 받지 못하면 제목 없이 ID로 보여 준다.
+- 논문 상세에 "인용" 칸([CitationLists](../../frontend/src/CitationLists.vue))을 둔다. "가까운 논문"이 첫 칸이고, 항목마다 까닭을 작은 표시로 보여 준다([relationReasons](../../frontend/src/citationListState.ts#relationReasons)). API 호출은 [fetchPaperRelated](../../frontend/src/api.ts#fetchPaperRelated)(타입 [PaperRelated](../../frontend/src/api.ts#PaperRelated), [RelatedWork](../../frontend/src/api.ts#RelatedWork))다. "피인용 n"과 "참고문헌 n"을 바꿔 보고, 피인용은 기간과 "n편 가운데 피인용 많은 순 m편"을 알린다. 항목마다 제목(DOI 또는 OpenAlex로 이어지는 링크), 저자·연도·게재처, 피인용 수, 공유 참고문헌 수를 보여 주고, 서재에 있으면 "서재에 있음", 없으면 "서재에 담기"를 둔다. 상태가 `ready`가 아니면 그 까닭을 한 줄로 알린다.
   - "서재에 담기"는 항목을 서재 입력으로 바꿔([citedWorkInput](../../frontend/src/citationListState.ts#citedWorkInput): 원문 주소는 DOI, 없으면 OpenAlex 주소, OpenAlex ID 포함) 논문을 추가하고, 그 항목을 "서재에 있음"으로 바꾼 뒤 서재 목록을 다시 읽는다. DOI가 이미 있으면 그 논문으로 표시한다. 상태는 [createCitationListState](../../frontend/src/citationListState.ts#createCitationListState)가 가지며, 다른 논문을 고른 뒤 늦게 온 응답은 버린다. API 호출은 [fetchPaperCitations](../../frontend/src/api.ts#fetchPaperCitations)(타입 [PaperCitations](../../frontend/src/api.ts#PaperCitations), [CitedWork](../../frontend/src/api.ts#CitedWork))다.
 - 설정 페이지([사용자 설정 설계](Settings.md#4-화면))에 "인용 데이터" 칸을 두어 상태를 보여 주고 "인용 데이터 새로 받기" 버튼을 둔다. 화면은 [CitationStatusPanel](../../frontend/src/CitationStatusPanel.vue)이고, 응답 타입은 [CitationStatus](../../frontend/src/api.ts#CitationStatus), API 호출은 [fetchCitationStatus](../../frontend/src/api.ts#fetchCitationStatus)와 [refreshCitations](../../frontend/src/api.ts#refreshCitations)다.
 
@@ -108,13 +112,13 @@
 - 7일 지난 논문만 다시 가져옴, 지운 논문의 데이터 정리, 429에서 멈춤.
 - 캐시 버전이 다르면 다시 만듦, 드라이브에 올리고 받기.
 - API 상태와 새로 받기.
+- 가까운 논문 점수(직접 인용, 함께 인용된 비율, 공유 참고문헌 비율, 자신 빼기, 순서)와 API(점수 순, 없는 서지 정보를 한 번만 받기).
 - 논문의 인용 목록 API: 가져오기 전 `pending`, 가져온 뒤 기간·건수·한도, 피인용 많은 순 목록과 서지 정보, 서재에 있는 논문 표시, DOI 없음·찾지 못함·없는 논문.
 
-[citationListState.test](../../frontend/src/citationListState.test.ts)는 인용 논문의 서재 입력 변환, 목록 읽기, 담기와 표시, 이미 있는 DOI, 실패 메시지, 늦게 온 응답 버리기를 확인한다.
+[citationListState.test](../../frontend/src/citationListState.test.ts)는 인용 논문의 서재 입력 변환, 목록 읽기, 담기와 표시, 이미 있는 DOI, 실패 메시지, 늦게 온 응답 버리기, 가까운 논문 읽기와 담기 표시, 까닭 문구를 확인한다.
 
 [api.test](../../frontend/src/api.test.ts)는 `toPaperInput`의 OpenAlex ID와 인용 데이터 API 호출을 확인한다.
 
 ## 8. 미결정 사항
 
-- 거리 점수 계산식(직접 인용, 서지 결합, 공동 인용의 가중치): M3-T5.
 - 서재 밖 추천 점수: M3-T6.

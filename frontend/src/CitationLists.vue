@@ -5,13 +5,13 @@ import Message from 'primevue/message'
 import SelectButton from 'primevue/selectbutton'
 import Tag from 'primevue/tag'
 import { computed, ref, watch } from 'vue'
-import type { CitedWork } from './api'
-import { createCitationListState } from './citationListState'
+import type { CitedWork, RelatedWork } from './api'
+import { createCitationListState, relationReasons } from './citationListState'
 
 const props = defineProps<{ paperId: number }>()
 const emit = defineEmits<{ added: [] }>()
 const lists = createCitationListState(() => emit('added'))
-const tab = ref<'citations' | 'references'>('citations')
+const tab = ref<'related' | 'citations' | 'references'>('related')
 
 watch(
   () => props.paperId,
@@ -21,10 +21,18 @@ watch(
 
 const data = computed(() => lists.state.data)
 const tabs = computed(() => [
+  { value: 'related', label: `가까운 논문 ${lists.state.related?.works.length ?? 0}` },
   { value: 'citations', label: `피인용 ${data.value?.citations.length ?? 0}` },
   { value: 'references', label: `참고문헌 ${data.value?.references.length ?? 0}` },
 ])
-const items = computed<CitedWork[]>(() => (data.value ? data.value[tab.value] : []))
+const items = computed<CitedWork[]>(() => {
+  if (tab.value === 'related') return lists.state.related?.works ?? []
+  return data.value ? data.value[tab.value] : []
+})
+
+function reasons(work: CitedWork): string[] {
+  return 'score' in work ? relationReasons(work as RelatedWork) : []
+}
 
 function authorLine(work: CitedWork): string {
   if (work.authors.length === 0) return ''
@@ -48,6 +56,10 @@ function authorLine(work: CitedWork): string {
       </p>
       <template v-else>
         <SelectButton v-model="tab" :options="tabs" option-label="label" option-value="value" :allow-empty="false" size="small" />
+        <p v-if="tab === 'related'" class="text-xs text-surface-500">
+          직접 인용, 함께 인용된 횟수(피인용 {{ lists.state.related?.citing_count ?? 0 }}편 기준), 공유한 참고문헌(참고문헌
+          {{ lists.state.related?.reference_count ?? 0 }}편 기준)으로 가까운 순서입니다.
+        </p>
         <p v-if="tab === 'citations'" class="text-xs text-surface-500">
           공개 후 1년({{ data.window_start }} ~ {{ data.window_end }}) 안에 인용한 {{ data.citing_total }}편 가운데 피인용 많은 순
           {{ data.citations.length }}편입니다.
@@ -68,7 +80,10 @@ function authorLine(work: CitedWork): string {
             </span>
             <div class="flex flex-wrap items-center gap-2 text-xs text-surface-500">
               <span v-if="work.cited_by_count !== null">피인용 {{ work.cited_by_count.toLocaleString() }}</span>
-              <span v-if="work.shared_refs">공유 참고문헌 {{ work.shared_refs }}</span>
+              <template v-if="tab === 'related'">
+                <span v-for="reason in reasons(work)" :key="reason" class="rounded bg-surface-100 px-1.5 py-0.5 dark:bg-surface-800">{{ reason }}</span>
+              </template>
+              <span v-else-if="work.shared_refs">공유 참고문헌 {{ work.shared_refs }}</span>
               <Tag v-if="work.library_paper_id" severity="success" value="서재에 있음" />
               <Button
                 v-else

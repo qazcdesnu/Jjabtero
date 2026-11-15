@@ -198,6 +198,71 @@ class FetchResult:
     works: list[dict[str, Any]] = field(default_factory=list)
 
 
+def lookup_works(http: httpx2.Client, work_ids: list[str], now: datetime) -> list[dict[str, Any]]:
+    """OpenAlex에서 여러 논문의 서지 정보를 100건씩 받는다.
+
+    @doc: docs/design/Citations.md#4-저장
+    """
+    stamp = now.isoformat()
+    rows: list[dict[str, Any]] = []
+    for index in range(0, len(work_ids), LOOKUP_BATCH):
+        batch = work_ids[index : index + LOOKUP_BATCH]
+        body = _get(
+            http,
+            OPENALEX_WORKS_URL,
+            {"filter": "openalex_id:" + "|".join(batch), "per-page": LOOKUP_BATCH, "select": _WORK_FIELDS},
+        ) or {}
+        rows.extend(_work_row(work, stamp) for work in body.get("results") or [] if short_id(work.get("id")))
+    return rows
+
+
+# @doc: docs/design/Citations.md#6-api와-화면
+DIRECT_WEIGHT = 0.5
+# @doc: docs/design/Citations.md#6-api와-화면
+RELATED_LIMIT = 30
+
+
+@dataclass(frozen=True)
+class Relation:
+    """가까운 논문 하나의 점수와 까닭.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+
+    work: str
+    score: float
+    cites_paper: bool
+    cited_by_paper: bool
+    cocited: int
+    shared_refs: int
+
+
+def related_works(work_id: str, rows: dict[str, Any], citing_count: int) -> list[Relation]:
+    """논문 하나와 인용으로 가까운 논문을 점수 순으로 돌려준다.
+
+    점수 = 직접 인용이면 0.5 + 함께 인용된 비율(공동 인용 수 / 가져온 피인용 수)
+    + 공유한 참고문헌 비율(공유 참고문헌 수 / 이 논문의 참고문헌 수).
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+    references: set[str] = rows["references"]
+    citations: dict[str, int] = rows["citations"]
+    cocitations: dict[str, int] = rows["cocitations"]
+    relations = []
+    for work in (references | set(citations) | set(cocitations)) - {work_id}:
+        cites_paper = work in citations
+        cited_by_paper = work in references
+        cocited = cocitations.get(work, 0)
+        shared = citations.get(work) or 0
+        score = (
+            (DIRECT_WEIGHT if cites_paper or cited_by_paper else 0)
+            + cocited / max(citing_count, 1)
+            + shared / max(len(references), 1)
+        )
+        relations.append(Relation(work, round(score, 4), cites_paper, cited_by_paper, cocited, shared))
+    return sorted(relations, key=lambda relation: (-relation.score, relation.work))
+
+
 def fetch_citations(http: httpx2.Client, work_id: str, limit: int, now: datetime) -> FetchResult:
     """참고문헌과 공개 후 1년 안의 피인용(피인용 많은 순 최대 `limit`건)을 가져온다.
 
@@ -252,14 +317,7 @@ def fetch_citations(http: httpx2.Client, work_id: str, limit: int, now: datetime
     cocitations = [(work, count) for work, count in ranked if count >= 2][:COCITATION_LIMIT]
 
     works = [_work_row(citer, stamp) for citer in citers if short_id(citer.get("id"))]
-    for index in range(0, len(references), LOOKUP_BATCH):
-        batch = references[index : index + LOOKUP_BATCH]
-        body = _get(
-            http,
-            OPENALEX_WORKS_URL,
-            {"filter": "openalex_id:" + "|".join(batch), "per-page": LOOKUP_BATCH, "select": _WORK_FIELDS},
-        ) or {}
-        works.extend(_work_row(work, stamp) for work in body.get("results") or [] if short_id(work.get("id")))
+    works.extend(lookup_works(http, references, now))
     return FetchResult(published, window_end, total, references, citations, cocitations, works)
 
 
@@ -412,6 +470,42 @@ class CitationStore:
         refs.sort(key=lambda row: (-(row["cited_by_count"] or 0), row["work"]))
         cites.sort(key=lambda row: (-(row["cited_by_count"] or 0), row["work"]))
         return (dict(fetch._mapping) if fetch else None), refs, cites
+
+    def relation_rows(self, work_id: str) -> dict[str, Any]:
+        """가까운 논문 계산에 쓸 참고문헌, 피인용(공유 참고문헌 수), 공동 인용 수를 돌려준다.
+
+        @doc: docs/design/Citations.md#6-api와-화면
+        """
+        with self.engine.connect() as connection:
+            references = {row.work for row in connection.execute(select(_references.c.work).where(_references.c.paper == work_id))}
+            citations = dict(
+                connection.execute(select(_citations.c.work, _citations.c.shared_refs).where(_citations.c.paper == work_id)).all()
+            )
+            cocitations = dict(
+                connection.execute(select(_cocitations.c.work, _cocitations.c.count).where(_cocitations.c.paper == work_id)).all()
+            )
+        return {"references": references, "citations": citations, "cocitations": cocitations}
+
+    def works_by_id(self, work_ids: set[str]) -> dict[str, dict[str, Any]]:
+        """`works`에 있는 서지 정보를 ID로 돌려준다.
+
+        @doc: docs/design/Citations.md#6-api와-화면
+        """
+        if not work_ids:
+            return {}
+        with self.engine.connect() as connection:
+            rows = connection.execute(select(_works).where(_works.c.id.in_(work_ids))).all()
+        return {row.id: dict(row._mapping) for row in rows}
+
+    def save_works(self, rows: list[dict[str, Any]]) -> None:
+        """서지 정보를 저장한다. 같은 ID는 바꾼다.
+
+        @doc: docs/design/Citations.md#4-저장
+        """
+        with self.engine.begin() as connection:
+            for row in {row["id"]: row for row in rows}.values():
+                connection.execute(delete(_works).where(_works.c.id == row["id"]))
+                connection.execute(insert(_works).values(**row))
 
     def rows(self, table: str) -> list[dict[str, Any]]:
         """표 하나의 모든 행. 테스트와 진단에 쓴다.
@@ -758,5 +852,79 @@ def paper_citations(paper_id: int, request: Request) -> PaperCitations:
         citing_limit=fetch["citing_limit"],
         references=[_cited_work(row, owners) for row in references],
         citations=[_cited_work(row, owners) for row in citations],
+    )
+
+
+class RelatedWork(CitedWork):
+    """가까운 논문 하나. 점수와 까닭을 함께 가진다.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+
+    score: float
+    cites_paper: bool
+    cited_by_paper: bool
+    cocited: int
+
+
+class PaperRelated(BaseModel):
+    """논문 하나의 가까운 논문 목록.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+
+    state: Literal["no_doi", "not_found", "pending", "ready"]
+    citing_count: int = 0
+    reference_count: int = 0
+    works: list[RelatedWork] = []
+
+
+@paper_router.get("/{paper_id}/related")
+def paper_related(paper_id: int, request: Request) -> PaperRelated:
+    """`GET /api/papers/{paper_id}/related`를 처리한다. 서지 정보가 없는 논문은 OpenAlex에서 받아 둔다.
+
+    @doc: docs/design/Citations.md#6-api와-화면
+    """
+    listed = paper_citations(paper_id, request)
+    if listed.state != "ready" or listed.openalex_id is None:
+        return PaperRelated(state=listed.state)
+    sync: CitationSync = request.app.state.citations
+    rows = sync.store.relation_rows(listed.openalex_id)
+    relations = related_works(listed.openalex_id, rows, len(rows["citations"]))[:RELATED_LIMIT]
+    wanted = {relation.work for relation in relations}
+    known = sync.store.works_by_id(wanted)
+    missing = sorted(wanted - set(known))
+    if missing:
+        try:
+            sync.store.save_works(lookup_works(sync.http, missing, sync.clock()))
+            known = sync.store.works_by_id(wanted)
+        except (OpenAlexBudgetError, httpx2.HTTPError, ValueError):
+            pass
+    owners = {
+        item.openalex_id: item.library_paper_id
+        for item in listed.references + listed.citations
+        if item.library_paper_id
+    }
+    with Session(sync.library_engine) as session:
+        for other in session.scalars(select(Paper)):
+            if other.openalex_id:
+                owners[other.openalex_id] = other.id
+            if other.doi:
+                owners[other.doi] = other.id
+    works = []
+    for relation in relations:
+        base = _cited_work({"work": relation.work, **known.get(relation.work, {})}, owners)
+        works.append(
+            RelatedWork(
+                **base.model_dump(exclude={"shared_refs"}),
+                shared_refs=relation.shared_refs,
+                score=relation.score,
+                cites_paper=relation.cites_paper,
+                cited_by_paper=relation.cited_by_paper,
+                cocited=relation.cocited,
+            )
+        )
+    return PaperRelated(
+        state="ready", citing_count=len(rows["citations"]), reference_count=len(rows["references"]), works=works
     )
 

@@ -462,3 +462,28 @@ export async function fetchPaperCitations(paperId: number): Promise<PaperCitatio
   }
   return (await response.json()) as PaperCitations
 }
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export interface RelatedWork extends CitedWork {
+  score: number
+  cites_paper: boolean
+  cited_by_paper: boolean
+  cocited: number
+}
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export interface PaperRelated {
+  state: PaperCitations['state']
+  citing_count: number
+  reference_count: number
+  works: RelatedWork[]
+}
+
+// @doc: docs/design/Citations.md#6-api와-화면
+export async function fetchPaperRelated(paperId: number): Promise<PaperRelated> {
+  const response = await fetch(`/api/papers/${paperId}/related`)
+  if (!response.ok) {
+    throw new Error(`가까운 논문 불러오기 실패: ${response.status}`)
+  }
+  return (await response.json()) as PaperRelated
+}
