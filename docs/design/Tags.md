@@ -6,29 +6,32 @@
 
 - 태그는 `tags`(이름 고유)와 `paper_tags`(논문–태그 연결) 표에 있다. 논문 검색에서 서재에 담을 때 태그를 붙일 수 있다([논문 검색과 추가 설계](PaperSearch.md#4-화면)).
 - 왼쪽 목록의 태그를 누르면 서재 목록이 그 태그를 모두 가진 논문만 보인다(AND, [서재 필터 설계](LibraryFilter.md#2-필터-조건)). 이것은 그대로 쓴다.
-- 더할 것: 서재 논문에 태그 붙이기·떼기(한 편, 여러 편), 태그 이름 바꾸기·지우기(M7-T2), 고른 태그로 인용 그래프 걸러 보기(M7-T3).
+- 더할 것: 서재 논문에 태그 붙이기·떼기(한 편, 여러 편), 태그 이름 바꾸기·지우기(M7-T2, 3·4절), 고른 태그로 인용 그래프 걸러 보기(M7-T3, 5절).
 
 ## 2. 태그 이름 규칙
 
-- 앞뒤 빈칸을 지우고, 안의 연속 빈칸은 하나로 줄인다. 빈 이름은 버린다. 50자를 넘으면 422다.
+- 앞뒤 빈칸을 지우고, 안의 연속 빈칸은 하나로 줄인다. 빈 이름은 버린다. 50자([MAX_TAG_LENGTH](../../src/jjabtero/tags.py#MAX_TAG_LENGTH))를 넘으면 422다([clean_tags](../../src/jjabtero/tags.py#clean_tags), [TagNameError](../../src/jjabtero/tags.py#TagNameError)).
 - 대소문자는 그대로 둔다. 같은 논문에 같은 이름을 두 번 붙이지 않는다.
-- 어느 논문에도 붙어 있지 않은 태그는 지운다. 왼쪽 목록에 쓰지 않는 태그가 남지 않게 하기 위해서다.
+- 어느 논문에도 붙어 있지 않은 태그는 지운다([drop_unused_tags](../../src/jjabtero/tags.py#drop_unused_tags)). 왼쪽 목록에 쓰지 않는 태그가 남지 않게 하기 위해서다.
 - 태그를 붙이거나 떼면 그 논문의 `updated_at`을 바꾼다. 드라이브 자동 합치기가 늦게 고친 쪽을 고를 수 있게 하기 위해서다([구글 드라이브 동기화 설계](DriveSync.md#10-자동-합치기)). 바꾼 뒤에는 드라이브 자동 올리기를 예약한다.
 
-## 3. API (M7-T2)
+## 3. API
 
-- `PUT /api/papers/{id}/tags` 본문 `{"tags": [이름, …]}`: 그 논문의 태그를 이 목록으로 바꾼다. 바뀐 논문(`PaperOut`)을 돌려준다. 없는 논문은 404다.
-- `POST /api/tags/apply` 본문 `{"paper_ids": [ID, …], "add": [이름, …], "remove": [이름, …]}`: 여러 논문에 태그를 붙이고 뗀다. 바뀐 논문 수를 돌려준다. 없는 논문 ID가 섞여 있으면 아무것도 바꾸지 않고 404다.
-- `PATCH /api/tags/{이름}` 본문 `{"name": 새 이름}`: 태그 이름을 바꾼다. 새 이름의 태그가 이미 있으면 두 태그를 합친다(옛 태그가 붙은 논문에 새 태그를 붙이고 옛 태그를 지운다). 없는 태그는 404다.
-- `DELETE /api/tags/{이름}`: 모든 논문에서 그 태그를 떼고 지운다. 논문은 지우지 않는다. 없는 태그는 404다.
+[tags 모듈](../../src/jjabtero/tags.py)의 [router](../../src/jjabtero/tags.py#router)가 처리한다. 로그인이 켜져 있으면 로그인해야 쓴다.
 
-## 4. 화면 (M7-T2)
+- `PUT /api/papers/{id}/tags` 본문 `{"tags": [이름, …]}`([TagsIn](../../src/jjabtero/tags.py#TagsIn), [put_paper_tags](../../src/jjabtero/tags.py#put_paper_tags), [set_paper_tags](../../src/jjabtero/tags.py#set_paper_tags)): 그 논문의 태그를 이 목록으로 바꾼다. 바뀐 논문(`PaperOut`)을 돌려준다. 없는 논문은 404다.
+- `POST /api/tags/apply` 본문 `{"paper_ids": [ID, …], "add": [이름, …], "remove": [이름, …]}`([ApplyIn](../../src/jjabtero/tags.py#ApplyIn), [post_apply_tags](../../src/jjabtero/tags.py#post_apply_tags), [apply_tags](../../src/jjabtero/tags.py#apply_tags)): 여러 논문에 태그를 붙이고 뗀다. 바뀐 논문 수([ChangedOut](../../src/jjabtero/tags.py#ChangedOut))를 돌려준다. 없는 논문 ID가 섞여 있으면 아무것도 바꾸지 않고 404다.
+- `PATCH /api/tags/{이름}` 본문 `{"name": 새 이름}`([RenameIn](../../src/jjabtero/tags.py#RenameIn), [patch_tag](../../src/jjabtero/tags.py#patch_tag), [rename_tag](../../src/jjabtero/tags.py#rename_tag)): 태그 이름을 바꾼다. 새 이름의 태그가 이미 있으면 두 태그를 합친다(옛 태그가 붙은 논문에 새 태그를 붙이고 옛 태그를 지운다). 없는 태그는 404다.
+- `DELETE /api/tags/{이름}`([remove_tag](../../src/jjabtero/tags.py#remove_tag), [delete_tag](../../src/jjabtero/tags.py#delete_tag)): 모든 논문에서 그 태그를 떼고 지운다. 논문은 지우지 않는다. 없는 태그는 404다.
 
-- **논문 상세**: 태그 칸에 태그마다 지울 수 있는 칩을 두고, 그 옆 입력란에 이름을 넣고 Enter를 누르면 붙인다. 입력하는 동안 서재의 기존 태그 이름을 자동 완성으로 보여 준다. 붙이거나 떼면 바로 저장한다(`PUT /api/papers/{id}/tags`).
-- **서재 목록**: 맨 앞에 고르기 칸(체크 상자)을 둔다. 하나 이상 고르면 목록 위에 "고른 n편"과 "태그 붙이기", "태그 떼기"가 나온다. 누르면 태그 이름 입력(자동 완성)이 열리고, 확인하면 `POST /api/tags/apply`를 부른다. 행을 누르면 지금처럼 상세를 연다.
-- **왼쪽 태그 목록**: 태그에 마우스를 올리면 메뉴 단추가 보이고, "이름 바꾸기"와 "지우기"가 있다. 지우기는 확인을 받는다("n편에서 태그를 뗍니다"). 이름을 바꾸거나 지우면 서재 필터에 그 태그가 있었을 때 필터도 함께 바꾼다.
+## 4. 화면
 
-## 5. 태그별 그래프 (M7-T3)
+- **논문 상세**([PaperDetail](../../frontend/src/PaperDetail.vue)): 태그 칸에 태그마다 지울 수 있는 칩을 두고, 그 옆 입력란에 이름을 넣고 Enter를 누르면 붙인다. 입력하는 동안 서재의 기존 태그 이름을 자동 완성으로 보여 준다(브라우저 `datalist`). 붙이거나 떼면 바로 저장한다(`PUT /api/papers/{id}/tags`, [setPaperTags](../../frontend/src/api.ts#setPaperTags)). 저장 오류는 태그 칸 아래에 보인다.
+- **서재 목록**([LibraryView](../../frontend/src/LibraryView.vue)): 맨 앞에 고르기 칸(체크 상자)을 둔다. 머리 칸의 체크 상자는 지금 보이는(거른) 논문을 모두 고르거나 푼다. 하나 이상 고르면 목록 위에 "고른 n편", 태그 이름 입력(자동 완성), "태그 붙이기", "태그 떼기", "고르기 해제"가 나온다. 붙이거나 떼면 `POST /api/tags/apply`([applyTags](../../frontend/src/api.ts#applyTags))를 부르고 서재를 다시 읽는다. 행을 누르면 지금처럼 상세를 연다. 다시 읽었을 때 서재에 없는 논문은 고르기에서 뺀다.
+- **왼쪽 태그 목록**([Sidebar](../../frontend/src/Sidebar.vue)): 태그에 마우스를 올리면 메뉴 단추가 보이고, "이름 바꾸기"와 "지우기"가 있다. 이름 바꾸기는 대화 상자에서 새 이름을 받고 같은 이름이 있으면 합친다고 알린다([renameTag](../../frontend/src/api.ts#renameTag)). 지우기는 확인을 받는다("n편에서 뗍니다. 논문은 지우지 않습니다", [deleteTag](../../frontend/src/api.ts#deleteTag)). 이름을 바꾸거나 지우면 서재 필터에 그 태그가 있었을 때 필터도 함께 바꾼다.
+- 상태와 동작(붙이기·떼기, 고르기, 이름 바꾸기·지우기와 필터 맞추기, 오류)은 [createLibraryState](../../frontend/src/libraryState.ts#createLibraryState)가 가진다.
+
+## 5. 태그별 그래프
 
 - 그래프 화면도 왼쪽에서 고른 태그(서재 필터의 태그)를 쓴다. 고른 태그를 모두 가진 서재 논문만 그래프에 넣고, 서재 밖 추천 논문도 그 논문들로만 계산한다. 서재 목록과 그래프가 같은 태그 선택을 보여야 헷갈리지 않기 때문이다.
 - API: `GET /api/citations/graph?tags=<이름>&tags=<이름>`([인용 그래프 설계](CitationGraph.md#3-api)).
@@ -36,7 +39,8 @@
 
 ## 6. 테스트
 
-- M7-T2, M7-T3에서 정해 더한다.
+- [test_tags](../../tests/test_tags.py)는 이름 규칙(빈칸, 겹침, 50자), 논문 태그 바꾸기(고친 시각, 쓰지 않는 태그 지우기, 자동 올리기 예약, 404, 422), 여러 편에 붙이기·떼기(바뀐 수, 없는 논문이 섞이면 아무것도 안 바꿈, 빈 목록 422), 이름 바꾸기와 합치기, 지우기(논문은 남김)를 확인한다.
+- [libraryState.test](../../frontend/src/libraryState.test.ts)는 한 편 태그 바꾸기와 오류, 여러 편 고르기·모두 고르기·붙이기·떼기, 이름 바꾸기·지우기 뒤의 필터, 다시 읽을 때 고르기 정리를 확인한다.
 
 ## 7. 미결정 사항
 

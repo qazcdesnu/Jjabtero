@@ -1,8 +1,10 @@
 <!-- @doc: docs/design/LibraryView.md#3-화면 -->
 <!-- @doc: docs/design/LibraryFilter.md#4-화면 -->
 <!-- @doc: docs/design/ReadingStatus.md#3-화면 -->
+<!-- @doc: docs/design/Tags.md#4-화면 -->
 <script setup lang="ts">
 import Button from 'primevue/button'
+import Checkbox from 'primevue/checkbox'
 import Chip from 'primevue/chip'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
@@ -13,7 +15,7 @@ import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import MultiSelect from 'primevue/multiselect'
 import Tag from 'primevue/tag'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { Paper } from './api'
 import { ITEM_TYPE_LABELS, READ_STATUSES, readStatusInfo } from './labels'
 import { isFilterActive } from './libraryFilter'
@@ -24,6 +26,17 @@ const state = props.library.state
 
 const itemTypeOptions = Object.entries(ITEM_TYPE_LABELS).map(([value, label]) => ({ value, label }))
 const filtering = computed(() => isFilterActive(state.filter))
+
+const bulkTag = ref('')
+const allChecked = computed(
+  () => props.library.visible.value.length > 0 && props.library.visible.value.every((paper) => state.checked.includes(paper.id)),
+)
+
+async function bulk(mode: 'add' | 'remove') {
+  const name = bulkTag.value.trim()
+  if (!name) return
+  if (await props.library.tagChecked([name], mode)) bulkTag.value = ''
+}
 
 const selection = computed({
   get: () => props.library.selected.value,
@@ -90,6 +103,29 @@ const selection = computed({
 
     <Message v-if="state.error" severity="warn">{{ state.error }}</Message>
 
+    <div
+      v-if="state.checked.length > 0"
+      class="flex flex-wrap items-center gap-2 rounded-md border border-primary-200 bg-primary-50 px-3 py-2 text-sm dark:border-primary-800 dark:bg-primary-950"
+    >
+      <span class="font-medium">고른 {{ state.checked.length }}편</span>
+      <InputText
+        v-model="bulkTag"
+        size="small"
+        class="w-40"
+        placeholder="태그 이름"
+        list="bulk-tag-names"
+        aria-label="고른 논문에 붙이거나 뗄 태그"
+        @keydown.enter.prevent="bulk('add')"
+      />
+      <datalist id="bulk-tag-names">
+        <option v-for="tag in library.tags.value" :key="tag.name" :value="tag.name" />
+      </datalist>
+      <Button label="태그 붙이기" icon="pi pi-tag" size="small" :disabled="!bulkTag.trim()" @click="bulk('add')" />
+      <Button label="태그 떼기" size="small" severity="secondary" outlined :disabled="!bulkTag.trim()" @click="bulk('remove')" />
+      <Button label="고르기 해제" size="small" severity="secondary" text @click="state.checked = []" />
+      <Message v-if="state.tagError" severity="error" size="small" class="w-full">{{ state.tagError }}</Message>
+    </div>
+
     <DataTable
       v-model:selection="selection"
       :value="library.visible.value"
@@ -112,6 +148,21 @@ const selection = computed({
           <template v-else>서재가 비었습니다. "논문 검색"에서 논문을 넣으세요.</template>
         </div>
       </template>
+      <Column header-style="width: 2.5rem">
+        <template #header>
+          <Checkbox :model-value="allChecked" binary aria-label="보이는 논문 모두 고르기" @update:model-value="library.toggleAllVisible()" />
+        </template>
+        <template #body="{ data }">
+          <span @click.stop>
+            <Checkbox
+              :model-value="state.checked.includes(data.id)"
+              binary
+              :aria-label="`${data.title} 고르기`"
+              @update:model-value="library.toggleChecked(data.id)"
+            />
+          </span>
+        </template>
+      </Column>
       <Column field="title" header="제목" sortable>
         <template #body="{ data }">
           <span class="line-clamp-2 font-medium" :title="data.title">{{ data.title }}</span>
