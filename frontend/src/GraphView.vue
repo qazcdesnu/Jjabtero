@@ -1,10 +1,12 @@
 <!-- @doc: docs/design/CitationGraph.md#4-화면 -->
+<!-- @doc: docs/design/Tags.md#5-태그별-그래프 -->
 <script setup lang="ts">
 import { GraphChart } from 'echarts/charts'
 import { DataZoomComponent, GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import { init, use, type ECharts } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import Button from 'primevue/button'
+import Chip from 'primevue/chip'
 import Message from 'primevue/message'
 import SelectButton from 'primevue/selectbutton'
 import ToggleSwitch from 'primevue/toggleswitch'
@@ -14,8 +16,9 @@ import { createGraphState } from './graphState'
 
 use([GraphChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer])
 
-const emit = defineEmits<{ open: [paperId: number]; added: [] }>()
-const graph = createGraphState(() => emit('added'))
+const props = withDefaults(defineProps<{ tags?: string[] }>(), { tags: () => [] })
+const emit = defineEmits<{ open: [paperId: number]; added: []; untag: [name: string] }>()
+const graph = createGraphState(() => emit('added'), undefined, () => props.tags)
 const layout = ref<GraphLayout>('year')
 const layouts = [
   { value: 'year', label: '연도 순' },
@@ -60,7 +63,7 @@ function meta(): string {
 
 watch(() => [graph.state.data, layout.value], draw)
 watch(
-  () => graph.state.outside,
+  () => [graph.state.outside, props.tags.join('\u0000')],
   () => graph.load(),
 )
 
@@ -103,12 +106,17 @@ onUnmounted(() => {
         <Button icon="pi pi-refresh" label="다시 그리기" size="small" severity="secondary" :loading="graph.state.loading" @click="graph.load()" />
       </div>
     </header>
+    <div v-if="tags.length" class="flex flex-wrap items-center gap-2">
+      <span class="text-xs text-surface-500">태그</span>
+      <Chip v-for="tag in tags" :key="tag" :label="tag" icon="pi pi-tag" removable @remove="emit('untag', tag)" />
+      <span class="text-xs text-surface-500">를 모두 가진 서재 논문만 그립니다.</span>
+    </div>
     <Message v-if="graph.state.error" severity="error">{{ graph.state.error }}</Message>
     <p v-if="counts" class="text-xs text-surface-500">
       서재 논문 {{ counts.library }}편(인용 데이터 있음 {{ counts.withData }}편)<template v-if="counts.outside">, 추천 논문 {{ counts.outside }}편</template>,
       인용 선 {{ counts.cites }}개, 가까움 선 {{ counts.related }}개.
       <template v-if="counts.noYear">연도를 모르는 {{ counts.noYear }}편은 자유 배치에서만 보입니다.</template>
-      <template v-if="layout === 'year'">왼쪽이 선행, 오른쪽이 후행입니다. 휠로 연도 범위를 넓히고 좁힙니다.</template>
+      <template v-if="layout === 'year'">&nbsp;왼쪽이 선행, 오른쪽이 후행입니다. 휠로 연도 범위를 넓히고 좁힙니다.</template>
     </p>
     <div
       ref="container"

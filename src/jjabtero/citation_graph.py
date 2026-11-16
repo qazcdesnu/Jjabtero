@@ -207,25 +207,32 @@ router = APIRouter(prefix="/api/citations")
 
 @router.get("/graph")
 def citation_graph(
-    request: Request, outside: Annotated[int, Query(ge=0, le=OUTSIDE_LIMIT)] = 0
+    request: Request,
+    outside: Annotated[int, Query(ge=0, le=OUTSIDE_LIMIT)] = 0,
+    tags: Annotated[list[str] | None, Query()] = None,
 ) -> CitationGraph:
-    """`GET /api/citations/graph`를 처리한다.
+    """`GET /api/citations/graph`를 처리한다. `tags`를 주면 그 태그를 모두 가진 서재 논문만으로 그린다.
 
     @doc: docs/design/CitationGraph.md#3-api
+    @doc: docs/design/Tags.md#5-태그별-그래프
     """
     sync: CitationSync = request.app.state.citations
     store = sync.store
     with Session(sync.library_engine) as session:
-        papers = list(session.scalars(select(Paper).order_by(Paper.id)))
+        library = list(session.scalars(select(Paper).order_by(Paper.id)))
+        wanted_tags = set(tags or [])
+        papers = [paper for paper in library if wanted_tags <= set(paper.tag_names)]
         by_work = {paper.openalex_id for paper in papers if paper.openalex_id}
-        library_dois = {paper.doi for paper in papers if paper.doi}
+        # 추천에서 빼는 것은 태그와 관계없이 서재 전체다. 이미 서재에 있는 논문을 추천하지 않기 위해서다.
+        library_works = {paper.openalex_id for paper in library if paper.openalex_id}
+        library_dois = {paper.doi for paper in library if paper.doi}
         rows_by_paper = {}
         for work_id in by_work:
             rows = store.relation_rows(work_id)
             if rows["references"] or rows["citations"]:
                 rows_by_paper[work_id] = rows
         # 서재 DOI와 겹치는 추천을 빼고도 `outside`편이 남도록 넉넉히 고른다.
-        ranked = recommend_works(rows_by_paper, by_work, limit=outside * 2) if outside else []
+        ranked = recommend_works(rows_by_paper, library_works, limit=outside * 2) if outside else []
         wanted = by_work | {item.work for item in ranked}
         known = store.works_by_id(wanted)
         missing = sorted({item.work for item in ranked} - set(known))

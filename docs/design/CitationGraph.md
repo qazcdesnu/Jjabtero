@@ -36,7 +36,7 @@
 
 ## 3. API
 
-- `GET /api/citations/graph?outside=<0~30>`는 [citation_graph](../../src/jjabtero/citation_graph.py#citation_graph)가 처리한다([router](../../src/jjabtero/citation_graph.py#router)). `outside`는 더할 서재 밖 논문 수이고 기본값은 0이다. 로그인이 켜져 있으면 로그인해야 쓴다.
+- `GET /api/citations/graph?outside=<0~30>`는 [citation_graph](../../src/jjabtero/citation_graph.py#citation_graph)가 처리한다([router](../../src/jjabtero/citation_graph.py#router)). `outside`는 더할 서재 밖 논문 수이고 기본값은 0이다. `tags`(여러 번)를 주면 그 태그를 모두 가진 서재 논문만으로 그린다([태그 설계](Tags.md#5-태그별-그래프)). 로그인이 켜져 있으면 로그인해야 쓴다.
 - 서지 정보가 없는 서재 밖 논문은 추천 API처럼 OpenAlex에서 받아 둔다.
 
 ## 4. 화면
