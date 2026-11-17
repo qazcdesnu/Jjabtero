@@ -2,6 +2,52 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md), [M3 인용 기반 연결·추천](Done-M3.md), [M6 리더 인용 미리보기](Done-M6.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M7-T2 논문 상세·서재 목록의 태그 붙이기·떼기와 왼쪽 태그 목록의 이름 바꾸기·지우기
+
+- 시작일: 2026-11-16
+- 완료일: 2026-11-16
+- 근거 문서: [태그 설계](design/Tags.md#3-api)
+- 참고 자료: 없음
+
+### 계획
+- 태그 API 네 개(논문 태그 바꾸기, 여러 편에 붙이기·떼기, 이름 바꾸기·합치기, 지우기)를 만든다.
+- 논문 상세의 태그 칩과 자동 완성 입력, 서재 목록의 여러 편 고르기와 태그 붙이기·떼기, 왼쪽 태그 메뉴를 만든다.
+- 테스트를 더하고 브라우저에서 확인한다.
+
+### 진행 기록
+- 2026-11-16: 병합되지 않은 가장 최근 브랜치 `m7-t1-tags-design`에서 작업 브랜치를 만들었다. `tags` 모듈과 API를 만들어 앱에 등록했다.
+- 2026-11-16: 문서 연결 검사가 실패했다. 설계 문서의 절 제목에 태스크 표시("(M7-T2)")를 붙여 코드가 가리키는 앵커(`#3-api`)와 맞지 않았고, 새 코드를 문서에서 링크하지 않았다. 절 제목에서 태스크 표시를 빼고 코드 링크를 더했다.
+- 2026-11-16: API 테스트 5개, 서재 상태 테스트 4개를 더했다. 화면(논문 상세의 태그 칩과 입력, 서재 목록의 고르기와 태그 막대, 왼쪽 태그 메뉴와 대화 상자)을 만들었다.
+- 2026-11-16: 시연 서버에서 브라우저로 확인했다. 'Attention'에 `transformer`를 붙이자 칩과 왼쪽 목록에 나왔고, 두 편을 골라 `nlp`를 붙이자 왼쪽 목록이 `nlp 2`가 되었다. 메뉴로 `nlp`를 `language`로 바꾸고 `transformer`를 지웠으며, `language`를 누르자 서재 목록이 2편으로 걸러졌다. 브라우저 콘솔 오류는 없었다.
+
+### 결정 사항
+- 자동 완성은 브라우저 기본 `datalist`로 한다. 기존 태그 이름을 보여 주기에 충분하고 부품을 더 들이지 않아도 되기 때문이다.
+- 여러 편 고르기는 표의 행 고르기(상세 열기)와 따로 둔다. 행을 누르면 지금처럼 상세가 열리고, 체크 상자만 여러 편 고르기다.
+
+### 변경 파일
+- `docs/Roadmap.md`
+- `docs/Ongoing.md`
+- `docs/Done.md`
+- `docs/design/Tags.md`
+- `docs/design/LibraryView.md`
+- `src/jjabtero/tags.py`
+- `src/jjabtero/app.py`
+- `tests/test_tags.py`
+- `frontend/src/api.ts`
+- `frontend/src/libraryState.ts`
+- `frontend/src/libraryState.test.ts`
+- `frontend/src/PaperDetail.vue`
+- `frontend/src/LibraryView.vue`
+- `frontend/src/Sidebar.vue`
+
+### 결과
+- 논문 상세에서 태그를 붙이고 떼고, 서재 목록에서 여러 편을 골라 한 번에 붙이고 떼며, 왼쪽 태그 목록에서 태그 이름을 바꾸거나(합치기 포함) 지운다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+- `npx vue-tsc --noEmit -p tsconfig.app.json`, `npm run build`: 통과.
+- 시연 서버에서 붙이기, 여러 편 붙이기, 이름 바꾸기, 지우기, 태그로 거르기를 브라우저로 확인했다.
+
 ## M7-T1 태그 설계(태그 이름 규칙, 붙이기·떼기·이름 바꾸기·지우기 API, 화면, 태그별 그래프)
 
 - 시작일: 2026-11-16

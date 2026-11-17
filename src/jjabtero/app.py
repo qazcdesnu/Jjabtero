@@ -53,6 +53,7 @@ from jjabtero.reading import annotations_router
 from jjabtero.references import router as references_router
 from jjabtero.reading import router as reading_router
 from jjabtero.settings import router as settings_router
+from jjabtero.tags import router as tags_router
 
 # @doc: docs/design/AppSkeleton.md#1-백엔드-앱
 DEFAULT_FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
@@ -187,6 +188,7 @@ def create_app(
     app.state.pdfs = PdfStore(path.parent / "pdfs", app.state.drive)
     app.include_router(_api)
     app.include_router(papers_router)
+    app.include_router(tags_router)
     app.include_router(drive_router)
     app.include_router(auth_router)
     app.include_router(public_pages_router)

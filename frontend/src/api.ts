@@ -596,3 +596,40 @@ export async function resolveReference(paperId: number, text: string): Promise<R
   }
   return (await response.json()) as ReferenceMatch
 }
+
+async function tagRequest<T>(url: string, init: RequestInit): Promise<T> {
+  const response = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) {
+    let detail = ''
+    try {
+      const body = await response.json()
+      detail = typeof body.detail === 'string' ? body.detail : ''
+    } catch {
+      detail = ''
+    }
+    throw new Error(detail || `태그 저장 실패: ${response.status}`)
+  }
+  return (await response.json()) as T
+}
+
+// @doc: docs/design/Tags.md#4-화면
+export function setPaperTags(paperId: number, tags: string[]): Promise<Paper> {
+  return tagRequest<Paper>(`/api/papers/${paperId}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) })
+}
+
+// @doc: docs/design/Tags.md#4-화면
+export async function applyTags(paperIds: number[], add: string[], remove: string[]): Promise<number> {
+  const body = { paper_ids: paperIds, add, remove }
+  return (await tagRequest<{ changed: number }>('/api/tags/apply', { method: 'POST', body: JSON.stringify(body) })).changed
+}
+
+// @doc: docs/design/Tags.md#4-화면
+export async function renameTag(name: string, newName: string): Promise<number> {
+  const url = `/api/tags/${encodeURIComponent(name)}`
+  return (await tagRequest<{ changed: number }>(url, { method: 'PATCH', body: JSON.stringify({ name: newName }) })).changed
+}
+
+// @doc: docs/design/Tags.md#4-화면
+export async function deleteTag(name: string): Promise<number> {
+  return (await tagRequest<{ changed: number }>(`/api/tags/${encodeURIComponent(name)}`, { method: 'DELETE' })).changed
+}

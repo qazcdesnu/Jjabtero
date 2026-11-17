@@ -3,9 +3,12 @@
 <!-- @doc: docs/design/Citations.md#6-api와-화면 -->
 <!-- @doc: docs/design/ReadingStatus.md#3-화면 -->
 <!-- @doc: docs/design/CitationStyles.md#5-복사 -->
+<!-- @doc: docs/design/Tags.md#4-화면 -->
 <script setup lang="ts">
 import Button from 'primevue/button'
+import Chip from 'primevue/chip'
 import ConfirmPopup from 'primevue/confirmpopup'
+import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import SelectButton from 'primevue/selectbutton'
 import Tag from 'primevue/tag'
@@ -23,6 +26,20 @@ const emit = defineEmits<{ read: [paper: { id: number; title: string }] }>()
 const paper = computed(() => props.library.selected.value)
 const removing = ref(false)
 const citing = ref(false)
+const newTag = ref('')
+
+// 태그를 붙이거나 떼면 바로 저장한다.
+async function addTag() {
+  const current = paper.value
+  const name = newTag.value.trim()
+  if (!current || !name) return
+  if (await props.library.setTags(current, [...current.tags, name])) newTag.value = ''
+}
+
+function removeTag(name: string) {
+  const current = paper.value
+  if (current) void props.library.setTags(current, current.tags.filter((tag) => tag !== name))
+}
 const confirm = useConfirm()
 
 const note = ref('')
@@ -123,9 +140,23 @@ function askRemove(event: Event) {
         <span v-else>—</span>
       </dd>
       <dt class="text-surface-500">태그</dt>
-      <dd class="flex flex-wrap gap-1">
-        <Tag v-for="tag in paper.tags" :key="tag" :value="tag" />
-        <span v-if="paper.tags.length === 0">—</span>
+      <dd class="flex flex-col gap-1">
+        <div class="flex flex-wrap items-center gap-1">
+          <Chip v-for="tag in paper.tags" :key="tag" :label="tag" removable class="!py-0.5 !text-xs" @remove="removeTag(tag)" />
+          <InputText
+            v-model="newTag"
+            size="small"
+            class="w-36"
+            placeholder="태그 더하기"
+            list="paper-tag-names"
+            aria-label="태그 더하기"
+            @keydown.enter.prevent="addTag"
+          />
+          <datalist id="paper-tag-names">
+            <option v-for="tag in library.tags.value" :key="tag.name" :value="tag.name" />
+          </datalist>
+        </div>
+        <Message v-if="library.state.tagError" severity="error" size="small">{{ library.state.tagError }}</Message>
       </dd>
       <dt class="text-surface-500">추가일</dt>
       <dd class="tabular-nums">{{ formatDate(paper.created_at) }}</dd>

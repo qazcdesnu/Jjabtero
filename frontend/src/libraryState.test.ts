@@ -1,6 +1,7 @@
 // @doc: docs/design/LibraryView.md#4-테스트
 // @doc: docs/design/LibraryFilter.md#5-테스트
 // @doc: docs/design/ReadingStatus.md#4-테스트
+// @doc: docs/design/Tags.md#6-테스트
 
 import { describe, expect, it, vi } from 'vitest'
 import { PaperNotFoundError, type Paper } from './api'
@@ -29,6 +30,10 @@ function setup(overrides: Partial<Parameters<typeof createLibraryState>[0]> = {}
     listPapers: vi.fn().mockResolvedValue([paper(2), paper(1)]),
     deletePaper: vi.fn().mockResolvedValue(undefined),
     updateReading: vi.fn(async (id: number, update: object) => ({ ...paper(id), ...update })),
+    setPaperTags: vi.fn(async (id: number, tags: string[]) => ({ ...paper(id), tags: [...tags].sort() })),
+    applyTags: vi.fn().mockResolvedValue(1),
+    renameTag: vi.fn().mockResolvedValue(1),
+    deleteTag: vi.fn().mockResolvedValue(1),
     ...overrides,
   }
   return { library: createLibraryState(deps), deps }
@@ -154,5 +159,52 @@ describe('changeReading', () => {
     expect(failing.library.state.readingError).toBe('저장 실패: 500')
     expect(failing.library.state.papers.map((p) => p.id)).toEqual([2, 1])
   })
-})
 
+  it('논문 한 편의 태그를 바꾸면 목록의 그 논문을 바꾸고, 실패하면 까닭을 둔다', async () => {
+    const { library, deps } = setup()
+    await library.load()
+    expect(await library.setTags(paper(1), ['b', 'a'])).toBe(true)
+    expect(deps.setPaperTags).toHaveBeenCalledWith(1, ['b', 'a'])
+    expect(library.state.papers.find((item) => item.id === 1)?.tags).toEqual(['a', 'b'])
+    vi.mocked(deps.setPaperTags).mockRejectedValueOnce(new Error('태그 이름은 50자까지입니다'))
+    expect(await library.setTags(paper(1), ['x'])).toBe(false)
+    expect(library.state.tagError).toContain('50자')
+  })
+
+  it('여러 편을 고르고 태그를 붙이거나 떼며, 보이는 논문 모두 고르기를 켜고 끈다', async () => {
+    const { library, deps } = setup()
+    await library.load()
+    library.toggleChecked(2)
+    expect(library.state.checked).toEqual([2])
+    library.toggleAllVisible()
+    expect([...library.state.checked].sort()).toEqual([1, 2])
+    await library.tagChecked(['survey'], 'add')
+    expect(deps.applyTags).toHaveBeenCalledWith([2, 1], ['survey'], [])
+    await library.tagChecked(['survey'], 'remove')
+    expect(deps.applyTags).toHaveBeenLastCalledWith([2, 1], [], ['survey'])
+    library.toggleAllVisible()
+    expect(library.state.checked).toEqual([])
+  })
+
+  it('태그 이름을 바꾸거나 지우면 필터의 그 태그도 바꾸거나 뺀다', async () => {
+    const { library, deps } = setup()
+    await library.load()
+    library.toggleTag('nlp')
+    library.toggleTag('cv')
+    await library.renameTagEverywhere('nlp', '  language ')
+    expect(deps.renameTag).toHaveBeenCalledWith('nlp', '  language ')
+    expect(library.state.filter.tags).toEqual(['language', 'cv'])
+    await library.deleteTagEverywhere('cv')
+    expect(library.state.filter.tags).toEqual(['language'])
+  })
+
+  it('다시 불러오면 서재에 없는 논문은 고르기에서 뺀다', async () => {
+    const { library, deps } = setup()
+    await library.load()
+    library.toggleChecked(1)
+    library.toggleChecked(2)
+    vi.mocked(deps.listPapers).mockResolvedValue([paper(2)])
+    await library.load()
+    expect(library.state.checked).toEqual([2])
+  })
+})

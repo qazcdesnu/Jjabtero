@@ -1,15 +1,29 @@
 // @doc: docs/design/LibraryView.md#2-화면-상태
 // @doc: docs/design/LibraryFilter.md#3-화면-상태
 // @doc: docs/design/ReadingStatus.md#3-화면
+// @doc: docs/design/Tags.md#4-화면
 
 import { computed, reactive } from 'vue'
-import { PaperNotFoundError, deletePaper, listPapers, updateReading, type Paper } from './api'
+import {
+  PaperNotFoundError,
+  applyTags,
+  deletePaper,
+  deleteTag,
+  listPapers,
+  renameTag,
+  setPaperTags,
+  updateReading,
+  type Paper,
+} from './api'
 import { emptyFilter, filterPapers, tagCounts } from './libraryFilter'
 
 // @doc: docs/design/LibraryView.md#2-화면-상태
 // @doc: docs/design/LibraryFilter.md#3-화면-상태
 // @doc: docs/design/ReadingStatus.md#3-화면
-export function createLibraryState(deps = { listPapers, deletePaper, updateReading }) {
+// @doc: docs/design/Tags.md#4-화면
+export function createLibraryState(
+  deps = { listPapers, deletePaper, updateReading, setPaperTags, applyTags, renameTag, deleteTag },
+) {
   const state = reactive({
     papers: [] as Paper[],
     loading: false,
@@ -18,6 +32,9 @@ export function createLibraryState(deps = { listPapers, deletePaper, updateReadi
     removeError: '',
     readingError: '',
     filter: emptyFilter(),
+    // 여러 편에 태그를 붙이려고 고른 논문 ID
+    checked: [] as number[],
+    tagError: '',
   })
 
   const visible = computed(() => filterPapers(state.papers, state.filter))
@@ -34,6 +51,7 @@ export function createLibraryState(deps = { listPapers, deletePaper, updateReadi
       if (!state.papers.some((paper) => paper.id === state.selectedId)) {
         state.selectedId = null
       }
+      state.checked = state.checked.filter((id) => state.papers.some((paper) => paper.id === id))
     } catch (error) {
       state.error = error instanceof Error ? error.message : String(error)
     } finally {
@@ -96,5 +114,81 @@ export function createLibraryState(deps = { listPapers, deletePaper, updateReadi
     state.filter = emptyFilter()
   }
 
-  return { state, visible, tags, selected, load, select, remove, changeReading, toggleTag, clearFilter }
+  async function tagAction(action: () => Promise<unknown>): Promise<boolean> {
+    state.tagError = ''
+    try {
+      await action()
+      return true
+    } catch (error) {
+      state.tagError = error instanceof Error ? error.message : String(error)
+      return false
+    }
+  }
+
+  // 논문 한 편의 태그를 바꾼다.
+  function setTags(paper: Paper, names: string[]): Promise<boolean> {
+    return tagAction(async () => {
+      const changed = await deps.setPaperTags(paper.id, names)
+      state.papers = state.papers.map((item) => (item.id === changed.id ? changed : item))
+    })
+  }
+
+  function toggleChecked(paperId: number): void {
+    state.checked = state.checked.includes(paperId)
+      ? state.checked.filter((id) => id !== paperId)
+      : [...state.checked, paperId]
+  }
+
+  // 보이는 논문을 모두 고르거나, 이미 모두 골랐으면 고르기를 푼다.
+  function toggleAllVisible(): void {
+    const ids = visible.value.map((paper) => paper.id)
+    const all = ids.length > 0 && ids.every((id) => state.checked.includes(id))
+    state.checked = all ? state.checked.filter((id) => !ids.includes(id)) : [...new Set([...state.checked, ...ids])]
+  }
+
+  // 고른 논문들에 태그를 붙이거나 뗀다.
+  function tagChecked(names: string[], mode: 'add' | 'remove'): Promise<boolean> {
+    return tagAction(async () => {
+      await deps.applyTags(state.checked, mode === 'add' ? names : [], mode === 'remove' ? names : [])
+      await load()
+    })
+  }
+
+  // 태그 이름을 바꾼다. 필터에 있던 태그는 새 이름으로 바꾼다.
+  function renameTagEverywhere(name: string, newName: string): Promise<boolean> {
+    return tagAction(async () => {
+      await deps.renameTag(name, newName)
+      const renamed = newName.replace(/\s+/g, ' ').trim()
+      state.filter.tags = [...new Set(state.filter.tags.map((tag) => (tag === name ? renamed : tag)))]
+      await load()
+    })
+  }
+
+  // 태그를 지운다. 필터에서도 뺀다.
+  function deleteTagEverywhere(name: string): Promise<boolean> {
+    return tagAction(async () => {
+      await deps.deleteTag(name)
+      state.filter.tags = state.filter.tags.filter((tag) => tag !== name)
+      await load()
+    })
+  }
+
+  return {
+    state,
+    visible,
+    tags,
+    selected,
+    load,
+    select,
+    remove,
+    changeReading,
+    toggleTag,
+    clearFilter,
+    setTags,
+    toggleChecked,
+    toggleAllVisible,
+    tagChecked,
+    renameTagEverywhere,
+    deleteTagEverywhere,
+  }
 }
