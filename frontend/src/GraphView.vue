@@ -40,6 +40,7 @@ const counts = computed(() => {
     cites: data.edges.filter((edge) => edge.kind === 'cites').length,
     related: data.edges.filter((edge) => edge.kind === 'related').length,
     noYear: layout.value === 'year' ? yearLayout(data.nodes).hidden : 0,
+    undated: layout.value === 'year' ? yearLayout(data.nodes, data.edges).undated : 0,
   }
 })
 
@@ -116,7 +117,14 @@ onUnmounted(() => {
       서재 논문 {{ counts.library }}편(인용 데이터 있음 {{ counts.withData }}편)<template v-if="counts.outside">, 추천 논문 {{ counts.outside }}편</template>,
       인용 선 {{ counts.cites }}개, 가까움 선 {{ counts.related }}개.
       <template v-if="counts.noYear">연도를 모르는 {{ counts.noYear }}편은 자유 배치에서만 보입니다.</template>
-      <template v-if="layout === 'year'">&nbsp;왼쪽이 선행, 오른쪽이 후행입니다. 휠로 연도 범위를 넓히고 좁힙니다.</template>
+      <template v-if="layout === 'year'"
+        >&nbsp;왼쪽이 선행, 오른쪽이 후행입니다. 같은 연도 안에서는 위가 먼저 공개된 논문이고, 서로 인용하면 인용된 논문이
+        위입니다.<template v-if="counts.undated">
+          같은 연도에 다른 논문이 있는데 공개일을 연도까지만 아는 {{ counts.undated }}편은 인용 관계로만 자리를 정하고, 인용 관계도
+          없으면 그해 아래쪽에 둡니다(점에 마우스를 올리면 날짜와 정밀도가 보입니다).</template
+        >
+        휠로 연도 범위를 넓히고 좁힙니다.</template
+      >
     </p>
     <div
       ref="container"

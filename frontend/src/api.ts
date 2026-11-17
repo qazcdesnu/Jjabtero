@@ -540,6 +540,8 @@ export interface GraphNode {
   venue: string | null
   doi: string | null
   cited_by_count: number | null
+  date: string | null
+  date_precision: 'day' | 'month' | 'year' | null
   has_data: boolean
   score: number | null
 }

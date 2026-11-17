@@ -140,3 +140,33 @@ def test_graph_api_filters_by_tags(tmp_path: Path) -> None:
     wide = client.get("/api/citations/graph", params={"tags": ["core"], "outside": 5}).json()
     outside_ids = {node["openalex_id"] for node in wide["nodes"] if node["paper_id"] is None}
     assert outside_ids and "W10" not in outside_ids and "W11" not in outside_ids
+
+
+def test_publication_when_precision() -> None:
+    """1월 1일은 날짜로 믿지 않고, arXiv 번호에서 연·월을 얻으며, 그 밖에는 연도만 안다.
+
+    @doc: docs/design/CitationGraph.md#5-테스트
+    """
+    from jjabtero.citation_graph import publication_when
+
+    assert publication_when("2017-06-12", 2017, None) == ("2017-06-12", "day")
+    assert publication_when("2018-01-01", 2018, "10.18653/v1/n18-2074") == ("2018", "year")
+    assert publication_when("2018-01-01", 2018, "10.48550/arxiv.1803.02155") == ("2018-03", "month")
+    assert publication_when(None, None, "10.48550/arxiv.cs/0612001") == ("2006-12", "month")
+    assert publication_when(None, 2014, None) == ("2014", "year")
+    assert publication_when(None, None, None) == (None, None)
+
+
+def test_graph_nodes_carry_dates(tmp_path: Path) -> None:
+    """그래프의 서재 점은 인용 데이터의 공개일을, 서재 밖 점은 서지 정보의 공개일을 정밀도와 함께 가진다.
+
+    @doc: docs/design/CitationGraph.md#5-테스트
+    """
+    client, app = make_client(tmp_path)
+    base = client.post("/api/papers", json={"title": "Base", "openalex_id": A}).json()["id"]
+    app.state.citations.run_once()
+    body = client.get("/api/citations/graph", params={"outside": 3}).json()
+    nodes = {node["id"]: node for node in body["nodes"]}
+    assert (nodes[f"p{base}"]["date"], nodes[f"p{base}"]["date_precision"]) == ("2017-06-12", "day")
+    outside = [node for node in body["nodes"] if node["paper_id"] is None]
+    assert all(node["date_precision"] in ("day", "year") for node in outside)

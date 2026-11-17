@@ -5,6 +5,7 @@
 """
 
 import json
+import re
 from typing import Annotated, Any, Literal
 
 import httpx2
@@ -46,8 +47,36 @@ class GraphNode(BaseModel):
     venue: str | None = None
     doi: str | None = None
     cited_by_count: int | None = None
+    # 공개일과 그 정밀도. 같은 연도 안에서 위아래 순서를 정하는 데 쓴다.
+    date: str | None = None
+    date_precision: Literal["day", "month", "year"] | None = None
     has_data: bool = True
     score: float | None = None
+
+
+_ARXIV_NEW = re.compile(r"^10\.48550/arxiv\.(\d{2})(\d{2})\.\d{4,5}", re.IGNORECASE)
+_ARXIV_OLD = re.compile(r"^10\.48550/arxiv\.[a-z\-.]+/(\d{2})(\d{2})\d{3}", re.IGNORECASE)
+
+
+def publication_when(
+    published: str | None, year: int | None, doi: str | None
+) -> tuple[str | None, Literal["day", "month", "year"] | None]:
+    """공개일과 정밀도를 정한다.
+
+    OpenAlex는 연도만 알 때 공개일을 1월 1일로 채우므로, 1월 1일은 날짜로 믿지 않는다. 그때 arXiv 논문이면
+    arXiv 번호(`YYMM.NNNNN`)에서 연·월을 얻고, 아니면 연도만 안다.
+
+    @doc: docs/design/CitationGraph.md#4-화면
+    """
+    if published and len(published) >= 10 and not published.endswith("-01-01"):
+        return published[:10], "day"
+    match = _ARXIV_NEW.match(doi or "") or _ARXIV_OLD.match(doi or "")
+    if match:
+        short, month = int(match.group(1)), int(match.group(2))
+        if 1 <= month <= 12:
+            return f"{(2000 if short < 90 else 1900) + short}-{month:02d}", "month"
+    known_year = year or (int(published[:4]) if published else None)
+    return (str(known_year), "year") if known_year else (None, None)
 
 
 class GraphEdge(BaseModel):
@@ -162,8 +191,9 @@ def build_graph(
         if paper.openalex_id:
             node_ids[paper.openalex_id] = node_id
         row = known.get(paper.openalex_id or "", {})
-        published = dates.get(paper.openalex_id or "")
+        published = dates.get(paper.openalex_id or "") or row.get("publication_date")
         year = paper.year or (int(published[:4]) if published else None)
+        date, precision = publication_when(published, year, paper.doi)
         nodes.append(
             GraphNode(
                 id=node_id,
@@ -176,6 +206,8 @@ def build_graph(
                 venue=paper.venue,
                 doi=paper.doi,
                 cited_by_count=row.get("cited_by_count"),
+                date=date,
+                date_precision=precision,
                 has_data=paper.openalex_id in rows_by_paper,
             )
         )
@@ -183,6 +215,7 @@ def build_graph(
     edges = library_edges(node_ids, rows_by_paper, library_cites(library, s2_references or {}))
     for item in outside:
         row = known.get(item.work, {})
+        date, precision = publication_when(row.get("publication_date"), row.get("year"), _doi(row.get("doi")))
         nodes.append(
             GraphNode(
                 id=item.work,
@@ -194,6 +227,8 @@ def build_graph(
                 venue=row.get("venue"),
                 doi=_doi(row.get("doi")),
                 cited_by_count=row.get("cited_by_count"),
+                date=date,
+                date_precision=precision,
                 score=item.score,
             )
         )

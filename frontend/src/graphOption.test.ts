@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type { CitationGraph, GraphNode } from './api'
-import { edgeText, graphOption, symbolSize, yearLayout } from './graphOption'
+import { dateLabel, edgeText, graphOption, orderWithinYear, symbolSize, yearLayout } from './graphOption'
 
 function node(id: string, year: number | null, extra: Partial<GraphNode> = {}): GraphNode {
   return {
@@ -16,6 +16,8 @@ function node(id: string, year: number | null, extra: Partial<GraphNode> = {}): 
     venue: null,
     doi: null,
     cited_by_count: null,
+    date: null,
+    date_precision: year === null ? null : 'year',
     has_data: true,
     score: id.startsWith('p') ? null : 1,
     ...extra,
@@ -79,3 +81,52 @@ describe('graphOption', () => {
     expect(edgeText({ ...graph.edges[0], source: 'W9', target: 'p1' }, names)).toBe('B → A 인용')
   })
 })
+
+describe('orderWithinYear', () => {
+  const day = (id: string, date: string, extra: Partial<GraphNode> = {}) =>
+    node(id, 2017, { date, date_precision: 'day', ...extra })
+
+  it('같은 연도 안에서는 공개일이 이른 논문을 위에, 월까지만 알면 그달 가운데로, 연도만 알면 아래에 둔다', () => {
+    const nodes = [
+      day('p1', '2017-12-06'),
+      node('p2', 2017),
+      node('W3', 2017, { date: '2017-06', date_precision: 'month' }),
+      day('p4', '2017-06-12'),
+      day('p5', '2017-06-20'),
+    ]
+    expect(orderWithinYear(nodes, []).map((item) => item.id)).toEqual(['p4', 'W3', 'p5', 'p1', 'p2'])
+  })
+
+  it('같은 연도의 인용 관계는 날짜보다 앞서 인용된 논문을 위에 두고, 날짜를 모르는 논문도 인용 관계로 자리를 정한다', () => {
+    const nodes = [day('p1', '2017-03-01'), day('p2', '2017-09-01'), node('p3', 2017)]
+    const edges = [
+      // p1이 p2를 인용한다: 날짜는 p1이 이르지만(판 차이) 인용된 p2가 위다.
+      { source: 'p1', target: 'p2', kind: 'cites' as const, shared_refs: 0, cocited: 0 },
+      // p2가 날짜를 모르는 p3을 인용한다: p3이 p2보다 위다.
+      { source: 'p2', target: 'p3', kind: 'cites' as const, shared_refs: 0, cocited: 0 },
+    ]
+    expect(orderWithinYear(nodes, edges).map((item) => item.id)).toEqual(['p3', 'p2', 'p1'])
+  })
+
+  it('서로 인용해 순서가 돌면 날짜로 끊는다', () => {
+    const nodes = [day('p1', '2017-09-01'), day('p2', '2017-03-01')]
+    const edges = [
+      { source: 'p1', target: 'p2', kind: 'cites' as const, shared_refs: 0, cocited: 0 },
+      { source: 'p2', target: 'p1', kind: 'cites' as const, shared_refs: 0, cocited: 0 },
+    ]
+    expect(orderWithinYear(nodes, edges).map((item) => item.id)).toEqual(['p2', 'p1'])
+  })
+
+  it('날짜 표시는 정밀도를 함께 보인다', () => {
+    expect(dateLabel(day('a', '2017-06-12'))).toBe('2017-06-12')
+    expect(dateLabel(node('a', 2018, { date: '2018-03', date_precision: 'month' }))).toBe('2018-03 (월까지)')
+    expect(dateLabel(node('a', 2018))).toBe('2018 (연도만)')
+    expect(dateLabel(node('a', null))).toBe('연도 모름')
+  })
+
+  it('같은 연도에 다른 논문이 있는데 연도만 아는 논문 수를 센다', () => {
+    const { undated } = yearLayout([day('p1', '2017-01-05'), node('p2', 2017), node('p3', 2016)])
+    expect(undated).toBe(1)
+  })
+})
+
