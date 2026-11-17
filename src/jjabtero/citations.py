@@ -26,6 +26,7 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    Text,
     create_engine,
     delete,
     insert,
@@ -101,6 +102,13 @@ _works = Table(
     Column("cited_by_count", Integer),
     Column("item_type", String),
     Column("updated_at", String),
+)
+_outside_references = Table(
+    "outside_references",
+    _metadata,
+    Column("work", String, primary_key=True),
+    Column("refs", Text),
+    Column("fetched_at", String),
 )
 _link_misses = Table(
     "link_misses",
@@ -215,6 +223,26 @@ def lookup_works(http: httpx2.Client, work_ids: list[str], now: datetime) -> lis
         ) or {}
         rows.extend(_work_row(work, stamp) for work in body.get("results") or [] if short_id(work.get("id")))
     return rows
+
+
+def lookup_references(http: httpx2.Client, work_ids: list[str]) -> dict[str, list[str]]:
+    """OpenAlex에서 여러 논문의 참고문헌 목록을 100건씩 받는다. 찾지 못한 논문은 빈 목록이다.
+
+    @doc: docs/design/CitationGraph.md#2-그래프-데이터
+    """
+    found: dict[str, list[str]] = dict.fromkeys(work_ids, [])
+    for index in range(0, len(work_ids), LOOKUP_BATCH):
+        batch = work_ids[index : index + LOOKUP_BATCH]
+        body = _get(
+            http,
+            OPENALEX_WORKS_URL,
+            {"filter": "openalex_id:" + "|".join(batch), "per-page": LOOKUP_BATCH, "select": "id,referenced_works"},
+        ) or {}
+        for work in body.get("results") or []:
+            work_id = short_id(work.get("id"))
+            if work_id:
+                found[work_id] = [ref for ref in map(short_id, work.get("referenced_works") or []) if ref]
+    return found
 
 
 # @doc: docs/design/Citations.md#6-api와-화면
@@ -454,6 +482,7 @@ class CitationStore:
                 select(_fetches.c.paper),
             )
             connection.execute(delete(_works).where(_works.c.id.not_in(used)))
+            connection.execute(delete(_outside_references).where(_outside_references.c.work.not_in(used)))
 
     def missed_recently(self, doi: str, now: datetime) -> bool:
         """이 DOI를 7일 안에 찾다가 못 찾았으면 참이다.
@@ -551,6 +580,45 @@ class CitationStore:
         with self.engine.connect() as connection:
             rows = connection.execute(select(_works).where(_works.c.id.in_(work_ids))).all()
         return {row.id: dict(row._mapping) for row in rows}
+
+    def outside_references(self, work_ids: set[str]) -> dict[str, list[str]]:
+        """저장해 둔 서재 밖 논문의 참고문헌 목록.
+
+        @doc: docs/design/CitationGraph.md#2-그래프-데이터
+        """
+        if not work_ids:
+            return {}
+        with self.engine.connect() as connection:
+            rows = connection.execute(select(_outside_references).where(_outside_references.c.work.in_(work_ids))).all()
+        return {row.work: json.loads(row.refs) for row in rows}
+
+    def stale_outside_references(self, work_ids: set[str], now: datetime) -> list[str]:
+        """참고문헌 목록이 없거나 `REFRESH_AFTER`보다 오래된 논문.
+
+        @doc: docs/design/CitationGraph.md#2-그래프-데이터
+        """
+        if not work_ids:
+            return []
+        with self.engine.connect() as connection:
+            rows = connection.execute(
+                select(_outside_references.c.work, _outside_references.c.fetched_at).where(
+                    _outside_references.c.work.in_(work_ids)
+                )
+            ).all()
+        fresh = {row.work for row in rows if now - datetime.fromisoformat(row.fetched_at) < REFRESH_AFTER}
+        return sorted(work_ids - fresh)
+
+    def save_outside_references(self, refs: dict[str, list[str]], now: datetime) -> None:
+        """서재 밖 논문의 참고문헌 목록을 저장한다. 같은 논문은 바꾼다.
+
+        @doc: docs/design/CitationGraph.md#2-그래프-데이터
+        """
+        with self.engine.begin() as connection:
+            for work, items in refs.items():
+                connection.execute(delete(_outside_references).where(_outside_references.c.work == work))
+                connection.execute(
+                    insert(_outside_references).values(work=work, refs=json.dumps(items), fetched_at=now.isoformat())
+                )
 
     def save_works(self, rows: list[dict[str, Any]]) -> None:
         """서지 정보를 저장한다. 같은 ID는 바꾼다.

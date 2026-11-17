@@ -4,14 +4,15 @@
 @doc: docs/design/Tags.md#6-테스트
 """
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx2
 from fastapi.testclient import TestClient
 
 from jjabtero.app import create_app
-from jjabtero.citation_graph import library_edges, outside_edges
-from jjabtero.citations import Recommendation, Relation
+from jjabtero.citation_graph import GraphEdge, library_edges, outside_edges, reference_edges
+from jjabtero.citations import CitationStore, Recommendation, Relation
 from test_citations import A, FakeOpenAlex
 
 
@@ -75,6 +76,35 @@ def test_outside_edges_follow_citation_direction() -> None:
     assert edges == [("p1", "W9", "cites", 0), ("W9", "p2", "cites", 0), ("p3", "W9", "related", 2)]
 
 
+def test_reference_edges_add_cites_and_drop_related() -> None:
+    """서재 밖 논문의 참고문헌으로 그래프 안의 점을 잇고, 같은 두 점의 가까움 선은 빼며, 겹치거나 밖의 논문은 잇지 않는다.
+
+    @doc: docs/design/CitationGraph.md#5-테스트
+    """
+    edges = [
+        GraphEdge(source="p1", target="W9", kind="cites"),
+        GraphEdge(source="p2", target="W9", kind="related", shared_refs=2),
+        GraphEdge(source="p2", target="W8", kind="related", shared_refs=2),
+    ]
+    node_ids = {"WA": "p1", "WB": "p2", "W8": "W8", "W9": "W9"}
+    refs = {"W9": ["WB", "W8", "W9", "W404"], "W8": ["W9", "W9"], "WX": ["W9"]}
+    got = {(e.source, e.target, e.kind) for e in reference_edges(refs, node_ids, edges)}
+    assert got == {("p1", "W9", "cites"), ("W9", "p2", "cites"), ("W9", "W8", "cites"), ("W8", "W9", "cites"), ("p2", "W8", "related")}
+
+
+def test_outside_references_refresh_after_a_week(tmp_path: Path) -> None:
+    """서재 밖 논문의 참고문헌은 없거나 7일이 지난 것만 다시 받을 대상이다.
+
+    @doc: docs/design/CitationGraph.md#5-테스트
+    """
+    store = CitationStore(tmp_path / "citations.db")
+    now = datetime(2026, 11, 18, tzinfo=UTC)
+    store.save_outside_references({"W1": ["W2"], "W3": []}, now)
+    assert store.outside_references({"W1", "W3", "W9"}) == {"W1": ["W2"], "W3": []}
+    assert store.stale_outside_references({"W1", "W9"}, now + timedelta(days=6)) == ["W9"]
+    assert store.stale_outside_references({"W1", "W9"}, now + timedelta(days=8)) == ["W1", "W9"]
+
+
 def make_client(tmp_path: Path) -> tuple[TestClient, object]:
     """가짜 OpenAlex를 쓰는 앱. 서재 논문 W10의 OpenAlex 응답을 더한다.
 
@@ -91,6 +121,7 @@ def make_client(tmp_path: Path) -> tuple[TestClient, object]:
         db_path=tmp_path / "library.db",
         http_client=httpx2.Client(transport=httpx2.MockTransport(openalex)),
     )
+    app.state.fake_openalex = openalex
     return TestClient(app), app
 
 
@@ -119,6 +150,36 @@ def test_graph_api_library_and_outside(tmp_path: Path) -> None:
     ids = {node["id"] for node in wide["nodes"]}
     assert all(edge["source"] in ids and edge["target"] in ids for edge in wide["edges"])
     assert client.get("/api/citations/graph", params={"outside": 31}).status_code == 422
+
+
+def test_graph_api_outside_references(tmp_path: Path) -> None:
+    """서재 밖 논문의 참고문헌을 한 번 받아 두고 그 인용 선을 그린다. 받지 못해도 그래프는 나온다.
+
+    @doc: docs/design/CitationGraph.md#5-테스트
+    """
+    client, app = make_client(tmp_path)
+    openalex = app.state.fake_openalex
+    client.post("/api/papers", json={"title": "Base", "openalex_id": A})
+    app.state.citations.run_once()
+    candidates = ["W1", "W2", "W50", "W60", "W10", "W11", "W12"]
+    openalex.refs = {work_id: [A, *candidates] for work_id in candidates}
+
+    def ref_requests() -> int:
+        return sum(1 for request in openalex.requests if request.url.params.get("select") == "id,referenced_works")
+
+    body = client.get("/api/citations/graph", params={"outside": 3}).json()
+    outside = [node["id"] for node in body["nodes"] if node["paper_id"] is None]
+    edges = {(edge["source"], edge["target"], edge["kind"]) for edge in body["edges"]}
+    assert len(outside) == 3 and ref_requests() == 1
+    assert all((a, b, "cites") in edges for a in outside for b in outside if a != b)
+    assert not any(kind == "related" and source in outside or kind == "related" and target in outside for source, target, kind in edges)
+    client.get("/api/citations/graph", params={"outside": 3})
+    assert ref_requests() == 1
+
+    with app.state.citations.store.engine.begin() as connection:
+        connection.exec_driver_sql("DELETE FROM outside_references")
+    openalex.budget_left = 0
+    assert len(client.get("/api/citations/graph", params={"outside": 3}).json()["nodes"]) == 4
 
 
 def test_graph_api_filters_by_tags(tmp_path: Path) -> None:

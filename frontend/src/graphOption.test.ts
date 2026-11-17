@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type { CitationGraph, GraphNode } from './api'
-import { dateLabel, edgeText, graphOption, orderWithinYear, symbolSize, yearLayout } from './graphOption'
+import { dateLabel, edgeText, graphCitedCounts, graphOption, orderWithinYear, symbolSize, yearLayout } from './graphOption'
 
 function node(id: string, year: number | null, extra: Partial<GraphNode> = {}): GraphNode {
   return {
@@ -34,7 +34,7 @@ const graph: CitationGraph = {
 }
 const palette = { library: '#0f0', outside: '#888', text: '#000', edge: '#999' }
 
-type Series = { layout: string; data: { id: string; value?: number[]; category: number; label: { show: boolean } }[]; links: { source: string; symbol: string[]; lineStyle: { type: string } }[] }
+type Series = { layout: string; data: { id: string; value?: number[]; category: number; symbolSize: number; label: { show: boolean } }[]; links: { source: string; symbol: string[]; lineStyle: { type: string } }[] }
 
 describe('yearLayout', () => {
   it('점이 있는 연도만 열로 두고, 서재 논문을 위로 쌓으며, 연도를 모르는 점은 뺀다', () => {
@@ -79,6 +79,27 @@ describe('graphOption', () => {
     const names = new Map([['p1', 'A'], ['W9', 'B']])
     expect(edgeText(graph.edges[1], names)).toBe('A ↔ B: 공유 참고문헌 2, 함께 인용 3회')
     expect(edgeText({ ...graph.edges[0], source: 'W9', target: 'p1' }, names)).toBe('B → A 인용')
+  })
+})
+
+describe('graphCitedCounts', () => {
+  it('그래프의 다른 점에서 들어오는 인용 선만 세고, 고르면 점 크기를 그 수로 정한다', () => {
+    const counted: CitationGraph = {
+      nodes: [node('p1', 2017), node('W9', 2018), node('W8', null)],
+      edges: [
+        { source: 'p1', target: 'W9', kind: 'cites', shared_refs: 0, cocited: 0 },
+        { source: 'W8', target: 'W9', kind: 'cites', shared_refs: 0, cocited: 0 },
+        { source: 'W9', target: 'W9', kind: 'cites', shared_refs: 0, cocited: 0 },
+        { source: 'p1', target: 'W8', kind: 'related', shared_refs: 2, cocited: 0 },
+      ],
+    }
+    expect(Object.fromEntries(graphCitedCounts(counted))).toEqual({ p1: 0, W9: 2, W8: 0 })
+    expect(symbolSize(node('a', 1, { cited_by_count: 100000 }), 'graph', 0)).toBe(8)
+    expect(symbolSize(node('a', 1), 'graph', 2)).toBeGreaterThan(symbolSize(node('a', 1), 'graph', 1))
+    const option = graphOption(counted, 'year', palette, 'graph') as { series: Series[]; tooltip: { formatter: (p: unknown) => string } }
+    expect(option.series[0].data.map((item) => item.id)).toEqual(['p1', 'W9'])
+    expect(option.series[0].data[1].symbolSize).toBe(16)
+    expect(option.tooltip.formatter({ dataType: 'node', data: { id: 'W9' } })).toContain('그래프 안 피인용 2')
   })
 })
 

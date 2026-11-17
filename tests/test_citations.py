@@ -64,6 +64,7 @@ class FakeOpenAlex:
         self.dois = dois or {"10.1/a": A}
         self.requests: list[httpx2.Request] = []
         self.budget_left: int | None = None
+        self.refs: dict[str, list[str]] = {}
 
     def __call__(self, request: httpx2.Request) -> httpx2.Response:
         if request.url.host == "api.semanticscholar.org":
@@ -88,7 +89,7 @@ class FakeOpenAlex:
             chunk = self.citers[(page - 1) * per_page : page * per_page]
             return httpx2.Response(200, json={"meta": {"count": len(self.citers)}, "results": chunk})
         ids = flt.removeprefix("openalex_id:").split("|")
-        return httpx2.Response(200, json={"meta": {"count": len(ids)}, "results": [work(i) for i in ids]})
+        return httpx2.Response(200, json={"meta": {"count": len(ids)}, "results": [work(i, refs=self.refs.get(i)) for i in ids]})
 
 
 class FakeDrive:

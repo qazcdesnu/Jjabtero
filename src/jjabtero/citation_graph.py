@@ -18,6 +18,7 @@ from jjabtero.citations import (
     CitationSync,
     OpenAlexBudgetError,
     Recommendation,
+    lookup_references,
     lookup_works,
     recommend_works,
 )
@@ -172,6 +173,32 @@ def _doi(value: str | None) -> str | None:
         return None
 
 
+def reference_edges(
+    outside_refs: dict[str, list[str]], node_ids: dict[str, str], edges: list[GraphEdge]
+) -> list[GraphEdge]:
+    """서재 밖 논문의 참고문헌으로 인용 선을 더한다. 같은 두 점 사이의 가까움 선은 뺀다.
+
+    `node_ids`는 OpenAlex ID → 점 ID다.
+
+    @doc: docs/design/CitationGraph.md#2-그래프-데이터
+    """
+    cites = {(edge.source, edge.target) for edge in edges if edge.kind == "cites"}
+    added: list[GraphEdge] = []
+    for work, refs in sorted(outside_refs.items()):
+        source = node_ids.get(work)
+        if source is None:
+            continue
+        for ref in refs:
+            target = node_ids.get(ref)
+            if target is None or target == source or (source, target) in cites:
+                continue
+            cites.add((source, target))
+            added.append(GraphEdge(source=source, target=target, kind="cites"))
+    linked = {frozenset(pair) for pair in cites}
+    kept = [edge for edge in edges if edge.kind == "cites" or frozenset((edge.source, edge.target)) not in linked]
+    return kept + added
+
+
 def build_graph(
     papers: list[Paper],
     rows_by_paper: dict[str, dict[str, Any]],
@@ -179,6 +206,7 @@ def build_graph(
     dates: dict[str, str | None],
     outside: list[Recommendation],
     s2_references: dict[str, list[PaperKeys]] | None = None,
+    outside_refs: dict[str, list[str]] | None = None,
 ) -> CitationGraph:
     """서재 논문, 인용 데이터, 서지 정보, 서재 밖 추천으로 그래프를 만든다.
 
@@ -233,6 +261,9 @@ def build_graph(
             )
         )
         edges.extend(outside_edges(item, node_ids))
+    if outside_refs:
+        ids = node_ids | {item.work: item.work for item in outside}
+        edges = reference_edges(outside_refs, ids, edges)
     return CitationGraph(nodes=nodes, edges=edges)
 
 
@@ -277,12 +308,20 @@ def citation_graph(
                 known = store.works_by_id(wanted)
             except (OpenAlexBudgetError, httpx2.HTTPError, ValueError):
                 pass
-        chosen = [item for item in ranked if _doi(known.get(item.work, {}).get("doi")) not in library_dois]
+        chosen = [item for item in ranked if _doi(known.get(item.work, {}).get("doi")) not in library_dois][:outside]
+        drawn = {item.work for item in chosen}
+        stale = store.stale_outside_references(drawn, sync.clock())
+        if stale:
+            try:
+                store.save_outside_references(lookup_references(sync.http, stale), sync.clock())
+            except (OpenAlexBudgetError, httpx2.HTTPError, ValueError):
+                pass
         return build_graph(
             papers,
             rows_by_paper,
             known,
             store.publication_dates(by_work),
-            chosen[:outside],
+            chosen,
             sync.s2_store.references(),
+            store.outside_references(drawn),
         )
