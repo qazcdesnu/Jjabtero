@@ -29,7 +29,7 @@
 - API 함수는 [updateReading](../../frontend/src/api.ts#updateReading)이다. 바뀐 논문을 돌려주고, 404면 `PaperNotFoundError`를 던진다.
 - 표시 이름은 [labels 모듈](../../frontend/src/labels.ts)의 [READ_STATUSES](../../frontend/src/labels.ts#READ_STATUSES)(값, 한국어 이름, 태그 색)이고, [readStatusInfo](../../frontend/src/labels.ts#readStatusInfo)는 값으로 이름과 색을 찾는다(모르는 값은 그대로 이름으로 쓴다). 읽을 것은 회색, 읽는 중은 파랑, 다 읽음은 초록이다.
 - 서재 상태 [createLibraryState](../../frontend/src/libraryState.ts#createLibraryState)에 `changeReading(paper, update)`를 더한다. 성공하면 목록의 그 논문을 응답으로 바꾸고 참을 돌려준다. 404면 목록에서 빼고, 그 밖의 실패는 `readingError`로 둔다. 실패하면 거짓을 돌려준다.
-- 서재 표에 "상태" 열(색 태그, 정렬 가능)을 더한다. 추가일 열은 표에서 빼고 상세에서 보여 준다. 제목 열 너비를 지키기 위해서다.
+- 서재 표에 "상태" 열(색 태그, 정렬 가능)을 더한다. 추가일 열은 표에서 빼고 상세에서 보여 준다. 제목 열 너비를 지키기 위해서다. 나중에 담은 순 정렬을 위해 "담은 날" 열로 다시 더했다([서재 화면 설계](LibraryView.md#3-화면)).
 - 서재 필터에 읽기 상태 여러 개 고르기를 더한다. 고른 상태 가운데 하나면 남긴다([서재 필터 설계](LibraryFilter.md#2-필터-조건)).
 - 상세 칸(`PaperDetail.vue`)
   - 제목 아래에 읽기 상태 단추 묶음(PrimeVue `SelectButton`)이 있다. 누르면 바로 저장한다.

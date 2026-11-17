@@ -15,7 +15,7 @@ import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref, watch } from 'vue'
-import { ITEM_TYPE_LABELS, READ_STATUSES, formatDate } from './labels'
+import { ITEM_TYPE_LABELS, READ_STATUSES, formatDateTime } from './labels'
 import { createLibraryState } from './libraryState'
 import CitationLists from './CitationLists.vue'
 import CiteDialog from './CiteDialog.vue'
@@ -159,7 +159,7 @@ function askRemove(event: Event) {
         <Message v-if="library.state.tagError" severity="error" size="small">{{ library.state.tagError }}</Message>
       </dd>
       <dt class="text-surface-500">추가일</dt>
-      <dd class="tabular-nums">{{ formatDate(paper.created_at) }}</dd>
+      <dd class="tabular-nums">{{ formatDateTime(paper.created_at) }}</dd>
     </dl>
 
     <CiteDialog v-model:visible="citing" :work="paper" />

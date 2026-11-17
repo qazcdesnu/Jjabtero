@@ -17,7 +17,7 @@ import MultiSelect from 'primevue/multiselect'
 import Tag from 'primevue/tag'
 import { computed, ref } from 'vue'
 import type { Paper } from './api'
-import { ITEM_TYPE_LABELS, READ_STATUSES, readStatusInfo } from './labels'
+import { ITEM_TYPE_LABELS, READ_STATUSES, formatDate, formatDateTime, readStatusInfo, timeKey } from './labels'
 import { isFilterActive } from './libraryFilter'
 import { createLibraryState } from './libraryState'
 
@@ -184,6 +184,17 @@ const selection = computed({
       <Column field="item_type" header="종류" sortable header-style="width: 6.5rem">
         <template #body="{ data }">
           <span class="text-sm">{{ ITEM_TYPE_LABELS[data.item_type] ?? data.item_type }}</span>
+        </template>
+      </Column>
+      <Column
+        field="created_at"
+        :sort-field="(paper: Paper) => timeKey(paper.created_at)"
+        header="담은 날"
+        sortable
+        header-style="width: 7.5rem"
+      >
+        <template #body="{ data }">
+          <span class="text-sm tabular-nums" :title="formatDateTime(data.created_at)">{{ formatDate(data.created_at) }}</span>
         </template>
       </Column>
 
