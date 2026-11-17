@@ -3,6 +3,7 @@
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import { computed } from 'vue'
+import OpenVersionChoice from './OpenVersionChoice.vue'
 import { readTarget, type createReferencePreview } from './referencePreview'
 
 const props = defineProps<{ preview: ReturnType<typeof createReferencePreview> }>()
@@ -63,6 +64,13 @@ const stored = computed(() => Boolean(work.value?.library_paper_id && state.valu
         </a>
       </div>
       <p v-if="state.message" class="text-xs text-surface-600 dark:text-surface-300">{{ state.message }}</p>
+      <OpenVersionChoice
+        v-if="state.alternatives.length"
+        :versions="state.alternatives"
+        :busy="state.working"
+        @pick="(version) => preview.fetchAlternative(version)"
+        @decline="preview.declineAlternatives()"
+      />
     </template>
     <p v-else-if="state.loading" class="text-surface-500">찾는 중…</p>
     <p v-else-if="state.error" class="text-red-600 dark:text-red-400">{{ state.error }}</p>

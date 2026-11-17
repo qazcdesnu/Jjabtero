@@ -59,6 +59,8 @@ class PaperOut(BaseModel):
     note: str | None
     openalex_id: str | None
     has_pdf: bool
+    pdf_source: str | None = None
+    pdf_source_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -82,6 +84,8 @@ class PaperOut(BaseModel):
             note=paper.note,
             openalex_id=paper.openalex_id,
             has_pdf=paper.pdf is not None,
+            pdf_source=paper.pdf.source if paper.pdf is not None else None,
+            pdf_source_url=paper.pdf.source_url if paper.pdf is not None else None,
             created_at=paper.created_at,
             updated_at=paper.updated_at,
         )

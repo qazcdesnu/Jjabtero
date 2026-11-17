@@ -1,7 +1,8 @@
 // @doc: docs/design/ReaderCitations.md#6-테스트
+// @doc: docs/design/Reader.md#8-테스트
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DuplicatePaperError, type CitedWork, type ReferenceMatch } from './api'
+import { DuplicatePaperError, NoOpenPdfError, type CitedWork, type OpenVersion, type ReferenceMatch } from './api'
 import { CLOSE_DELAY_MS, HOVER_DELAY_MS, createReferencePreview, readTarget } from './referencePreview'
 
 const work: CitedWork = {
@@ -29,6 +30,7 @@ function setup(overrides = {}, result = match()) {
     resolveReference: vi.fn().mockResolvedValue(result),
     addPaper: vi.fn().mockResolvedValue({ id: 7 }),
     fetchOpenPdf: vi.fn().mockResolvedValue({}),
+    fetchPdfAlternatives: vi.fn().mockResolvedValue([]),
     ...overrides,
   }
   return { preview: createReferencePreview(3, entryText, onAdded, deps), deps, entryText, onAdded }
@@ -122,5 +124,33 @@ describe('createReferencePreview', () => {
     expect(deps.fetchOpenPdf).toHaveBeenCalledWith(4)
     expect(preview.state.message).toBe('서재에 담았습니다. PDF는 받지 못했습니다: 공개된 PDF를 찾지 못했습니다.')
     expect(preview.state.working).toBe(false)
+  })
+
+  it('공개 PDF가 없으면 비슷한 공개판을 보이고, 고르면 담은 논문에 그 PDF를 받으며, 받지 않으면 담기만 했다고 알린다', async () => {
+    const version = { openalex_id: 'W2', title: 'Goedel Machines' } as OpenVersion
+    const fetchOpenPdf = vi.fn().mockRejectedValueOnce(new NoOpenPdfError('공개된 PDF를 찾지 못했습니다.')).mockResolvedValue({})
+    const { preview, deps, onAdded } = setup({ fetchOpenPdf, fetchPdfAlternatives: vi.fn().mockResolvedValue([version]) })
+    preview.hover('cite.a', place)
+    await vi.advanceTimersByTimeAsync(HOVER_DELAY_MS)
+    await preview.addAndFetch()
+    expect(deps.fetchPdfAlternatives).toHaveBeenCalledWith(7)
+    expect(preview.state.alternatives).toEqual([version])
+    expect(preview.state.message).toBe('서재에 담았습니다.')
+    await preview.fetchAlternative(version)
+    expect(fetchOpenPdf).toHaveBeenLastCalledWith(7, 'W2')
+    expect(preview.state.result?.has_pdf).toBe(true)
+    expect(preview.state.message).toBe('서재에 담고 비슷한 공개판의 PDF를 받았습니다.')
+    expect(onAdded).toHaveBeenCalledTimes(2)
+
+    const declined = setup({
+      fetchOpenPdf: vi.fn().mockRejectedValue(new NoOpenPdfError('없음')),
+      fetchPdfAlternatives: vi.fn().mockResolvedValue([version]),
+    })
+    declined.preview.hover('cite.a', place)
+    await vi.advanceTimersByTimeAsync(HOVER_DELAY_MS)
+    await declined.preview.addAndFetch()
+    declined.preview.declineAlternatives()
+    expect(declined.preview.state.alternatives).toEqual([])
+    expect(declined.preview.state.message).toBe('서재에 담았습니다. 공개된 PDF가 없습니다.')
   })
 })
