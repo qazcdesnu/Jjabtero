@@ -111,3 +111,33 @@ export function createPositionSaver<T>(save: (value: T) => Promise<void>, delay 
 
   return { schedule, flush }
 }
+
+// @doc: docs/design/Reader.md#6-화면
+export const NOTE_BOX_WIDTH = 432
+// @doc: docs/design/Reader.md#6-화면
+export const NOTE_BOX_MIN_HEIGHT = 200
+
+// @doc: docs/design/Reader.md#6-화면
+export interface Viewport {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+// @doc: docs/design/Reader.md#6-화면
+export function notePlacement(
+  anchor: { left: number; top: number },
+  view: Viewport,
+  width = NOTE_BOX_WIDTH,
+  minHeight = NOTE_BOX_MIN_HEIGHT,
+  gap = 8,
+): { left: number; top: number; maxHeight: number } {
+  // 오른쪽으로 넘치면 왼쪽으로 당긴다.
+  const left = Math.max(view.left + gap, Math.min(anchor.left, view.left + view.width - width - gap))
+  const bottom = view.top + view.height - gap
+  let top = anchor.top + gap
+  // 아래 공간이 좁으면 상자를 올려 최소 높이를 확보한다.
+  if (bottom - top < minHeight) top = Math.max(view.top + gap, bottom - minHeight)
+  return { left, top, maxHeight: Math.max(bottom - top, 0) }
+}

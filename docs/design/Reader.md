@@ -80,6 +80,10 @@ PDF API는 [pdfs 모듈](../../src/jjabtero/pdfs.py)의 [router](../../src/jjabt
 - 하이라이트: 글을 고르면 선택 아래에 색 다섯 개([HIGHLIGHT_COLORS](../../frontend/src/annotations.ts#HIGHLIGHT_COLORS))의 작은 도구 막대가 뜨고, 색을 누르면 하이라이트가 된다. 선택의 화면 사각형은 [normalizeRects](../../frontend/src/annotations.ts#normalizeRects)가 쪽 비율로 바꾸고 같은 줄의 조각을 합친다. 여러 쪽에 걸친 선택은 시작한 쪽 안의 부분만 쓴다.
 - 하이라이트는 캔버스와 글자 층 사이의 층에 반투명 색(곱하기 혼합, [colorFill](../../frontend/src/annotations.ts#colorFill))으로 그린다. 글자 층이 위에 있어 하이라이트 위에서도 글을 고를 수 있다. 그래서 하이라이트를 누른 것은 글자 층의 클릭 위치로 판정한다([hitTest](../../frontend/src/annotations.ts#hitTest), 겹치면 나중 것). 누르면 고른 글, 색 바꾸기, 메모, 삭제가 있는 작은 창이 뜬다. Esc나 다른 곳을 누르면 닫힌다.
 - 영역 메모: 머리줄의 "영역 메모"를 켜면 커서가 십자가 되고 글자 층이 선택을 받지 않는다. 쪽 위를 끌면 점선 사각형이 보이고([dragRect](../../frontend/src/annotations.ts#dragRect), 쪽 너비·높이의 1%([MIN_NOTE_SIZE](../../frontend/src/annotations.ts#MIN_NOTE_SIZE))보다 작으면 버림), 놓으면 메모 입력이 열린다. 저장하면 `kind: note` 주석이 되고 영역 메모 모드가 꺼진다. 영역 메모는 노란 테두리 사각형과 말풍선 표시로 그리고, 누르면 하이라이트와 같은 창(색 고르기 없음)이 뜬다.
+- 메모 상자(하이라이트 창과 영역 메모 입력)의 너비는 432px([NOTE_BOX_WIDTH](../../frontend/src/readerState.ts#NOTE_BOX_WIDTH))다. 처음 288px에서 사용자 요청으로 1.5배로 늘렸다([이슈 I22](../Issue.md)). 위치는 [notePlacement](../../frontend/src/readerState.ts#notePlacement)가 리더에서 보이는 영역([Viewport](../../frontend/src/readerState.ts#Viewport), 스크롤과 창 크기가 바뀔 때마다 잰다) 안으로 정한다.
+  - 기준점(고른 글이나 영역의 아래) 아래 8px에 두고, 오른쪽으로 넘치면 왼쪽으로 당긴다.
+  - 상자 아래 끝이 리더 화면 아래를 넘지 않게, 남은 높이를 최대 높이로 한다. 남은 높이가 200px([NOTE_BOX_MIN_HEIGHT](../../frontend/src/readerState.ts#NOTE_BOX_MIN_HEIGHT))보다 작으면 상자를 올려 200px를 확보한다(화면이 그보다 낮으면 화면 위에 붙인다).
+  - 메모가 길면 메모 칸 안에서 스크롤하고, 고른 글·색·삭제·저장 버튼은 줄지 않고 늘 보인다.
 - 머리줄의 "주석 n"으로 오른쪽 주석 목록을 열고 닫는다. 쪽 순서로 종류, 쪽, 요약([annotationSummary](../../frontend/src/annotations.ts#annotationSummary): 하이라이트는 글과 메모, 영역 메모는 메모)을 보여 주고, 누르면 그 자리로 스크롤하고 주석 창을 연다.
 
 ## 7. 태스크 나누기
