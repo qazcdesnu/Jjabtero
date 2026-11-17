@@ -56,10 +56,11 @@
 | `cocitations` | A와 함께 인용된 논문, 함께 인용된 횟수. 2회 이상인 것 가운데 많은 순으로 A마다 최대 100건 |
 | `works` | 참고문헌과 피인용 논문의 제목, 저자(앞 10명), 연도, 공개일, 게재처, DOI, 피인용 수, 항목 종류(검색과 같은 규칙으로 OpenAlex `type`을 바꾼 값). 항목 종류는 캐시 버전 2에서 더했다 |
 | `link_misses` | OpenAlex에서 찾지 못한 DOI와 시도한 시각 |
+| `outside_references` | 그래프에 그린 서재 밖 논문의 참고문헌 목록(JSON)과 받은 시각. 그래프 안 인용 선에 쓴다([서재 인용 그래프 설계](CitationGraph.md#2-그래프-데이터), [이슈 I25](../Issue.md)) |
 
 - 피인용 논문의 참고문헌 목록 자체는 저장하지 않는다. N이 크면(예: 200) A마다 1만 건쯤이 되어 파일이 커지기 때문이다. 가져올 때 서지 결합과 공동 인용 수로 줄여 저장한다.
 - 함께 인용된 논문의 `works`는 가져오지 않는다. 화면에서 보여 줄 때(M3-T5) 받는다.
-- 서재에서 지운 논문의 인용 데이터는 다음 갱신 때 지운다. 어느 표에서도 쓰지 않는 `works`도 함께 지운다([CitationStore.prune](../../src/jjabtero/citations.py#CitationStore.prune)).
+- 서재에서 지운 논문의 인용 데이터는 다음 갱신 때 지운다. 어느 표에서도 쓰지 않는 `works`와 `outside_references`도 함께 지운다([CitationStore.prune](../../src/jjabtero/citations.py#CitationStore.prune)).
 
 **드라이브 보관**
 

@@ -12,7 +12,7 @@ import MultiSelect from 'primevue/multiselect'
 import SelectButton from 'primevue/selectbutton'
 import ToggleSwitch from 'primevue/toggleswitch'
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { graphOption, yearLayout, type GraphLayout, type GraphPalette } from './graphOption'
+import { graphCitedCounts, graphOption, yearLayout, type GraphLayout, type GraphPalette, type SizeBy } from './graphOption'
 import { createGraphState } from './graphState'
 
 use([GraphChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer])
@@ -30,6 +30,12 @@ const layouts = [
   { value: 'year', label: '연도 순' },
   { value: 'force', label: '자유 배치' },
 ]
+const sizeBy = ref<SizeBy>('total')
+const sizes = [
+  { value: 'total', label: '전체 피인용' },
+  { value: 'graph', label: '그래프 안 피인용' },
+]
+const cited = computed(() => (graph.state.data ? graphCitedCounts(graph.state.data) : new Map<string, number>()))
 const container = ref<HTMLDivElement | null>(null)
 const chart = shallowRef<ECharts | null>(null)
 let resizer: ResizeObserver | null = null
@@ -58,7 +64,7 @@ function palette(): GraphPalette {
 
 function draw(): void {
   if (!chart.value || !graph.state.data) return
-  chart.value.setOption(graphOption(graph.state.data, layout.value, palette()), true)
+  chart.value.setOption(graphOption(graph.state.data, layout.value, palette(), sizeBy.value), true)
 }
 
 function meta(): string {
@@ -68,7 +74,7 @@ function meta(): string {
   return [authors, node.year, node.venue].filter(Boolean).join(' · ')
 }
 
-watch(() => [graph.state.data, layout.value], draw)
+watch(() => [graph.state.data, layout.value, sizeBy.value], draw)
 watch(
   () => [graph.state.outside, props.tags.join('\u0000')],
   () => graph.load(),
@@ -106,6 +112,10 @@ onUnmounted(() => {
       </div>
       <div class="flex flex-wrap items-center gap-3">
         <SelectButton v-model="layout" :options="layouts" option-label="label" option-value="value" :allow-empty="false" size="small" />
+        <label class="flex items-center gap-2 text-sm">
+          점 크기
+          <SelectButton v-model="sizeBy" :options="sizes" option-label="label" option-value="value" :allow-empty="false" size="small" />
+        </label>
         <MultiSelect
           :model-value="tags"
           :options="tagOptions"
@@ -174,7 +184,8 @@ onUnmounted(() => {
         <span v-else class="leading-snug font-medium">{{ graph.selected.value.title }}</span>
         <span class="text-xs text-surface-500">{{ meta() }}</span>
         <span class="text-xs text-surface-500">
-          <template v-if="graph.selected.value.cited_by_count !== null">피인용 {{ graph.selected.value.cited_by_count.toLocaleString() }}</template>
+          그래프 안 피인용 {{ cited.get(graph.selected.value.id) ?? 0 }}
+          <template v-if="graph.selected.value.cited_by_count !== null"> · 전체 피인용 {{ graph.selected.value.cited_by_count.toLocaleString() }}</template>
           <template v-if="graph.selected.value.score !== null"> · 추천 점수 {{ graph.selected.value.score.toFixed(2) }}</template>
           <template v-if="graph.selected.value.paper_id !== null && !graph.selected.value.has_data"> · 인용 데이터 없음</template>
         </span>

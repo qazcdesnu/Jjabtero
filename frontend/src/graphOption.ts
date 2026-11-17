@@ -14,6 +14,21 @@ export interface GraphPalette {
   edge: string
 }
 
+// @doc: docs/design/CitationGraph.md#4-화면
+export type SizeBy = 'total' | 'graph'
+
+// @doc: docs/design/CitationGraph.md#4-화면
+export function graphCitedCounts(graph: CitationGraph): Map<string, number> {
+  // 그래프의 다른 점에서 들어오는 인용 선 수. 연도 순 배치에서 빠진 점의 선도 센다.
+  const counts = new Map(graph.nodes.map((node) => [node.id, 0]))
+  for (const edge of graph.edges) {
+    if (edge.kind === 'cites' && edge.source !== edge.target && counts.has(edge.target)) {
+      counts.set(edge.target, (counts.get(edge.target) ?? 0) + 1)
+    }
+  }
+  return counts
+}
+
 // 같은 연도 안에서 견줄 날짜. 월까지만 알면 그달 가운데로 본다. 연도만 알면 견줄 수 없다(null).
 function dateKey(node: GraphNode): string | null {
   if (node.date_precision === 'day' && node.date) return node.date
@@ -99,7 +114,8 @@ export function dateLabel(node: GraphNode): string {
 }
 
 // @doc: docs/design/CitationGraph.md#4-화면
-export function symbolSize(node: GraphNode): number {
+export function symbolSize(node: GraphNode, sizeBy: SizeBy = 'total', inGraph = 0): number {
+  if (sizeBy === 'graph') return Math.min(40, 8 + 4 * inGraph)
   if (node.cited_by_count === null) return 12
   return Math.min(36, 8 + 4 * Math.log10(1 + node.cited_by_count))
 }
@@ -124,7 +140,13 @@ export function edgeText(edge: GraphEdge, names: Map<string, string>): string {
 }
 
 // @doc: docs/design/CitationGraph.md#4-화면
-export function graphOption(graph: CitationGraph, layout: GraphLayout, palette: GraphPalette): EChartsCoreOption {
+export function graphOption(
+  graph: CitationGraph,
+  layout: GraphLayout,
+  palette: GraphPalette,
+  sizeBy: SizeBy = 'total',
+): EChartsCoreOption {
+  const cited = graphCitedCounts(graph)
   const year = layout === 'year' ? yearLayout(graph.nodes, graph.edges) : null
   const placed = year ? year.positions : null
   const nodes = placed ? graph.nodes.filter((node) => placed.has(node.id)) : graph.nodes
@@ -141,7 +163,7 @@ export function graphOption(graph: CitationGraph, layout: GraphLayout, palette: 
       name: node.title,
       value: placed ? placed.get(node.id) : undefined,
       category: library ? 0 : 1,
-      symbolSize: symbolSize(node),
+      symbolSize: symbolSize(node, sizeBy, cited.get(node.id) ?? 0),
       itemStyle: { opacity: library && !node.has_data ? 0.35 : 1 },
       label: { show: library, formatter: shortTitle(node.title) },
     }
@@ -165,7 +187,9 @@ export function graphOption(graph: CitationGraph, layout: GraphLayout, palette: 
         const lines = [`<b>${escapeHtml(node.title)}</b>`]
         const meta = [dateLabel(node), node.venue].filter(Boolean).join(' · ')
         if (meta) lines.push(escapeHtml(meta))
-        if (node.cited_by_count !== null) lines.push(`피인용 ${node.cited_by_count.toLocaleString()}`)
+        const counts = [`그래프 안 피인용 ${cited.get(node.id) ?? 0}`]
+        if (node.cited_by_count !== null) counts.push(`전체 피인용 ${node.cited_by_count.toLocaleString()}`)
+        lines.push(counts.join(' · '))
         if (node.score !== null) lines.push(`추천 점수 ${node.score.toFixed(2)}`)
         if (node.paper_id !== null && !node.has_data) lines.push('인용 데이터 없음')
         return lines.join('<br>')

@@ -32,6 +32,7 @@
 - `cites`: 인용. 방향이 있다(인용한 논문 → 인용된 논문). 서재 논문 A의 OpenAlex 참고문헌에 B가 있거나, B의 가져온 피인용에 A가 있거나, A의 Semantic Scholar 참고문헌에 B가 있으면([인용 데이터 설계](Citations.md#9-semantic-scholar-참고문헌)) A → B다. OpenAlex 참고문헌에는 빠진 것이 많아 Semantic Scholar를 함께 본다. 선행·후행([인용 데이터 설계](Citations.md#6-api와-화면))이 화살표 방향으로 보인다.
 - `related`: 직접 인용은 없지만 가까움. 방향이 없다. 두 서재 논문이 참고문헌을 2개 이상 공유하거나([COUPLING_MIN](../../src/jjabtero/citation_graph.py#COUPLING_MIN)) 함께 2번 이상 인용되면 잇고, 공유 참고문헌 수와 함께 인용된 횟수를 담는다. 같은 두 점 사이에 인용 선이 있으면 그리지 않는다. 그림이 복잡해지지 않게 하기 위해서다.
 - 서재 밖 논문은 이어진 서재 논문마다 선 하나를 둔다. 서재 논문이 인용했으면 서재 논문 → 그 논문, 그 논문이 서재 논문을 인용했으면 그 논문 → 서재 논문의 `cites`, 그 밖에는 `related`다.
+- 서재 밖 논문끼리의 인용, 그리고 서재 밖 논문이 서재 논문을 인용한 것을 빠짐없이 그리기 위해 그래프에 넣은 서재 밖 논문의 참고문헌을 받는다([이슈 I25](../Issue.md)). 인용 캐시의 `outside_references`에 없거나 7일(인용 데이터를 다시 가져오는 주기와 같다, [인용 데이터 설계](Citations.md#5-갱신))이 지난 것만 OpenAlex에서 100편씩 묶어 받는다([lookup_references](../../src/jjabtero/citations.py#lookup_references), [CitationStore.outside_references](../../src/jjabtero/citations.py#CitationStore.outside_references), [CitationStore.stale_outside_references](../../src/jjabtero/citations.py#CitationStore.stale_outside_references), [CitationStore.save_outside_references](../../src/jjabtero/citations.py#CitationStore.save_outside_references)). 받지 못하면(사용량 초과, 네트워크) 있는 것만으로 그린다. 받은 참고문헌에 그래프의 다른 점이 있으면 `cites` 선을 더하고([reference_edges](../../src/jjabtero/citation_graph.py#reference_edges)), 같은 두 점 사이의 `related` 선은 뺀다.
 - 서재 논문 사이의 선은 [library_edges](../../src/jjabtero/citation_graph.py#library_edges)가, 서재 밖 논문의 선은 [outside_edges](../../src/jjabtero/citation_graph.py#outside_edges)가 만든다.
 
 ## 3. API
@@ -49,14 +50,15 @@
     - 인용 관계가 없으면 날짜순이다. 월까지만 알면 그달 가운데로 본다. 연도만 알면 날짜를 아는 논문보다 아래에 두고, 그들끼리는 서재 논문, 피인용 많은 순이다.
     - 정확히 정할 수 없는 경우: 연도만 아는 논문끼리, 연도만 아는 논문과 날짜를 아는 논문(인용 관계가 없을 때), 같은 날짜, 다른 해의 논문이 판 차이로 거꾸로 인용하는 경우(가로 위치는 연도라 바꿀 수 없음). 화면 안내 줄에 같은 연도에 다른 논문이 있는데 연도만 아는 논문 수를 알리고, 점의 도움말에 날짜와 정밀도([dateLabel](../../frontend/src/graphOption.ts#dateLabel): `2017-06-12`, `2018-03 (월까지)`, `2018 (연도만)`)를 보인다. 휠로 연도 범위를 넓히고 좁힌다. 연도를 모르는 점은 이 배치에서 빼고 그 수를 알린다. 위치는 [yearLayout](../../frontend/src/graphOption.ts#yearLayout)이 정한다.
   - **자유 배치**: 힘 배치(force)로 이어진 점끼리 모인다. 끌어서 옮길 수 있다.
-- 서재 논문은 기본 색, 서재 밖 논문은 회색, 인용 데이터가 없는 서재 논문은 흐리게 그린다. 점 크기는 피인용 수의 로그에 비례한다([symbolSize](../../frontend/src/graphOption.ts#symbolSize)). 이름표는 서재 논문에만 붙이고, 겹치면 숨긴다. 인용 선은 실선과 화살표, 가까움 선은 점선이다. 마우스를 올리면 이웃만 강조하고 도움말(점은 제목, 연도, 피인용 수, 추천 점수, 선은 관계와 공유 참고문헌 수·함께 인용 횟수 [edgeText](../../frontend/src/graphOption.ts#edgeText))을 보여 준다. 확대·이동이 된다.
+- 서재 논문은 기본 색, 서재 밖 논문은 회색, 인용 데이터가 없는 서재 논문은 흐리게 그린다. 점 크기는 피인용 수의 로그에 비례한다([symbolSize](../../frontend/src/graphOption.ts#symbolSize)).
+- **그래프 안 피인용**: 점마다 지금 그래프의 다른 점에서 들어오는 인용 선 수를 센다([graphCitedCounts](../../frontend/src/graphOption.ts#graphCitedCounts), [이슈 I25](../Issue.md)). 추천 논문을 고를 때 전체 피인용 수만큼 그래프 안에서 얼마나 인용되는지가 중요하기 때문이다. 도움말과 논문 카드에 "그래프 안 피인용 n"으로 보이고, 도구 줄의 "점 크기"에서 "전체 피인용"(처음)과 "그래프 안 피인용"을 고른다([SizeBy](../../frontend/src/graphOption.ts#SizeBy)). 그래프 안 피인용으로 고르면 점 크기는 그 수에 비례하고, 0인 점은 가장 작다. 연도 순 배치에서 연도를 몰라 빠진 점의 선도 센다. 이름표는 서재 논문에만 붙이고, 겹치면 숨긴다. 인용 선은 실선과 화살표, 가까움 선은 점선이다. 마우스를 올리면 이웃만 강조하고 도움말(점은 제목, 연도, 피인용 수, 추천 점수, 선은 관계와 공유 참고문헌 수·함께 인용 횟수 [edgeText](../../frontend/src/graphOption.ts#edgeText))을 보여 준다. 확대·이동이 된다.
 - 점을 누르면 아래에 그 논문 카드가 열린다. 서재 논문이면 "서재에서 보기"(서재 화면에서 그 논문을 고름), 서재 밖 논문이면 "서재에 담기"를 둔다. 담으면 그래프를 다시 읽는다.
 - ECharts 설정은 [graphOption](../../frontend/src/graphOption.ts#graphOption)(배치 이름 [GraphLayout](../../frontend/src/graphOption.ts#GraphLayout), 밝은·어두운 테마 색 [GraphPalette](../../frontend/src/graphOption.ts#GraphPalette))이 만든다. 상태(읽기, 고른 점, 담기)는 [createGraphState](../../frontend/src/graphState.ts#createGraphState)가 가진다. API 호출은 [fetchCitationGraph](../../frontend/src/api.ts#fetchCitationGraph)(타입 [CitationGraph](../../frontend/src/api.ts#CitationGraph), [GraphNode](../../frontend/src/api.ts#GraphNode), [GraphEdge](../../frontend/src/api.ts#GraphEdge))다.
 
 ## 5. 테스트
 
-- [test_citation_graph](../../tests/test_citation_graph.py)는 공개일 정밀도(1월 1일, arXiv 번호, 연도만), 점의 공개일, 서재 논문 사이의 인용 선(참고문헌과 피인용 양쪽), 가까움 선의 기준과 인용 선이 있을 때 빼기, 서재 밖 논문과 그 선의 방향, API(인용 데이터 없는 논문, `outside` 범위, 서지 정보 받기)를 확인한다.
-- [graphOption.test](../../frontend/src/graphOption.test.ts)는 연도 순 위치(연도별 열, 같은 연도 쌓기, 연도 모름 빼기), 같은 연도 안의 순서(날짜순, 월까지, 연도만은 아래, 인용된 논문이 위, 서로 인용하면 날짜, 연도만 아는 논문 수), 날짜 표시와 설정(점 종류별 모양, 선 모양, 배치 전환)을 확인한다. [graphState.test](../../frontend/src/graphState.test.ts)는 읽기, 고르기, 담기와 다시 읽기, 실패 메시지를 확인한다.
+- [test_citation_graph](../../tests/test_citation_graph.py)는 공개일 정밀도(1월 1일, arXiv 번호, 연도만), 점의 공개일, 서재 논문 사이의 인용 선(참고문헌과 피인용 양쪽), 가까움 선의 기준과 인용 선이 있을 때 빼기, 서재 밖 논문과 그 선의 방향, 서재 밖 논문의 참고문헌으로 더한 인용 선과 그때 빠지는 가까움 선, 참고문헌 받기(없거나 오래된 것만, 실패하면 있는 것만), API(인용 데이터 없는 논문, `outside` 범위, 서지 정보 받기)를 확인한다.
+- [graphOption.test](../../frontend/src/graphOption.test.ts)는 연도 순 위치(연도별 열, 같은 연도 쌓기, 연도 모름 빼기), 같은 연도 안의 순서(날짜순, 월까지, 연도만은 아래, 인용된 논문이 위, 서로 인용하면 날짜, 연도만 아는 논문 수), 날짜 표시, 그래프 안 피인용 수와 그에 따른 점 크기, 설정(점 종류별 모양, 선 모양, 배치 전환)을 확인한다. [graphState.test](../../frontend/src/graphState.test.ts)는 읽기, 고르기, 담기와 다시 읽기, 실패 메시지를 확인한다.
 
 ## 6. 미결정 사항
 
