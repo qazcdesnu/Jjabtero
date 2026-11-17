@@ -127,6 +127,8 @@ onMounted(async () => {
         <GraphView
           v-else
           :tags="library.state.filter.tags"
+          :all-tags="library.tags.value"
+          @update:tags="(names: string[]) => (library.state.filter.tags = names)"
           @added="library.load()"
           @open="openInLibrary"
           @untag="library.toggleTag"
