@@ -16,6 +16,8 @@ const outside: GraphNode = {
   venue: null,
   doi: '10.1/w9',
   cited_by_count: 10,
+  date: '2019-05-01',
+  date_precision: 'day',
   has_data: true,
   score: 1.2,
 }
