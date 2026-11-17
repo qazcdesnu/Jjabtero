@@ -560,8 +560,11 @@ export interface CitationGraph {
 }
 
 // @doc: docs/design/CitationGraph.md#4-화면
-export async function fetchCitationGraph(outside = 0): Promise<CitationGraph> {
-  const response = await fetch(`/api/citations/graph?outside=${outside}`)
+// @doc: docs/design/Tags.md#5-태그별-그래프
+export async function fetchCitationGraph(outside = 0, tags: string[] = []): Promise<CitationGraph> {
+  const params = new URLSearchParams({ outside: String(outside) })
+  for (const tag of tags) params.append('tags', tag)
+  const response = await fetch(`/api/citations/graph?${params}`)
   if (!response.ok) {
     throw new Error(`인용 그래프 불러오기 실패: ${response.status}`)
   }

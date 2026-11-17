@@ -1,6 +1,7 @@
 """서재 인용 그래프의 데이터와 API를 검증한다.
 
 @doc: docs/design/CitationGraph.md#5-테스트
+@doc: docs/design/Tags.md#6-테스트
 """
 
 from pathlib import Path
@@ -118,3 +119,24 @@ def test_graph_api_library_and_outside(tmp_path: Path) -> None:
     ids = {node["id"] for node in wide["nodes"]}
     assert all(edge["source"] in ids and edge["target"] in ids for edge in wide["edges"])
     assert client.get("/api/citations/graph", params={"outside": 31}).status_code == 422
+
+
+def test_graph_api_filters_by_tags(tmp_path: Path) -> None:
+    """태그를 주면 그 태그를 모두 가진 서재 논문만 점이 되고, 서재 밖 추천은 그 논문들로 계산하되 서재의 다른 논문은 추천하지 않는다.
+
+    @doc: docs/design/CitationGraph.md#5-테스트
+    """
+    client, app = make_client(tmp_path)
+    base = client.post("/api/papers", json={"title": "Base", "openalex_id": A, "tags": ["nlp", "core"]}).json()["id"]
+    later = client.post("/api/papers", json={"title": "Later", "openalex_id": "W10", "tags": ["nlp"]}).json()["id"]
+    client.post("/api/papers", json={"title": "Other", "openalex_id": "W11", "tags": ["cv"]})
+    app.state.citations.run_once()
+
+    nlp = client.get("/api/citations/graph", params={"tags": ["nlp"]}).json()
+    assert {node["id"] for node in nlp["nodes"]} == {f"p{base}", f"p{later}"}
+    both = client.get("/api/citations/graph", params=[("tags", "nlp"), ("tags", "core")]).json()
+    assert {node["id"] for node in both["nodes"]} == {f"p{base}"}
+    assert client.get("/api/citations/graph", params={"tags": ["none"]}).json() == {"nodes": [], "edges": []}
+    wide = client.get("/api/citations/graph", params={"tags": ["core"], "outside": 5}).json()
+    outside_ids = {node["openalex_id"] for node in wide["nodes"] if node["paper_id"] is None}
+    assert outside_ids and "W10" not in outside_ids and "W11" not in outside_ids

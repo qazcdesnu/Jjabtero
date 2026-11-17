@@ -1,4 +1,5 @@
 // @doc: docs/design/CitationGraph.md#5-테스트
+// @doc: docs/design/Tags.md#6-테스트
 
 import { describe, expect, it, vi } from 'vitest'
 import { DuplicatePaperError, type CitationGraph, type GraphNode } from './api'
@@ -35,10 +36,10 @@ describe('createGraphState', () => {
   it('추천 논문 함께 보기를 켜면 그 수만큼 청해 읽고, 점을 고른다', async () => {
     const { graph, deps } = setup()
     await graph.load()
-    expect(deps.fetchCitationGraph).toHaveBeenLastCalledWith(0)
+    expect(deps.fetchCitationGraph).toHaveBeenLastCalledWith(0, [])
     graph.state.outside = true
     await graph.load()
-    expect(deps.fetchCitationGraph).toHaveBeenLastCalledWith(OUTSIDE_COUNT)
+    expect(deps.fetchCitationGraph).toHaveBeenLastCalledWith(OUTSIDE_COUNT, [])
     graph.state.data = before
     graph.select('W9')
     expect(graph.selected.value?.title).toBe('Outside')
@@ -68,5 +69,16 @@ describe('createGraphState', () => {
     const broken = setup({ fetchCitationGraph: vi.fn().mockRejectedValue(new Error('인용 그래프 불러오기 실패: 500')) })
     await broken.graph.load()
     expect(broken.graph.state.error).toContain('500')
+  })
+
+  it('고른 태그로 그래프를 청한다', async () => {
+    const tags = ['nlp']
+    const deps = { fetchCitationGraph: vi.fn().mockResolvedValue(before), addPaper: vi.fn() }
+    const graph = createGraphState(vi.fn(), deps, () => tags)
+    await graph.load()
+    expect(deps.fetchCitationGraph).toHaveBeenLastCalledWith(0, ['nlp'])
+    tags.push('core')
+    await graph.load()
+    expect(deps.fetchCitationGraph).toHaveBeenLastCalledWith(0, ['nlp', 'core'])
   })
 })

@@ -124,7 +124,13 @@ onMounted(async () => {
       <SplitterPanel :size="85" :min-size="50" class="overflow-auto">
         <SettingsView v-if="view === 'settings'" />
         <RecommendView v-else-if="view === 'recommend'" @added="library.load()" />
-        <GraphView v-else @added="library.load()" @open="openInLibrary" />
+        <GraphView
+          v-else
+          :tags="library.state.filter.tags"
+          @added="library.load()"
+          @open="openInLibrary"
+          @untag="library.toggleTag"
+        />
       </SplitterPanel>
     </Splitter>
     <Splitter v-else key="main" class="min-h-0 flex-1 rounded-none border-0">

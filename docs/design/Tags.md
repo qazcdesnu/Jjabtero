@@ -34,12 +34,14 @@
 ## 5. 태그별 그래프
 
 - 그래프 화면도 왼쪽에서 고른 태그(서재 필터의 태그)를 쓴다. 고른 태그를 모두 가진 서재 논문만 그래프에 넣고, 서재 밖 추천 논문도 그 논문들로만 계산한다. 서재 목록과 그래프가 같은 태그 선택을 보여야 헷갈리지 않기 때문이다.
-- API: `GET /api/citations/graph?tags=<이름>&tags=<이름>`([인용 그래프 설계](CitationGraph.md#3-api)).
-- 그래프 화면에 있을 때 왼쪽 태그를 누르면 서재 화면으로 가지 않고 그래프를 다시 그린다. 그래프 위쪽에 고른 태그를 지울 수 있는 칩으로 보여 준다.
+- API: `GET /api/citations/graph?tags=<이름>&tags=<이름>`([citation_graph](../../src/jjabtero/citation_graph.py#citation_graph), [인용 그래프 설계](CitationGraph.md#3-api)). 서재 밖 추천에서 빼는 것은 태그와 관계없이 서재 전체다. 고른 태그가 없는 서재 논문을 추천하지 않기 위해서다. 화면은 [fetchCitationGraph](../../frontend/src/api.ts#fetchCitationGraph)에 태그를 넘긴다([createGraphState](../../frontend/src/graphState.ts#createGraphState)의 `tags`).
+- 그래프 화면([GraphView](../../frontend/src/GraphView.vue))에 있을 때 왼쪽 태그를 누르면 서재 화면으로 가지 않고 그래프를 다시 그린다. 그래프 위쪽에 고른 태그를 지울 수 있는 칩으로 보여 주고, 칩을 지우면 왼쪽 선택에서도 빠진다.
+- 시연 서재(9편)에서 `language`(2편)를 고르자 서재 논문 2편, 인용 선 1개로 다시 그렸고, 칩을 지우자 9편으로 돌아왔다(2026-11-16).
 
 ## 6. 테스트
 
 - [test_tags](../../tests/test_tags.py)는 이름 규칙(빈칸, 겹침, 50자), 논문 태그 바꾸기(고친 시각, 쓰지 않는 태그 지우기, 자동 올리기 예약, 404, 422), 여러 편에 붙이기·떼기(바뀐 수, 없는 논문이 섞이면 아무것도 안 바꿈, 빈 목록 422), 이름 바꾸기와 합치기, 지우기(논문은 남김)를 확인한다.
+- [test_citation_graph](../../tests/test_citation_graph.py)는 태그 하나·둘(모두 가진 논문만), 없는 태그(빈 그래프), 태그로 거른 그래프의 추천이 서재의 다른 논문을 빼는 것을 확인한다. [graphState.test](../../frontend/src/graphState.test.ts)는 고른 태그로 그래프를 청하는 것을 확인한다.
 - [libraryState.test](../../frontend/src/libraryState.test.ts)는 한 편 태그 바꾸기와 오류, 여러 편 고르기·모두 고르기·붙이기·떼기, 이름 바꾸기·지우기 뒤의 필터, 다시 읽을 때 고르기 정리를 확인한다.
 
 ## 7. 미결정 사항

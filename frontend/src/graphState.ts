@@ -8,7 +8,13 @@ import { citedWorkInput } from './citationListState'
 export const OUTSIDE_COUNT = 15
 
 // @doc: docs/design/CitationGraph.md#4-화면
-export function createGraphState(onAdded: () => Promise<void> | void, deps = { fetchCitationGraph, addPaper }) {
+// @doc: docs/design/Tags.md#5-태그별-그래프
+export function createGraphState(
+  onAdded: () => Promise<void> | void,
+  deps = { fetchCitationGraph, addPaper },
+  // 왼쪽에서 고른 태그. 그 태그를 모두 가진 서재 논문만으로 그린다.
+  tags: () => string[] = () => [],
+) {
   const state = reactive({
     data: null as CitationGraph | null,
     loading: false,
@@ -26,7 +32,7 @@ export function createGraphState(onAdded: () => Promise<void> | void, deps = { f
     state.loading = true
     state.error = ''
     try {
-      state.data = await deps.fetchCitationGraph(state.outside ? OUTSIDE_COUNT : 0)
+      state.data = await deps.fetchCitationGraph(state.outside ? OUTSIDE_COUNT : 0, [...tags()])
     } catch (error) {
       state.error = error instanceof Error ? error.message : String(error)
     } finally {

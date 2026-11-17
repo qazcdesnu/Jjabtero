@@ -16,7 +16,8 @@ const view = defineModel<string>({ required: true })
 
 function pickTag(name: string) {
   props.library.toggleTag(name)
-  view.value = 'library'
+  // 그래프 화면에서는 그래프를 고른 태그로 다시 그린다. 그 밖의 화면에서는 서재로 간다.
+  if (view.value !== 'graph') view.value = 'library'
 }
 
 // 태그 메뉴: 이름 바꾸기, 지우기
