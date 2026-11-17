@@ -47,7 +47,7 @@
 - 서재 논문의 인용을 가져올 때 이미 부르는 OpenAlex 요청(논문 하나의 `referenced_works`)에 `primary_topic`을 함께 청한다. 새 요청이 늘지 않는다.
 - 대표 주제(`primary_topic`)의 `field`와 `subfield`의 ID와 이름만 인용 캐시의 `fetches` 표에 둔다(`field_id`, `field`, `subfield_id`, `subfield`). 주제 단계 이름과 신뢰 점수는 버린다.
 - 인용 캐시 버전(`CACHE_VERSION`)을 3으로 올린다. 그래서 다음 갱신 때 모든 서재 논문을 다시 가져와 세부 학문이 채워진다.
-- 인용 캐시는 컴퓨터마다 다시 만드는 파일이라 드라이브로 옮기지 않는다. 다른 컴퓨터는 그 컴퓨터의 갱신 때 채운다.
+- 인용 캐시는 드라이브에도 올라가므로([인용 데이터 설계](Citations.md#4-저장)), 다른 컴퓨터도 받은 캐시에서 세부 학문을 읽는다.
 - 서재 논문 응답 `PaperOut`에 `field`, `subfield`를 더해 상세와 세부 학문 거르기에 쓴다. OpenAlex에 연결되지 않았거나 아직 가져오지 않은 논문은 비어 있다.
 
 ## 4. API
