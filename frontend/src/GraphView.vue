@@ -8,6 +8,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import Button from 'primevue/button'
 import Chip from 'primevue/chip'
 import Message from 'primevue/message'
+import MultiSelect from 'primevue/multiselect'
 import SelectButton from 'primevue/selectbutton'
 import ToggleSwitch from 'primevue/toggleswitch'
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
@@ -16,8 +17,13 @@ import { createGraphState } from './graphState'
 
 use([GraphChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer])
 
-const props = withDefaults(defineProps<{ tags?: string[] }>(), { tags: () => [] })
-const emit = defineEmits<{ open: [paperId: number]; added: []; untag: [name: string] }>()
+const props = withDefaults(
+  defineProps<{ tags?: string[]; allTags?: { name: string; count: number }[] }>(),
+  { tags: () => [], allTags: () => [] },
+)
+const emit = defineEmits<{ open: [paperId: number]; added: []; untag: [name: string]; 'update:tags': [names: string[]] }>()
+// 왼쪽 목록의 태그 선택과 같은 상태다. 여기서 고르면 왼쪽에도 반영된다.
+const tagOptions = computed(() => props.allTags.map((tag) => ({ value: tag.name, label: `${tag.name} (${tag.count})` })))
 const graph = createGraphState(() => emit('added'), undefined, () => props.tags)
 const layout = ref<GraphLayout>('year')
 const layouts = [
@@ -100,6 +106,23 @@ onUnmounted(() => {
       </div>
       <div class="flex flex-wrap items-center gap-3">
         <SelectButton v-model="layout" :options="layouts" option-label="label" option-value="value" :allow-empty="false" size="small" />
+        <MultiSelect
+          :model-value="tags"
+          :options="tagOptions"
+          option-label="label"
+          option-value="value"
+          :placeholder="allTags.length ? '태그: 서재 전체' : '태그 없음'"
+          :disabled="!allTags.length"
+          :max-selected-labels="2"
+          selected-items-label="태그 {0}개"
+          filter
+          filter-placeholder="태그 찾기"
+          show-clear
+          size="small"
+          class="w-52"
+          aria-label="그래프에 그릴 태그"
+          @update:model-value="(names: string[] | null) => emit('update:tags', names ?? [])"
+        />
         <label class="flex items-center gap-2 text-sm">
           <ToggleSwitch v-model="graph.state.outside" />
           추천 논문 함께 보기
@@ -111,6 +134,7 @@ onUnmounted(() => {
       <span class="text-xs text-surface-500">태그</span>
       <Chip v-for="tag in tags" :key="tag" :label="tag" icon="pi pi-tag" removable @remove="emit('untag', tag)" />
       <span class="text-xs text-surface-500">를 모두 가진 서재 논문만 그립니다.</span>
+      <Button label="서재 전체 보기" size="small" text @click="emit('update:tags', [])" />
     </div>
     <Message v-if="graph.state.error" severity="error">{{ graph.state.error }}</Message>
     <p v-if="counts" class="text-xs text-surface-500">
