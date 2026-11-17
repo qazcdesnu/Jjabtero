@@ -100,7 +100,8 @@ const dragPreview = computed(() => (dragging.value ? dragRect(dragging.value.sta
 const citationLinks = new Map<number, CitationLink[]>()
 const pageTexts = new Map<number, Promise<{ pieces: TextPiece[]; right: number; view: number[] }>>()
 let anchorsPromise: Promise<Map<string, Anchor>> | null = null
-// 링크가 없는 PDF는 글자로 참고문헌과 인용 표시를 찾는다. 문서에 인용 링크가 하나라도 있으면 쓰지 않는다.
+// 링크가 없는 PDF는 글자로 참고문헌과 인용 표시를 찾는다. 인용 링크의 목적지를 하나라도 찾을 수 있으면 쓰지 않는다.
+// 학술지가 다시 저장한 PDF는 인용 링크만 남고 목적지가 모두 사라지기도 한다(이슈 H4).
 let textIndexPromise: Promise<ReferenceEntry[]> | null = null
 const TEXT_DEST = 'text:'
 const hoveredLink = ref<CitationLink | null>(null)
@@ -120,6 +121,7 @@ async function readCitationLinks(page: number): Promise<void> {
     const rect = linkRect(corners, viewport.width, viewport.height)
     found.push({ page, dest: annotation.dest, rects: [rect] })
   }
+  if (found.length > 0 && (await readAnchors()).size === 0) found.length = 0
   if (found.length === 0) {
     const entries = await readTextIndex()
     if (entries.length) {
@@ -143,9 +145,11 @@ function asPageText(page: number, text: { pieces: TextPiece[]; view: number[] })
 function readTextIndex(): Promise<ReferenceEntry[]> {
   textIndexPromise ??= (async () => {
     const pdf = doc.value!
-    for (let page = 1; page <= pdf.numPages; page += 1) {
-      const annotations = await (await pdf.getPage(page)).getAnnotations()
-      if (annotations.some((annotation) => annotation.subtype === 'Link' && isCitationDest(annotation.dest))) return []
+    if ((await readAnchors()).size > 0) {
+      for (let page = 1; page <= pdf.numPages; page += 1) {
+        const annotations = await (await pdf.getPage(page)).getAnnotations()
+        if (annotations.some((annotation) => annotation.subtype === 'Link' && isCitationDest(annotation.dest))) return []
+      }
     }
     // 참고문헌은 대개 끝에 있으므로 뒤에서부터 제목을 찾는다.
     for (let page = pdf.numPages; page >= 1; page -= 1) {

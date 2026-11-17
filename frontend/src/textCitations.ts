@@ -44,6 +44,9 @@ const HEADING = /^(?:\d+\.?\s*)?(?:references|bibliography|참고\s*문헌)$/i
 const STOP_WORD = /^(?:[A-Z]\.?\s+)?(?:appendix|appendices|supplementary)\b/i
 const STOP_CAPS = /^[A-Z](?:\.\d+)*\s+[A-Z][A-Z\s:,-]{3,}$/
 const NUMBERED = /^\s*(?:\[(\d{1,4})\]|(\d{1,4})\.\s)/
+// @doc: docs/design/ReaderCitations.md#2-인용-표시-찾기
+// 번호 양식에서 다음 항목 번호는 앞 번호보다 크고 이만큼 안이다. "2025. URL …"처럼 연도로 시작하는 이어지는 줄을 항목으로 보지 않기 위해서다.
+export const NUMBER_STEP = 3
 const YEAR = /(?:19|20)\d{2}/g
 // 같은 줄에서 이만큼(pt) 넘게 떨어진 조각은 다른 단으로 본다.
 const COLUMN_GAP = 40
@@ -101,9 +104,28 @@ export function firstSurname(text: string): string {
   return normalizeName(surname.replace(/[^\p{L}'’-]/gu, ''))
 }
 
+// 여러 쪽의 같은 높이에 같은 글(숫자는 무시)이 되풀이되는 줄은 머리말·꼬리말이다. 학술지가 덧붙인 머리말은
+// 위 6%보다 안쪽에 있기도 해서, 참고문헌 목록이 그 줄에서 끝난 것으로 잘못 보았다(이슈 H4).
+function dropRunningLines(lines: TextLine[]): TextLine[] {
+  const key = (line: TextLine) => `${Math.round(line.y)}|${line.text.replace(/\d+/g, '#')}`
+  const pagesByKey = new Map<string, Set<number>>()
+  for (const line of lines) {
+    const pages = pagesByKey.get(key(line)) ?? new Set<number>()
+    pages.add(line.page)
+    pagesByKey.set(key(line), pages)
+  }
+  return lines.filter((line) => (pagesByKey.get(key(line))?.size ?? 0) < 2)
+}
+
+function entryNumber(match: RegExpExecArray | null, bracket: boolean): number | null {
+  if (!match) return null
+  const value = bracket ? match[1] : match[2]
+  return value === undefined ? null : Number(value)
+}
+
 // @doc: docs/design/ReaderCitations.md#2-인용-표시-찾기
 export function referenceEntries(pages: PageText[]): ReferenceEntry[] {
-  const lines = pages.flatMap(bodyLines)
+  const lines = dropRunningLines(pages.flatMap(bodyLines))
   let start = -1
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     if (isHeading(lines[index])) {
@@ -118,11 +140,23 @@ export function referenceEntries(pages: PageText[]): ReferenceEntry[] {
     body.push(line)
   }
   const numbered = body.filter((line) => NUMBERED.test(line.text)).length >= Math.min(3, body.length)
+  // `[n]`과 `n.` 가운데 많은 쪽만 항목 번호로 본다.
+  const brackets = body.filter((line) => NUMBERED.exec(line.text)?.[1] !== undefined).length
+  const bracket = brackets * 2 >= body.filter((line) => NUMBERED.test(line.text)).length
   // 두 단이면 쪽마다 왼쪽 단을 다 읽고 오른쪽 단을 읽는다. 왼쪽 끝에서 150pt 넘게 오른쪽이면 오른쪽 단이다.
   const lefts = new Map<number, number>()
   for (const line of body) lefts.set(line.page, Math.min(lefts.get(line.page) ?? Infinity, line.x))
-  const side = (line: TextLine) => (line.x > (lefts.get(line.page) ?? line.x) + 150 ? 1 : 0)
-  body.sort((a, b) => a.page - b.page || side(a) - side(b) || b.y - a.y)
+  const right = (line: TextLine) => line.x > (lefts.get(line.page) ?? line.x) + 150
+  // 오른쪽에 있는 줄이 쪽 줄의 1/4 이상일 때만 두 단으로 본다. 한 단 쪽에서 낱말 사이가 크게 벌어져 줄의 뒷부분이
+  // 따로 떨어진 것을 오른쪽 단으로 보면 목록이 거기서 끝나 버린다(이슈 H4).
+  const twoColumns = new Set(
+    [...lefts.keys()].filter((page) => {
+      const onPage = body.filter((line) => line.page === page)
+      return onPage.filter(right).length * 4 >= onPage.length
+    }),
+  )
+  const side = (line: TextLine) => (twoColumns.has(line.page) && right(line) ? 1 : 0)
+  body.sort((a, b) => a.page - b.page || side(a) - side(b) || (Math.abs(a.y - b.y) <= 2 ? a.x - b.x : b.y - a.y))
   // 내어쓰기 양식: 쪽·단마다 가장 왼쪽 줄이 항목의 첫 줄이다.
   const margins = new Map<string, number>()
   for (const line of body) {
@@ -133,8 +167,10 @@ export function referenceEntries(pages: PageText[]): ReferenceEntry[] {
   for (const line of body) {
     const margin = margins.get(`${line.page}:${side(line)}`) ?? line.x
     const match = NUMBERED.exec(line.text)
-    const starts = numbered ? match !== null : line.x <= margin + 1.5
     const last = entries[entries.length - 1]
+    const number = numbered ? entryNumber(match, bracket) : null
+    const previous = last?.number ?? 0
+    const starts = numbered ? number !== null && number > previous && number <= previous + NUMBER_STEP : line.x <= margin + 1.5
     if (!starts && last) {
       // 항목이 끝난 뒤의 글(그림 부록 등)을 끌어오지 않는다. 번호 양식의 이어지는 줄은 들여쓰여 있고,
       // 같은 쪽에서 줄 사이가 크게 벌어지면 목록이 끝난 것이다.
@@ -144,7 +180,7 @@ export function referenceEntries(pages: PageText[]): ReferenceEntry[] {
     }
     if (starts || !last) {
       entries.push({
-        number: match ? Number(match[1] ?? match[2]) : null,
+        number,
         surname: '',
         years: [],
         text: line.text,

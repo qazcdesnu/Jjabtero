@@ -87,6 +87,39 @@ describe('referenceEntries', () => {
     expect(hasReferenceHeading(authorYear[0])).toBe(false)
   })
 
+  it('학술지 머리말, 낱말 사이가 크게 벌어진 줄, 연도로 시작하는 이어지는 줄에서 목록을 끊지 않는다', () => {
+    const view = [0, 0, 612, 792]
+    const header = (page: number) => [
+      { str: 'Journal of Things – Safety', x: 72, y: 758, width: 150, height: 10 },
+      { str: `2025 ${page}(3) Agents`, x: 328, y: 758, width: 120, height: 10 },
+    ]
+    const piece = (str: string, x: number, y: number) => ({ str, x, y, width: str.length * 4.5, height: 10 })
+    const pages: PageText[] = [
+      {
+        page: 1,
+        view,
+        pieces: [
+          ...header(1),
+          piece('References', 108, 720),
+          piece('[1] Ann Lee. A first paper. Venue,', 113, 700),
+          piece('2025. URL https://example.org/a.', 134, 689),
+          piece('[2] Bo Kim. Gemini model', 113, 678),
+          piece('updates — march 2025.', 300, 678),
+          piece('[3] Cy Park. Third. 2024.', 113, 667),
+        ],
+      },
+      {
+        page: 2,
+        view,
+        pieces: [...header(2), piece('[4] Di Choi. Fourth. 2023.', 113, 710), piece('[5] Ed Han. Fifth. 2022.', 113, 699)],
+      },
+    ]
+    const entries = referenceEntries(pages)
+    expect(entries.map((entry) => entry.number)).toEqual([1, 2, 3, 4, 5])
+    expect(entries[0].text).toBe('[1] Ann Lee. A first paper. Venue, 2025. URL https://example.org/a.')
+    expect(entries[1].text).toBe('[2] Bo Kim. Gemini model updates — march 2025.')
+  })
+
   it('참고문헌 제목이 없으면 빈 목록이다', () => {
     expect(referenceEntries([numbered[0]])).toEqual([])
   })
