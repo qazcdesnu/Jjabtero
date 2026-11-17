@@ -25,6 +25,8 @@ export interface TextPiece {
   y: number
   width?: number
   height?: number
+  // 글꼴 계열(pdf.js `styles`의 `fontFamily`). 인용 표시의 영역을 잴 때 쓴다.
+  font?: string
 }
 
 // @doc: docs/design/ReaderCitations.md#3-참고문헌-항목-읽기

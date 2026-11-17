@@ -126,12 +126,20 @@ async function readCitationLinks(page: number): Promise<void> {
     const entries = await readTextIndex()
     if (entries.length) {
       const text = await readPageText(page)
-      for (const marker of findMarkers(asPageText(page, text), entries)) {
+      for (const marker of findMarkers(asPageText(page, text), entries, measureText)) {
         found.push({ page, dest: `${TEXT_DEST}${marker.entry}`, rects: marker.rects })
       }
     }
   }
   citationLinks.set(page, found)
+}
+
+// 인용 표시의 영역을 글자의 실제 너비 비율로 잡기 위해 캔버스로 잰다. 글꼴 크기는 비율만 쓰므로 상관없다.
+const measureCanvas = document.createElement('canvas').getContext('2d')
+function measureText(text: string, font = 'serif'): number {
+  if (!measureCanvas) return text.length
+  measureCanvas.font = `100px ${font}`
+  return measureCanvas.measureText(text).width
 }
 
 function asPageText(page: number, text: { pieces: TextPiece[]; view: number[] }): PageText {
@@ -197,6 +205,7 @@ function readPageText(page: number) {
                 y: item.transform[5] as number,
                 width: item.width,
                 height: item.height,
+                font: content.styles[item.fontName]?.fontFamily,
               },
             ]
           : [],
