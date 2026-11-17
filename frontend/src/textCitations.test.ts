@@ -156,6 +156,28 @@ describe('findMarkers', () => {
     expect(inReferences(1, 700, entries)).toBe(false)
   })
 
+  it('여러 문헌을 한꺼번에 인용한 표시는 줄을 넘어가도 숫자마다 항목과 잇고, 넘어간 줄의 조각에 영역을 둔다', () => {
+    const entries = referenceEntries(numbered)
+    const body: PageText = {
+      page: 1,
+      view: VIEW,
+      pieces: [
+        { str: 'as shown before [1, 2,', x: 100, y: 600, width: 110, height: 10 },
+        { str: '3] and also [ 3; 1 ].', x: 100, y: 588, width: 105, height: 10 },
+      ],
+    }
+    const markers = findMarkers(body, entries)
+    expect(markers.map((marker) => entries[marker.entry].number)).toEqual([1, 2, 3, 3, 1])
+    // 줄을 넘어간 "3"은 둘째 조각의 첫 글자다.
+    expect(markers[2].rects).toHaveLength(1)
+    expect(markers[2].rects[0].x).toBeCloseTo(100 / 612)
+    // 글자 너비를 잴 수 있으면 그 비율로 자리를 잡는다. 여기서는 "[" 하나가 다른 글자의 11배 너비다.
+    const wide = (text: string) => text.length + 10 * (text.match(/\[/g)?.length ?? 0)
+    const measured = findMarkers(body, entries, wide)
+    // "as shown before [1, 2," 는 21글자에 "["가 하나라 너비 32, "1" 앞은 27이다.
+    expect(measured[0].rects[0].x).toBeCloseTo((100 + (110 * 27) / 32) / 612)
+  })
+
   it('저자-연도 양식은 성과 연도(글자 포함)로 항목과 잇고, 참고문헌에 없는 이름은 건너뛴다', () => {
     const entries = referenceEntries(authorYear)
     const markers = findMarkers(authorYear[0], entries)

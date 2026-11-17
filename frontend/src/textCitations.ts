@@ -8,8 +8,12 @@ export interface PageText {
   page: number
   // 쪽의 PDF 좌표 범위 [왼쪽, 아래, 오른쪽, 위]
   view: number[]
-  pieces: { str: string; x: number; y: number; width: number; height: number }[]
+  pieces: { str: string; x: number; y: number; width: number; height: number; font?: string }[]
 }
+
+// @doc: docs/design/ReaderCitations.md#2-인용-표시-찾기
+// 글의 너비를 잰다(글꼴 계열은 조각의 `font`). 브라우저는 캔버스로 재고, 없으면 글자 수로 본다.
+export type MeasureText = (text: string, font?: string) => number
 
 // @doc: docs/design/ReaderCitations.md#2-인용-표시-찾기
 export interface TextLine {
@@ -209,11 +213,14 @@ export function referenceEntries(pages: PageText[]): ReferenceEntry[] {
   return entries
 }
 
-function rectFor(page: PageText, piece: PageText['pieces'][number], start: number, end: number): Rect {
+const countChars: MeasureText = (text) => text.length
+
+function rectFor(page: PageText, piece: PageText['pieces'][number], start: number, end: number, measure: MeasureText): Rect {
   const [left, bottom, right, top] = page.view
-  const length = Math.max(piece.str.length, 1)
-  const x0 = piece.x + (piece.width * start) / length
-  const x1 = piece.x + (piece.width * end) / length
+  // 조각 안의 글자 위치는 조각 너비에 비례해 잡는다. 글자마다 너비가 달라, 잴 수 있으면 실제 너비 비율을 쓴다(이슈 I26).
+  const total = measure(piece.str, piece.font) || Math.max(piece.str.length, 1)
+  const x0 = piece.x + (piece.width * measure(piece.str.slice(0, start), piece.font)) / total
+  const x1 = piece.x + (piece.width * measure(piece.str.slice(0, end), piece.font)) / total
   const height = piece.height || 10
   const y1 = piece.y + height * 0.85
   const y0 = piece.y - height * 0.25
@@ -239,7 +246,7 @@ export function authorYearEntry(entries: ReferenceEntry[], surname: string, year
   return same[0]
 }
 
-const NUMERIC_MARKER = /\[(\d{1,4}(?:\s*[,–-]\s*\d{1,4})*)\]/g
+const NUMERIC_MARKER = /\[\s*(\d{1,4}(?:\s*[,;–-]\s*\d{1,4})*)\s*\]/g
 const AUTHOR_YEAR = /(\p{Lu}[\p{L}'’-]+)(?:\s+et\s+al\.?|\s+(?:and|&)\s+\p{Lu}[\p{L}'’-]+)?,?\s*\(?((?:19|20)\d{2})([a-z])?/gu
 
 // @doc: docs/design/ReaderCitations.md#2-인용-표시-찾기
@@ -253,30 +260,45 @@ export function inReferences(page: number, y: number, entries: ReferenceEntry[])
 }
 
 // @doc: docs/design/ReaderCitations.md#2-인용-표시-찾기
-export function findMarkers(page: PageText, entries: ReferenceEntry[]): TextMarker[] {
+export function findMarkers(page: PageText, entries: ReferenceEntry[], measure: MeasureText = countChars): TextMarker[] {
   if (entries.length === 0) return []
   const numbered = entries.some((entry) => entry.number !== null)
   const byNumber = new Map(entries.flatMap((entry, index) => (entry.number === null ? [] : [[entry.number, index] as const])))
+  // 쪽의 조각을 줄바꿈으로 이어 한 글로 본다. "[13, 29," 와 "47]"처럼 인용 표시가 줄을 넘어가도 찾기 위해서다(이슈 I26).
+  // 참고문헌 목록 안의 조각은 넘어갈 수 없는 글자로 바꾼다. 목록의 "[5]" 같은 항목 번호는 인용 표시가 아니다.
+  let text = ''
+  const spans: { piece: number; from: number }[] = []
+  page.pieces.forEach((piece, index) => {
+    if (inReferences(page.page, piece.y, entries)) {
+      text += '\u0000'
+      return
+    }
+    spans.push({ piece: index, from: text.length })
+    text += `${piece.str}\n`
+  })
+  const rectsFor = (from: number, to: number): Rect[] =>
+    spans.flatMap(({ piece, from: offset }) => {
+      const item = page.pieces[piece]
+      const start = Math.max(from, offset) - offset
+      const end = Math.min(to, offset + item.str.length) - offset
+      return end > start && item.str.slice(start, end).trim() ? [rectFor(page, item, start, end, measure)] : []
+    })
   const markers: TextMarker[] = []
-  for (const piece of page.pieces) {
-    // 참고문헌 목록 안의 "[5]" 같은 항목 번호는 인용 표시가 아니다.
-    if (inReferences(page.page, piece.y, entries)) continue
-    if (numbered) {
-      for (const match of piece.str.matchAll(NUMERIC_MARKER)) {
-        const inside = match.index! + 1
-        for (const number of match[1].matchAll(/\d{1,4}/g)) {
-          const entry = byNumber.get(Number(number[0]))
-          if (entry === undefined) continue
-          const start = inside + number.index!
-          markers.push({ entry, rects: [rectFor(page, piece, start, start + number[0].length)] })
-        }
+  if (numbered) {
+    for (const match of text.matchAll(NUMERIC_MARKER)) {
+      const inside = match.index! + 1
+      for (const number of match[1].matchAll(/\d{1,4}/g)) {
+        const entry = byNumber.get(Number(number[0]))
+        if (entry === undefined) continue
+        const start = inside + number.index!
+        markers.push({ entry, rects: rectsFor(start, start + number[0].length) })
       }
-    } else {
-      for (const match of piece.str.matchAll(AUTHOR_YEAR)) {
-        const entry = authorYearEntry(entries, match[1], match[2], match[3] ?? '')
-        if (entry < 0) continue
-        markers.push({ entry, rects: [rectFor(page, piece, match.index!, match.index! + match[0].length)] })
-      }
+    }
+  } else {
+    for (const match of text.matchAll(AUTHOR_YEAR)) {
+      const entry = authorYearEntry(entries, match[1], match[2], match[3] ?? '')
+      if (entry < 0) continue
+      markers.push({ entry, rects: rectsFor(match.index!, match.index! + match[0].length) })
     }
   }
   return markers
