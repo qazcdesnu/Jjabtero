@@ -1,7 +1,17 @@
 // @doc: docs/design/ReaderCitations.md#5-상자
 
 import { reactive } from 'vue'
-import { DuplicatePaperError, addPaper, fetchOpenPdf, pdfUrl, resolveReference, type ReferenceMatch } from './api'
+import {
+  DuplicatePaperError,
+  NoOpenPdfError,
+  addPaper,
+  fetchOpenPdf,
+  fetchPdfAlternatives,
+  pdfUrl,
+  resolveReference,
+  type OpenVersion,
+  type ReferenceMatch,
+} from './api'
 import { citedWorkInput } from './citationListState'
 
 // @doc: docs/design/ReaderCitations.md#5-상자
@@ -38,7 +48,7 @@ export function createReferencePreview(
   paperId: number,
   entryText: (dest: string) => Promise<string>,
   onAdded: () => Promise<void> | void,
-  deps = { resolveReference, addPaper, fetchOpenPdf },
+  deps = { resolveReference, addPaper, fetchOpenPdf, fetchPdfAlternatives },
   timers: Timers = browserTimers,
 ) {
   const state = reactive({
@@ -51,6 +61,9 @@ export function createReferencePreview(
     error: '',
     working: false,
     message: '',
+    // 공개 PDF가 없을 때 받을지 물을 비슷한 공개판과, 그 PDF를 둘 서재 논문
+    alternatives: [] as OpenVersion[],
+    alternativesFor: 0,
   })
   const results = new Map<string, Promise<{ text: string; match: ReferenceMatch | null }>>()
   let hoverTimer: unknown = null
@@ -78,7 +91,7 @@ export function createReferencePreview(
 
   async function show(dest: string, place: PreviewPlace): Promise<void> {
     const mine = ++token
-    Object.assign(state, { open: true, dest, place, text: '', loading: true, result: null, error: '', message: '' })
+    Object.assign(state, { open: true, dest, place, text: '', loading: true, result: null, error: '', message: '', alternatives: [] })
     try {
       const { text, match } = await lookup(dest)
       if (mine !== token) return
@@ -159,7 +172,14 @@ export function createReferencePreview(
           match.has_pdf = true
           state.message = '서재에 담고 PDF를 받았습니다.'
         } catch (error) {
-          state.message = `서재에 담았습니다. PDF는 받지 못했습니다: ${error instanceof Error ? error.message : String(error)}`
+          const found = error instanceof NoOpenPdfError ? await deps.fetchPdfAlternatives(paperId).catch(() => []) : []
+          if (found.length > 0) {
+            state.alternatives = found
+            state.alternativesFor = paperId
+            state.message = '서재에 담았습니다.'
+          } else {
+            state.message = `서재에 담았습니다. PDF는 받지 못했습니다: ${error instanceof Error ? error.message : String(error)}`
+          }
         }
       }
       await onAdded()
@@ -170,5 +190,26 @@ export function createReferencePreview(
     }
   }
 
-  return { state, hover, leave, enterBox, leaveBox: scheduleClose, close, addAndFetch }
+  async function fetchAlternative(version: OpenVersion): Promise<void> {
+    const match = state.result
+    state.working = true
+    try {
+      await deps.fetchOpenPdf(state.alternativesFor, version.openalex_id)
+      if (match) match.has_pdf = true
+      state.alternatives = []
+      state.message = '서재에 담고 비슷한 공개판의 PDF를 받았습니다.'
+      await onAdded()
+    } catch (error) {
+      state.message = `PDF를 받지 못했습니다: ${error instanceof Error ? error.message : String(error)}`
+    } finally {
+      state.working = false
+    }
+  }
+
+  function declineAlternatives(): void {
+    state.alternatives = []
+    state.message = '서재에 담았습니다. 공개된 PDF가 없습니다.'
+  }
+
+  return { state, hover, leave, enterBox, leaveBox: scheduleClose, close, addAndFetch, fetchAlternative, declineAlternatives }
 }

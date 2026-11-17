@@ -14,7 +14,7 @@ from fakes import FakeDrive, write_client_secret
 from jjabtero.app import create_app
 from jjabtero.drive_sync import DrivePaths
 from jjabtero.google_auth import Token, TokenStore
-from jjabtero.pdfs import MAX_PDF_BYTES
+from jjabtero.pdfs import MAX_PDF_BYTES, title_similarity
 
 PDF = b"%PDF-1.7\n" + b"x" * 100
 ARXIV_DOI = "10.48550/arxiv.1706.03762"
@@ -219,3 +219,108 @@ def test_arxiv_abstract_page_becomes_pdf_url(tmp_path: Path) -> None:
     paper_id = add_paper(client, openalex_id="W1")
     body = client.post(f"/api/papers/{paper_id}/pdf/fetch").json()
     assert body["source_url"] == "https://arxiv.org/pdf/1412.6980v5"
+
+
+def test_title_similarity_accepts_other_editions_only() -> None:
+    """표기가 다른 같은 논문의 판은 비슷하다고 보고, 같은 저자의 다른 논문은 0이다.
+
+    @doc: docs/design/Reader.md#8-테스트
+    """
+    chapter = "Gödel Machines: Fully Self-referential Optimal Universal Self-improvers"
+    preprint = "Goedel Machines: Self-Referential Universal Problem Solvers Making Provably Optimal Self-Improvements"
+    assert title_similarity(chapter, preprint) > 0.9
+    assert title_similarity(chapter, "Developmental robotics, optimal artificial curiosity, creativity, music") == 0
+    assert title_similarity("Learning: a survey", "Learning: other things entirely") == 0
+    assert title_similarity("Deep learning in neural networks", "Neural networks and deep learning, revisited") > 0
+
+
+def work(work_id: str, title: str, authors: list[str], year: int = 2003, pdf: str | None = None, doi: str | None = None) -> dict:
+    """OpenAlex 검색 결과 하나.
+
+    @doc: docs/design/Reader.md#8-테스트
+    """
+    return {
+        "id": f"https://openalex.org/{work_id}",
+        "doi": f"https://doi.org/{doi}" if doi else None,
+        "display_name": title,
+        "publication_year": year,
+        "authorships": [{"author": {"display_name": name}} for name in authors],
+        "primary_location": {"source": {"display_name": "arXiv"}},
+        "best_oa_location": {"pdf_url": pdf} if pdf else None,
+        "open_access": {"oa_url": None},
+    }
+
+
+class AlternativesWeb(FakeWeb):
+    """서재 논문은 공개 PDF가 없고, 검색에는 공개판 후보를 주는 가짜 웹.
+
+    @doc: docs/design/Reader.md#8-테스트
+    """
+
+    def __init__(self, results: list[dict]) -> None:
+        super().__init__(oa_url=None)
+        self.results = results
+        self.params: list[dict] = []
+
+    def __call__(self, request: httpx2.Request) -> httpx2.Response:
+        if request.url.host == "api.openalex.org" and request.url.path == "/works":
+            self.urls.append(str(request.url))
+            self.params.append(dict(request.url.params))
+            return httpx2.Response(200, json={"results": self.results})
+        if request.url.host == "api.openalex.org" and request.url.path == "/works/W2":
+            self.urls.append(str(request.url))
+            return httpx2.Response(200, json={"best_oa_location": {"pdf_url": "https://arxiv.org/abs/cs/0309048"}})
+        return super().__call__(request)
+
+
+CHAPTER = "Gödel Machines: Fully Self-referential Optimal Universal Self-improvers"
+PREPRINT = "Goedel Machines: Self-Referential Universal Problem Solvers Making Provably Optimal Self-Improvements"
+
+
+def test_alternatives_pick_same_author_similar_title_with_pdf(tmp_path: Path) -> None:
+    """같은 첫 저자, 비슷한 제목, 5년 안, 공개 PDF가 있는 것만 비슷함 순으로 고르고, 자기 자신은 뺀다.
+
+    @doc: docs/design/Reader.md#8-테스트
+    """
+    web = AlternativesWeb(
+        [
+            work("W9", "Developmental robotics, optimal artificial curiosity", ["Jürgen Schmidhuber"], pdf="https://x/a.pdf"),
+            work("W2", PREPRINT, ["Jürgen Schmidhuber"], pdf="https://arxiv.org/abs/cs/0309048"),
+            work("W3", PREPRINT, ["Jürgen Schmidhuber"]),
+            work("W4", "Gödel Agent: a self-referential agent", ["Xunjian Yin"], pdf="https://x/b.pdf"),
+            work("W5", PREPRINT, ["Jürgen Schmidhuber"], year=1990, pdf="https://x/c.pdf"),
+            work("W1", CHAPTER, ["Jürgen Schmidhuber"], year=2007, pdf="https://x/self.pdf"),
+            work("W6", CHAPTER, ["J. Schmidhuber"], year=2007, pdf="https://x/d.pdf", doi="10.1007/978-3-540-68677-4_7"),
+        ]
+    )
+    app, _ = make_app(tmp_path, web)
+    client = TestClient(app)
+    paper_id = add_paper(
+        client, title=CHAPTER, authors=["Jürgen Schmidhuber"], year=2007, openalex_id="W1", doi="10.1007/978-3-540-68677-4_7"
+    )
+    found = client.get(f"/api/papers/{paper_id}/pdf/alternatives").json()
+    assert [item["openalex_id"] for item in found] == ["W2"]
+    assert found[0]["pdf_url"] == "https://arxiv.org/pdf/cs/0309048" and found[0]["authors"] == ["Jürgen Schmidhuber"]
+    assert web.params[0]["filter"] == "is_oa:true,raw_author_name.search:schmidhuber"
+
+    no_author = add_paper(client, title="Anonymous", doi="10.1/x")
+    assert client.get(f"/api/papers/{no_author}/pdf/alternatives").json() == []
+    assert client.get("/api/papers/999/pdf/alternatives").status_code == 404
+
+
+def test_fetch_alternate_version_stores_its_pdf(tmp_path: Path) -> None:
+    """공개판 ID를 주면 그 공개판의 PDF를 받아 출처 `alternate`로 두고, 논문 응답에 출처를 보인다.
+
+    @doc: docs/design/Reader.md#8-테스트
+    """
+    web = AlternativesWeb([])
+    app, _ = make_app(tmp_path, web)
+    client = TestClient(app)
+    paper_id = add_paper(client, title=CHAPTER, openalex_id="W1")
+    assert client.post(f"/api/papers/{paper_id}/pdf/fetch").status_code == 404
+    response = client.post(f"/api/papers/{paper_id}/pdf/fetch", json={"openalex_id": "W2"})
+    assert response.status_code == 200
+    assert (response.json()["source"], response.json()["source_url"]) == ("alternate", "https://arxiv.org/pdf/cs/0309048")
+    paper = client.get("/api/papers").json()[0]
+    assert (paper["pdf_source"], paper["pdf_source_url"]) == ("alternate", "https://arxiv.org/pdf/cs/0309048")
+    assert client.post(f"/api/papers/{paper_id}/pdf/fetch", json={"openalex_id": "x"}).status_code == 422

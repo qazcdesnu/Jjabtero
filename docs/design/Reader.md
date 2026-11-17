@@ -25,6 +25,18 @@
 - [download_pdf](../../src/jjabtero/pdfs.py#download_pdf)가 넘겨주기(redirect)를 따라가며 받는다. 받은 내용이 PDF(`%PDF-`로 시작)가 아니면 버린다([check_pdf](../../src/jjabtero/pdfs.py#check_pdf), [NotPdfError](../../src/jjabtero/pdfs.py#NotPdfError)). 출판사 페이지가 PDF 대신 HTML을 주는 경우가 있기 때문이다.
 - 자동 받기는 사용자가 논문 상세에서 "PDF 받기"를 누를 때 한다. 서재에 담을 때마다 자동으로 받으면 쓰지 않을 PDF까지 드라이브를 채우기 때문이다.
 
+**비슷한 공개판 받기**([이슈 I27](../Issue.md))
+
+- 공개 PDF가 없으면(책의 장, 유료 학술지) 같은 저자가 공개한 비슷한 판(예비판, 학위논문, 저장소 사본)을 찾아 보여 주고, 사용자가 고르면 그 PDF를 받는다. Schmidhuber의 "Gödel Machines: Fully Self-referential Optimal Universal Self-improvers"(Springer 책의 장, OpenAlex `closed`)에는 같은 저자의 arXiv 예비판 "Goedel Machines: Self-Referential Universal Problem Solvers Making Provably Optimal Self-Improvements"(`cs/0309048`)가 있었다(2026-11-18 확인).
+- 찾기([open_alternatives](../../src/jjabtero/pdfs.py#open_alternatives), 결과 [OpenVersion](../../src/jjabtero/pdfs.py#OpenVersion)): OpenAlex에 제목으로 검색하되(`search`) 첫 저자의 성으로 거르고(`raw_author_name.search`) 공개된 것만(`is_oa:true`) 10건 받는다. 제목 검색만 하면 다른 저자의 비슷한 제목(Gödel Agent 등)이 먼저 나왔다. 저자 이름이 없는 논문은 찾지 않는다.
+- 받은 것 가운데 다음을 모두 만족하는 것을 비슷함이 큰 순으로 3건까지 고른다([title_similarity](../../src/jjabtero/pdfs.py#title_similarity)).
+  - 저자 가운데 서재 논문의 첫 저자와 성이 같은 사람이 있다(악센트를 떼고 비교).
+  - 제목이 비슷하다: 쌍점(`:`) 앞 본제목끼리의 글자 비슷함(`difflib`)이 0.85 이상이고 본제목이 두 낱말 이상이거나, 전체 제목의 낱말(앞 5글자) 겹침(Jaccard)이 0.5 이상이다. 기준은 [ALTERNATIVE_MIN_SIMILARITY](../../src/jjabtero/pdfs.py#ALTERNATIVE_MIN_SIMILARITY)다. "Gödel"과 "Goedel"처럼 표기가 다른 것은 글자 비슷함이 잡는다. 같은 저자의 다른 논문("Developmental robotics …")은 둘 다 낮아 빠진다.
+  - 연도가 5년 안이다.
+  - 공개 PDF 주소가 있다(`best_oa_location.pdf_url`, 없으면 `open_access.oa_url`, arXiv 소개 페이지는 PDF 주소로).
+  - 서재 논문 자신(같은 OpenAlex ID나 DOI)이 아니다.
+- 받기: `POST /api/papers/{id}/pdf/fetch`에 본문 `{"openalex_id": 공개판 ID}`를 주면 그 공개판의 공개 PDF를 받아 이 논문의 PDF로 둔다. 출처는 `alternate`, 출처 주소는 받은 주소다.
+
 **수동: PDF 올리기**
 
 - 논문 상세의 "PDF 올리기"로 사용자가 가진 PDF를 올린다. 같은 검사(`%PDF-`)를 한다.
@@ -47,7 +59,7 @@
 
 | 표 | 열 | 내용 |
 | --- | --- | --- |
-| `paper_pdfs`([PaperPdf](../../src/jjabtero/models.py#PaperPdf), 마이그레이션 0005) | `paper_id`(기본 키, 논문 지우면 함께 지움), `sha256`, `size`, `source`(`openalex`, `arxiv`, `upload`), `source_url`, `drive_file_id`, `page_count`, `added_at` | 논문의 PDF |
+| `paper_pdfs`([PaperPdf](../../src/jjabtero/models.py#PaperPdf), 마이그레이션 0005) | `paper_id`(기본 키, 논문 지우면 함께 지움), `sha256`, `size`, `source`(`openalex`, `arxiv`, `alternate`, `upload`), `source_url`, `drive_file_id`, `page_count`, `added_at` | 논문의 PDF |
 | `reading_positions`([ReadingPosition](../../src/jjabtero/models.py#ReadingPosition), 마이그레이션 0006) | `paper_id`(기본 키, 논문 지우면 함께 지움), `page`(1부터), `offset`(그 쪽 안의 세로 위치 0~1), `zoom`, `updated_at` | 읽던 위치 |
 | `annotations`([Annotation](../../src/jjabtero/models.py#Annotation), 마이그레이션 0007) | `id`, `paper_id`(논문 지우면 함께 지움), `kind`([ANNOTATION_KINDS](../../src/jjabtero/reading.py#ANNOTATION_KINDS): `highlight`, `note`), `page`, `rects`(JSON), `text`, `color`, `note`, `created_at`, `updated_at` | 하이라이트와 영역 메모 |
 
@@ -63,18 +75,21 @@ PDF API는 [pdfs 모듈](../../src/jjabtero/pdfs.py)의 [router](../../src/jjabt
 | 메서드와 경로 | 내용 |
 | --- | --- |
 | `GET /api/papers/{id}/pdf`([read_pdf](../../src/jjabtero/pdfs.py#read_pdf)) | PDF 내용(`application/pdf`). 로컬 사본이 없으면 드라이브에서 받아 둔다. 없으면 404 |
-| `POST /api/papers/{id}/pdf/fetch`([fetch_pdf](../../src/jjabtero/pdfs.py#fetch_pdf)) | 공개 PDF를 받아 보관하고 `paper_pdfs` 정보를 돌려준다. 공개 PDF가 없으면 404, PDF가 아니거나 받지 못하면 502 |
+| `POST /api/papers/{id}/pdf/fetch`([fetch_pdf](../../src/jjabtero/pdfs.py#fetch_pdf)) | 공개 PDF를 받아 보관하고 `paper_pdfs` 정보를 돌려준다. 본문 `{"openalex_id": …}`([FetchIn](../../src/jjabtero/pdfs.py#FetchIn))를 주면 그 공개판의 PDF를 받는다(2절). 공개 PDF가 없으면 404, PDF가 아니거나 받지 못하면 502 |
+| `GET /api/papers/{id}/pdf/alternatives`([pdf_alternatives](../../src/jjabtero/pdfs.py#pdf_alternatives)) | 비슷한 공개판 후보(2절, [OpenVersion](../../src/jjabtero/pdfs.py#OpenVersion): OpenAlex ID, 제목, 저자 앞 3명, 연도, 게재처, PDF 주소, 비슷함). 없으면 빈 목록, OpenAlex를 쓰지 못하면 502 |
 | `PUT /api/papers/{id}/pdf`([upload_pdf](../../src/jjabtero/pdfs.py#upload_pdf)) | 올린 PDF(본문이 PDF 내용)를 보관하고 정보를 돌려준다. PDF가 아니면 415, 너무 크면 413 |
 | `GET`, `PUT /api/papers/{id}/position`([read_position](../../src/jjabtero/reading.py#read_position), [save_position](../../src/jjabtero/reading.py#save_position)) | 읽던 위치를 읽고 쓴다. 저장한 위치가 없으면 204다. 입력은 [PositionIn](../../src/jjabtero/reading.py#PositionIn)(쪽 1 이상, 쪽 안 위치 0~1, 확대 0.25~5, 벗어나면 422), 응답은 [PositionOut](../../src/jjabtero/reading.py#PositionOut)이다. 저장하면 드라이브 자동 올리기를 예약한다. [reading 모듈](../../src/jjabtero/reading.py)의 [router](../../src/jjabtero/reading.py#router)가 처리한다 |
 | `GET /api/papers/{id}/annotations`([list_annotations](../../src/jjabtero/reading.py#list_annotations)) | 주석 목록. 쪽 순서, 쪽 안에서는 위에서부터다 |
 | `POST /api/papers/{id}/annotations`([create_annotation](../../src/jjabtero/reading.py#create_annotation)), `PATCH`·`DELETE /api/annotations/{id}`([update_annotation](../../src/jjabtero/reading.py#update_annotation), [delete_annotation](../../src/jjabtero/reading.py#delete_annotation)) | 주석을 만들고(입력 [AnnotationIn](../../src/jjabtero/reading.py#AnnotationIn)) 색·메모를 고치고(입력 [AnnotationUpdate](../../src/jjabtero/reading.py#AnnotationUpdate), 보낸 항목만) 지운다. 응답은 [AnnotationOut](../../src/jjabtero/reading.py#AnnotationOut)이다. 앞뒤 공백만인 글과 메모는 비운다. 바꿀 때마다 드라이브 자동 올리기를 예약한다. `/api/annotations`는 [annotations_router](../../src/jjabtero/reading.py#annotations_router)가 처리한다 |
 
 - 모두 로그인이 켜져 있으면 로그인해야 쓴다. PDF도 `/api` 아래라 공개되지 않는다.
-- 논문 목록 응답에 PDF가 있는지(`has_pdf`, 화면 타입 [Paper.has_pdf](../../frontend/src/api.ts#Paper.has_pdf))를 더해, 목록과 상세에서 표시한다. 화면의 API 호출은 [listAnnotations](../../frontend/src/api.ts#listAnnotations), [createAnnotation](../../frontend/src/api.ts#createAnnotation), [updateAnnotation](../../frontend/src/api.ts#updateAnnotation), [deleteAnnotation](../../frontend/src/api.ts#deleteAnnotation)(타입 [Annotation](../../frontend/src/api.ts#Annotation), [AnnotationInput](../../frontend/src/api.ts#AnnotationInput)), [fetchPosition](../../frontend/src/api.ts#fetchPosition), [savePosition](../../frontend/src/api.ts#savePosition)(타입 [ReadingPosition](../../frontend/src/api.ts#ReadingPosition)), [fetchOpenPdf](../../frontend/src/api.ts#fetchOpenPdf), [uploadPdf](../../frontend/src/api.ts#uploadPdf), [pdfUrl](../../frontend/src/api.ts#pdfUrl)이고 응답 타입은 [PaperPdf](../../frontend/src/api.ts#PaperPdf)다.
+- 논문 목록 응답에 PDF가 있는지(`has_pdf`, 화면 타입 [Paper.has_pdf](../../frontend/src/api.ts#Paper.has_pdf))를 더해, 목록과 상세에서 표시한다. PDF의 출처와 출처 주소(`pdf_source`, `pdf_source_url`)도 더한다. 공개판에서 받은 PDF를 알리기 위해서다([이슈 I27](../Issue.md)). 화면의 API 호출은 [listAnnotations](../../frontend/src/api.ts#listAnnotations), [createAnnotation](../../frontend/src/api.ts#createAnnotation), [updateAnnotation](../../frontend/src/api.ts#updateAnnotation), [deleteAnnotation](../../frontend/src/api.ts#deleteAnnotation)(타입 [Annotation](../../frontend/src/api.ts#Annotation), [AnnotationInput](../../frontend/src/api.ts#AnnotationInput)), [fetchPosition](../../frontend/src/api.ts#fetchPosition), [savePosition](../../frontend/src/api.ts#savePosition)(타입 [ReadingPosition](../../frontend/src/api.ts#ReadingPosition)), [fetchOpenPdf](../../frontend/src/api.ts#fetchOpenPdf), [uploadPdf](../../frontend/src/api.ts#uploadPdf), [pdfUrl](../../frontend/src/api.ts#pdfUrl)이고 응답 타입은 [PaperPdf](../../frontend/src/api.ts#PaperPdf)다.
 
 ## 6. 화면
 
-- 논문 상세에 PDF 칸([PdfPanel](../../frontend/src/PdfPanel.vue))을 둔다. PDF가 있으면 "읽기"와 "PDF 바꾸기"를, 없으면 "PDF 받기"와 "PDF 올리기"를 보여 준다. 받기·올리기 상태는 [createPdfState](../../frontend/src/pdfState.ts#createPdfState)가 가진다. "새 탭에서 열기"로 브라우저의 PDF 뷰어로도 열 수 있다.
+- 논문 상세에 PDF 칸([PdfPanel](../../frontend/src/PdfPanel.vue))을 둔다. PDF가 있으면 "읽기"와 "PDF 바꾸기"를, 없으면 "PDF 받기"와 "PDF 올리기"를 보여 준다. 받기·올리기 상태는 [createPdfState](../../frontend/src/pdfState.ts#createPdfState)가 가진다.
+  - "PDF 받기"가 공개 PDF를 찾지 못하면(404, [NoOpenPdfError](../../frontend/src/api.ts#NoOpenPdfError)) 비슷한 공개판을 찾는다([fetchPdfAlternatives](../../frontend/src/api.ts#fetchPdfAlternatives), 타입 [OpenVersion](../../frontend/src/api.ts#OpenVersion)). 있으면 "공개된 PDF가 없습니다. 비슷한 공개판이 있습니다. 이 PDF를 받을까요?"와 함께 후보마다 제목(PDF 링크), 저자·연도·게재처, "이 PDF 받기"를 보이고, 맨 아래에 "받지 않기"를 둔다. 고르면 그 공개판으로 받는다([fetchOpenPdf](../../frontend/src/api.ts#fetchOpenPdf)의 두 번째 인자). 없으면 지금처럼 오류를 보인다.
+  - 공개판에서 받은 PDF는 "비슷한 공개판에서 받은 PDF입니다"와 출처 주소를 보인다. 판이 달라 쪽 번호나 내용이 다를 수 있음을 알리기 위해서다. 화면 타입에 [Paper.pdf_source](../../frontend/src/api.ts#Paper.pdf_source)를 더한다. "새 탭에서 열기"로 브라우저의 PDF 뷰어로도 열 수 있다.
 - "읽기"를 누르면 리더 화면([ReaderView](../../frontend/src/ReaderView.vue))이 열린다. 리더는 왼쪽 목록을 남기고 가운데와 오른쪽 칸을 합친 넓은 칸을 쓴다. 위에 닫기, 제목, 쪽 이동(이전·다음, 쪽 번호 입력), 확대·축소(50~300%, [ZOOM_STEPS](../../frontend/src/readerState.ts#ZOOM_STEPS)), 너비 맞춤을 둔다. 처음에는 너비에 맞추되 150%를 넘지 않는다. 왼쪽 목록에서 다른 화면을 고르면 리더가 닫힌다.
 - 쪽 배치와 위치 계산은 [readerState 모듈](../../frontend/src/readerState.ts)의 순수 함수다. [pageTops](../../frontend/src/readerState.ts#pageTops)는 쪽마다 위쪽 위치를([PAGE_GAP](../../frontend/src/readerState.ts#PAGE_GAP) 간격), [pageAt](../../frontend/src/readerState.ts#pageAt)은 스크롤 위치의 쪽을, [visiblePages](../../frontend/src/readerState.ts#visiblePages)는 그릴 쪽을, [nextZoom](../../frontend/src/readerState.ts#nextZoom)과 [fitWidthScale](../../frontend/src/readerState.ts#fitWidthScale)은 확대 배율을, [clampPage](../../frontend/src/readerState.ts#clampPage)는 쪽 번호 범위를 맡는다. 읽던 위치에 쓸 [positionAt](../../frontend/src/readerState.ts#positionAt)과 [scrollTopFor](../../frontend/src/readerState.ts#scrollTopFor)는 스크롤 위치와 (쪽, 쪽 안 비율)을 서로 바꾼다. 확대·축소할 때도 이 둘로 보던 자리를 지킨다.
 - 하이라이트: 글을 고르면 선택 아래에 색 다섯 개([HIGHLIGHT_COLORS](../../frontend/src/annotations.ts#HIGHLIGHT_COLORS))의 작은 도구 막대가 뜨고, 색을 누르면 하이라이트가 된다. 선택의 화면 사각형은 [normalizeRects](../../frontend/src/annotations.ts#normalizeRects)가 쪽 비율로 바꾸고 같은 줄의 조각을 합친다. 여러 쪽에 걸친 선택은 시작한 쪽 안의 부분만 쓴다.
@@ -97,6 +112,8 @@ PDF API는 [pdfs 모듈](../../src/jjabtero/pdfs.py)의 [router](../../src/jjabt
 | M4-T6 | 영역 메모와 주석 목록 |
 
 ## 8. 테스트
+
+- 비슷한 공개판([이슈 I27](../Issue.md)): [test_pdfs](../../tests/test_pdfs.py)는 제목 비슷함(표기가 다른 판, 같은 저자의 다른 논문, 한 낱말 본제목, 낱말 겹침), 후보 고르기(같은 첫 저자, 5년 안, 공개 PDF, 자기 자신과 같은 DOI 빼기, 저자 없음, 없는 논문), 공개판으로 받기(출처 `alternate`, 논문 응답의 출처, 잘못된 ID 422)를 확인한다. [pdfState.test](../../frontend/src/pdfState.test.ts)와 [referencePreview.test](../../frontend/src/referencePreview.test.ts)는 공개 PDF가 없을 때 공개판을 묻고 받기·받지 않기, 다른 실패에는 찾지 않기를, [api.test](../../frontend/src/api.test.ts)는 `NoOpenPdfError`와 요청 모양을 확인한다.
 
 - [test_pdfs](../../tests/test_pdfs.py): 공개 PDF 받기(OpenAlex, arXiv DOI, 없음, PDF가 아님), 로컬 사본과 드라이브 `pdfs/` 폴더 보관, 올리기(바꾸기, PDF 아님 415, 너무 큼 413), 로컬 사본이 없을 때 드라이브에서 받기, 드라이브 없이 로컬만, 없는 논문 404, 논문을 지우면 연결만 지우기.
 - [test_reading](../../tests/test_reading.py): 읽던 위치가 없을 때 204, 저장과 바꾸기, 범위 밖 422, 없는 논문 404, 논문을 지우면 함께 지우기, 저장마다 드라이브 올리기 예약.

@@ -2,6 +2,55 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md), [M3 인용 기반 연결·추천](Done-M3.md), [M6 리더 인용 미리보기](Done-M6.md), [M7 태그](Done-M7.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## I27 공개 PDF가 없으면 비슷한 공개판(같은 저자의 예비판 등)을 찾아 그 PDF를 받을지 묻기
+
+- 시작일: 2026-11-18
+- 완료일: 2026-11-18
+- 근거 문서: [PDF 리더 설계](design/Reader.md#2-pdf-가져오기)
+- 참고 자료: 없음
+
+### 계획
+- OpenAlex에서 같은 첫 저자의 공개 논문을 제목으로 찾아, 제목이 비슷한 것을 공개판 후보로 고르는 API를 만든다.
+- 논문 상세의 "PDF 받기"와 리더 인용 미리보기의 "서재에 담고 PDF 받기"가 공개 PDF를 찾지 못하면 후보를 보여 주고 받을지 묻는다.
+- 서재의 "Gödel Machines" 장(Springer, 비공개)으로 브라우저에서 확인한다.
+
+### 진행 기록
+- 2026-11-18: 사용자가 서재에 담은 Schmidhuber의 "Gödel Machines: Fully Self-referential Optimal Universal Self-improvers"(Springer 책의 장)가 PDF를 받지 못하는 것을 보고, 비슷한 공개판을 받을 수 있으면 받을지 묻게 해 달라고 했다. OpenAlex에서 이 장은 비공개(`closed`)였고, 같은 저자의 arXiv 예비판 "Goedel Machines: Self-Referential Universal Problem Solvers Making Provably Optimal Self-Improvements"(`cs/0309048`)가 공개되어 있었다. 병합되지 않은 가장 최근 브랜치 `i26-multi-citations`에서 작업 브랜치를 만들었다.
+- 2026-11-18: OpenAlex 질의를 시험했다. 제목 검색만 하면 다른 저자의 비슷한 제목(Gödel Agent 등)이 먼저 나오고, 첫 저자 이름 거르기(`raw_author_name.search`)와 공개 거르기(`is_oa:true`)를 함께 쓰면 예비판이 맨 위에 나왔다. 같은 저자의 다른 논문도 함께 나오므로 제목 비슷함으로 다시 거르기로 했다.
+
+- 2026-11-18: 공개판 찾기 API(`GET /api/papers/{id}/pdf/alternatives`)와 공개판으로 받기(`POST …/pdf/fetch` 본문 `openalex_id`)를 만들고, 논문 응답에 PDF 출처를 더했다. 논문 상세의 PDF 칸과 인용 미리보기 상자가 공개 PDF가 없으면(404) 후보를 찾아 "이 PDF 받기"와 "받지 않기"로 묻게 했다(`OpenVersionChoice`).
+- 2026-11-18: 로컬 서재 사본(드라이브 없이, 포트 8010)에서 "Gödel Machines" 장의 "PDF 받기"를 누르자 후보로 arXiv 예비판 하나("Goedel Machines: Self-Referential Universal Problem Solvers …", 2003)가 나왔고, "이 PDF 받기"로 받은 뒤 "읽기"와 "비슷한 공개판에서 받은 PDF입니다"가 보였다. 콘솔에는 공개 PDF가 없다는 404 응답 기록만 있었다. 확인 뒤 로컬 앱이 쓰는 `frontend/dist`를 `main`에서 다시 빌드했다.
+
+### 결정 사항
+- 공개판은 사용자가 고를 때만 받는다. 판이 달라 내용이 조금 다를 수 있기 때문이다.
+
+### 변경 파일
+- `docs/Issue.md`
+- `docs/Ongoing.md`
+- `docs/design/Reader.md`
+- `docs/design/ReaderCitations.md`
+- `docs/Done.md`
+- `src/jjabtero/pdfs.py`
+- `src/jjabtero/papers_api.py`
+- `tests/test_pdfs.py`
+- `frontend/src/api.ts`
+- `frontend/src/api.test.ts`
+- `frontend/src/pdfState.ts`
+- `frontend/src/pdfState.test.ts`
+- `frontend/src/PdfPanel.vue`
+- `frontend/src/OpenVersionChoice.vue`
+- `frontend/src/referencePreview.ts`
+- `frontend/src/referencePreview.test.ts`
+- `frontend/src/ReferencePreview.vue`
+
+### 결과
+- 공개 PDF가 없는 논문은 같은 저자의 비슷한 공개판을 보여 주고, 사용자가 고르면 그 PDF를 받는다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+- `npx vue-tsc --noEmit -p tsconfig.app.json`, `npm run build`: 통과.
+- 로컬 서재 사본으로 브라우저에서 확인했다.
+
 ## I26 리더 인용 미리보기가 여러 문헌을 한꺼번에 인용한 표시(`[4, 23, 61]`)에서도 숫자마다 동작하기(줄을 넘어간 표시, 줄 앞쪽 숫자의 영역)
 
 - 시작일: 2026-11-18

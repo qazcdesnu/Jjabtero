@@ -4,6 +4,7 @@ import Button from 'primevue/button'
 import Message from 'primevue/message'
 import { ref, watch } from 'vue'
 import { pdfUrl, type Paper } from './api'
+import OpenVersionChoice from './OpenVersionChoice.vue'
 import { createPdfState } from './pdfState'
 
 const props = defineProps<{ paper: Paper }>()
@@ -51,6 +52,17 @@ async function onFile(event: Event) {
       />
       <input ref="fileInput" type="file" accept="application/pdf,.pdf" class="hidden" @change="onFile" />
     </div>
+    <p v-if="paper.has_pdf && paper.pdf_source === 'alternate'" class="text-xs text-surface-500">
+      비슷한 공개판에서 받은 PDF입니다. 판이 달라 쪽 번호나 내용이 다를 수 있습니다.
+      <a v-if="paper.pdf_source_url" :href="paper.pdf_source_url" target="_blank" rel="noopener" class="text-primary hover:underline">출처</a>
+    </p>
+    <OpenVersionChoice
+      v-if="pdf.state.alternatives.length"
+      :versions="pdf.state.alternatives"
+      :busy="pdf.state.busy"
+      @pick="(version) => pdf.fetchAlternative(paper.id, version)"
+      @decline="pdf.declineAlternatives()"
+    />
     <p v-if="!paper.has_pdf" class="text-xs text-surface-500">
       "PDF 받기"는 arXiv와 오픈 액세스로 공개된 PDF를 찾아 받습니다. 없으면 가진 PDF를 올려 주세요.
     </p>

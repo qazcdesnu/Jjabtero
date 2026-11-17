@@ -28,6 +28,8 @@ import {
   fetchCitationStatus,
   refreshCitations,
   fetchOpenPdf,
+  fetchPdfAlternatives,
+  NoOpenPdfError,
   uploadPdf,
   fetchPosition,
   savePosition,
@@ -318,6 +320,24 @@ describe('PDF API', () => {
       vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: 'PDF 파일이 아닙니다.' }), { status: 415 })),
     )
     await expect(uploadPdf(3, new Blob(['x']))).rejects.toThrow('PDF 파일이 아닙니다.')
+  })
+
+  it('공개 PDF가 없으면 NoOpenPdfError를 던지고, 공개판 ID를 주면 본문으로 보내며, 공개판 후보를 읽는다', async () => {
+    const missing = JSON.stringify({ detail: '공개된 PDF를 찾지 못했습니다. PDF를 직접 올려 주세요.' })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(missing, { status: 404 })))
+    await expect(fetchOpenPdf(3)).rejects.toBeInstanceOf(NoOpenPdfError)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: '논문이 없습니다: 3' }), { status: 404 })))
+    await expect(fetchOpenPdf(3)).rejects.not.toBeInstanceOf(NoOpenPdfError)
+
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify([]), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await fetchOpenPdf(3, 'W2')
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/papers/3/pdf/fetch',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ openalex_id: 'W2' }) }),
+    )
+    await expect(fetchPdfAlternatives(3)).resolves.toEqual([])
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/papers/3/pdf/alternatives')
   })
 })
 

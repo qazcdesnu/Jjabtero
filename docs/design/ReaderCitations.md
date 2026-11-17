@@ -104,7 +104,7 @@
 - 상자는 인용 표시 바로 아래(아래 공간이 모자라면 위)에 띄운다. 마우스가 인용 표시에서 상자로 옮겨 가도 닫히지 않고, 둘 다에서 벗어나 0.3초([CLOSE_DELAY_MS](../../frontend/src/referencePreview.ts#CLOSE_DELAY_MS))가 지나면 닫힌다. 상자의 위치([PreviewPlace](../../frontend/src/referencePreview.ts#PreviewPlace))는 링크 왼쪽에 맞추되, 상자가 리더 오른쪽으로 넘치지 않게 한다. 링크 아래 260px 안에 공간이 없으면 위에 띄운다. `Esc`로도 닫힌다.
 - 찾는 동안에는 "찾는 중…"을 보여 준다. 링크마다 찾은 결과를 리더를 연 동안 기억하고, 실패(오류)는 기억하지 않아 다시 올리면 다시 찾는다. 항목 글은 상자 아래에 작게 보여 준다.
 - 찾으면 제목(DOI 또는 OpenAlex로 이어지는 링크), 저자·연도·게재처, 피인용 수, 서재 상태("서재에 있음", "PDF 있음")를 보여 주고, 아래 두 버튼을 둔다.
-  - **서재에 담고 PDF 받기**: 서재에 없으면 담고([citedWorkInput](../../frontend/src/citationListState.ts#citedWorkInput)), PDF가 없으면 공개 PDF를 받는다(`POST /api/papers/{id}/pdf/fetch`). 끝나면 "서재에 담고 PDF를 받았습니다." 또는 "서재에 담았습니다. PDF는 받지 못했습니다: <까닭>"을 알리고 서재 목록을 다시 읽는다(리더의 `added` 알림을 `App.vue`가 받는다). 이미 서재에 있는 DOI면 그 논문에 PDF만 받는다. 이미 서재에 있고 PDF도 있으면 이 버튼 대신 "서재에 있음 · PDF 있음"을 보인다.
+  - **서재에 담고 PDF 받기**: 서재에 없으면 담고([citedWorkInput](../../frontend/src/citationListState.ts#citedWorkInput)), PDF가 없으면 공개 PDF를 받는다(`POST /api/papers/{id}/pdf/fetch`). 끝나면 "서재에 담고 PDF를 받았습니다." 또는 "서재에 담았습니다. PDF는 받지 못했습니다: <까닭>"을 알리고 서재 목록을 다시 읽는다(리더의 `added` 알림을 `App.vue`가 받는다). 이미 서재에 있는 DOI면 그 논문에 PDF만 받는다. 이미 서재에 있고 PDF도 있으면 이 버튼 대신 "서재에 있음 · PDF 있음"을 보인다. 공개 PDF를 찾지 못하면 PDF 리더와 같이 비슷한 공개판을 찾아([PDF 리더 설계](Reader.md#2-pdf-가져오기), [이슈 I27](../Issue.md)) "서재에 담았습니다. 공개된 PDF가 없습니다. 비슷한 공개판이 있습니다. 이 PDF를 받을까요?"와 후보(제목, 저자·연도·게재처, "이 PDF 받기")와 "받지 않기"를 상자에 보인다.
   - **새 탭에서 읽기**([readTarget](../../frontend/src/referencePreview.ts#readTarget)): 서재 논문에 PDF가 있으면 그 PDF(`/api/papers/{id}/pdf`), 없으면 공개 PDF 주소를 새 탭에서 연다. 공개 PDF도 없으면 이름을 "원문 페이지 열기"로 바꾸고 DOI(없으면 OpenAlex) 페이지를 연다.
 - 못 찾으면 항목 글과 "이 참고문헌을 찾지 못했습니다"를 보여 준다.
 

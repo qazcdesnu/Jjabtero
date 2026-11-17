@@ -57,6 +57,9 @@ export interface PaperInput {
 export interface Paper extends PaperInput {
   // @doc: docs/design/Reader.md#5-api
   has_pdf?: boolean
+  // @doc: docs/design/Reader.md#6-화면
+  pdf_source?: string | null
+  pdf_source_url?: string | null
   id: number
   read_status: string
   note: string | null
@@ -300,6 +303,20 @@ export interface PaperPdf {
   stored_in_drive: boolean
 }
 
+// @doc: docs/design/Reader.md#6-화면
+export class NoOpenPdfError extends Error {}
+
+// @doc: docs/design/Reader.md#5-api
+export interface OpenVersion {
+  openalex_id: string
+  title: string
+  authors: string[]
+  year: number | null
+  venue: string | null
+  pdf_url: string
+  similarity: number
+}
+
 async function pdfResponse(response: Response): Promise<PaperPdf> {
   if (!response.ok) {
     let detail = ''
@@ -309,6 +326,7 @@ async function pdfResponse(response: Response): Promise<PaperPdf> {
     } catch {
       detail = ''
     }
+    if (response.status === 404 && detail.startsWith('공개된 PDF')) throw new NoOpenPdfError(detail)
     throw new Error(detail || `PDF 요청 실패: ${response.status}`)
   }
   return (await response.json()) as PaperPdf
@@ -320,8 +338,19 @@ export function pdfUrl(paperId: number): string {
 }
 
 // @doc: docs/design/Reader.md#5-api
-export async function fetchOpenPdf(paperId: number): Promise<PaperPdf> {
-  return pdfResponse(await fetch(`/api/papers/${paperId}/pdf/fetch`, { method: 'POST' }))
+export async function fetchOpenPdf(paperId: number, openalexId?: string): Promise<PaperPdf> {
+  // openalexId를 주면 그 공개판의 PDF를 받는다.
+  const init: RequestInit = openalexId
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openalex_id: openalexId }) }
+    : { method: 'POST' }
+  return pdfResponse(await fetch(`/api/papers/${paperId}/pdf/fetch`, init))
+}
+
+// @doc: docs/design/Reader.md#6-화면
+export async function fetchPdfAlternatives(paperId: number): Promise<OpenVersion[]> {
+  const response = await fetch(`/api/papers/${paperId}/pdf/alternatives`)
+  if (!response.ok) throw new Error(`비슷한 공개판을 찾지 못했습니다: ${response.status}`)
+  return (await response.json()) as OpenVersion[]
 }
 
 // @doc: docs/design/Reader.md#5-api
