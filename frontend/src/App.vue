@@ -45,6 +45,8 @@ const drive = createDriveState(() => library.load())
 const auth = createAuthState()
 // 머리줄의 계정 버튼으로 여는 프로필 창
 const profileOpen = ref(false)
+// 프로필에서 AI 키나 모델을 바꿀 때마다 늘려, 리더의 AI 대화 칸이 키 상태를 다시 읽게 한다.
+const aiKeyVersion = ref(0)
 const ready = ref(false)
 // opened: 리더를 연 횟수. 판을 바꾸면 늘려 리더를 그 판으로 새로 만든다.
 const reading = ref<{ id: number; title: string; opened?: number } | null>(null)
@@ -136,7 +138,9 @@ onMounted(async () => {
           :title="reading.title"
           @close="closeReader"
           @switch="switchReaderVersion"
+          :ai-key-version="aiKeyVersion"
           @added="library.load()"
+          @profile="profileOpen = true"
         />
       </SplitterPanel>
     </Splitter>
@@ -179,6 +183,6 @@ onMounted(async () => {
         </div>
       </SplitterPanel>
     </Splitter>
-    <ProfileDialog v-model:visible="profileOpen" :email="auth.state.me?.email ?? null" />
+    <ProfileDialog v-model:visible="profileOpen" :email="auth.state.me?.email ?? null" @changed="aiKeyVersion += 1" />
   </div>
 </template>

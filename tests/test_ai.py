@@ -3,6 +3,7 @@
 @doc: docs/design/AiChat.md#7-테스트
 """
 
+import json
 import os
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from jjabtero.ai import (
     master_cipher,
 )
 from jjabtero.models import Setting
-from test_pdfs import make_app
+from test_pdfs import add_paper, make_app
 
 API_KEY = "AIzaTEST-secret-value-1234"
 MODELS = {
@@ -194,3 +195,86 @@ def test_print_secret_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsy
     master_cipher(data_dir, create=True)
     cli.main(["--print-secret-key"])
     assert capsys.readouterr().out.strip() == (data_dir / SECRET_FILE).read_text().strip()
+
+
+class ChatWeb(GeminiWeb):
+    """모델 목록과 대화에 답하는 가짜 Gemini. 대화 응답은 `reply`로 정한다.
+
+    @doc: docs/design/AiChat.md#7-테스트
+    """
+
+    def __init__(self, reply: dict | None = None, chat_status: int = 200) -> None:
+        super().__init__()
+        self.reply = reply if reply is not None else {
+            "candidates": [{"content": {"parts": [{"text": "생각", "thought": True}, {"text": "요약입니다."}]}}]
+        }
+        self.chat_status = chat_status
+
+    def __call__(self, request: httpx2.Request) -> httpx2.Response:
+        if request.url.path.endswith(":generateContent"):
+            self.requests.append(request)
+            if self.chat_status != 200:
+                return httpx2.Response(self.chat_status, json={"error": {"message": "quota"}})
+            return httpx2.Response(200, json=self.reply)
+        return super().__call__(request)
+
+
+def _chat_client(tmp_path: Path, web: GeminiWeb) -> tuple[TestClient, int]:
+    client, _ = _client(tmp_path, web)
+    paper_id = add_paper(client)
+    client.put("/api/ai/key", json={"api_key": API_KEY})
+    return client, paper_id
+
+
+CHAT = {
+    "page": 3,
+    "context": "We propose a self-improving agent.",
+    "messages": [
+        {"role": "user", "text": "번역해 줘"},
+        {"role": "model", "text": "자기 개선 에이전트를 제안한다."},
+        {"role": "user", "text": "요약해 줘"},
+    ],
+}
+
+
+def test_chat_sends_context_and_history(tmp_path: Path) -> None:
+    """고른 글과 쪽, 논문 제목은 시스템 지시로, 주고받은 말은 차례로 보내고 생각 부분은 뺀 답을 돌려준다.
+
+    @doc: docs/design/AiChat.md#7-테스트
+    """
+    web = ChatWeb()
+    client, paper_id = _chat_client(tmp_path, web)
+    response = client.post("/api/ai/chat", json={"paper_id": paper_id, **CHAT})
+    assert response.status_code == 200
+    assert response.json() == {"text": "요약입니다.", "model": "gemini-2.5-flash"}
+    request = web.requests[-1]
+    assert request.url.path == "/v1beta/models/gemini-2.5-flash:generateContent"
+    assert request.headers["x-goog-api-key"] == API_KEY
+    body = json.loads(request.content)
+    system = body["systemInstruction"]["parts"][0]["text"]
+    assert "We propose a self-improving agent." in system
+    assert "3쪽에서" in system
+    assert [(c["role"], c["parts"][0]["text"]) for c in body["contents"]] == [
+        ("user", "번역해 줘"), ("model", "자기 개선 에이전트를 제안한다."), ("user", "요약해 줘"),
+    ]
+
+
+def test_chat_errors(tmp_path: Path) -> None:
+    """없는 논문은 404, 마지막 말이 사용자 것이 아니면 422, Gemini 실패와 빈 답은 502, 키가 없으면 409다.
+
+    @doc: docs/design/AiChat.md#7-테스트
+    """
+    client, paper_id = _chat_client(tmp_path, ChatWeb(chat_status=429))
+    assert client.post("/api/ai/chat", json={"paper_id": 9999, **CHAT}).status_code == 404
+    last_model = {**CHAT, "messages": CHAT["messages"][:2]}
+    assert client.post("/api/ai/chat", json={"paper_id": paper_id, **last_model}).status_code == 422
+    failed = client.post("/api/ai/chat", json={"paper_id": paper_id, **CHAT})
+    assert failed.status_code == 502
+    assert "quota" in failed.json()["detail"]
+
+    blocked, paper_id = _chat_client(tmp_path / "b", ChatWeb(reply={"promptFeedback": {"blockReason": "SAFETY"}}))
+    response = blocked.post("/api/ai/chat", json={"paper_id": paper_id, **CHAT})
+    assert response.status_code == 502
+    assert "SAFETY" in response.json()["detail"]
+    blocked.delete("/api/ai/key")
+    assert blocked.post("/api/ai/chat", json={"paper_id": paper_id, **CHAT}).status_code == 409

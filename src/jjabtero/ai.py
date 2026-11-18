@@ -6,7 +6,7 @@
 import os
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx2
 from cryptography.fernet import Fernet, InvalidToken
@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from jjabtero.models import Setting
+from jjabtero.models import Paper, Setting
 
 # @doc: docs/design/AiChat.md#2-키-암호화
 SECRET_ENV = "JJABTERO_SECRET_KEY"
@@ -120,6 +120,45 @@ def gemini_models(http: httpx2.Client, api_key: str) -> list[ModelOut]:
             ModelOut(name=name, label=item.get("displayName") or name, description=item.get("description") or "")
         )
     return models
+
+
+# @doc: docs/design/AiChat.md#4-gemini-호출
+SYSTEM_PROMPT = (
+    "당신은 논문을 읽는 사람을 돕는다. 논문 제목: {title}\n"
+    "사용자가 {page}논문에서 고른 글은 아래와 같다.\n---\n{context}\n---\n"
+    "이 글을 바탕으로 답한다. 따로 말하지 않으면 한국어로 답한다."
+)
+
+
+def gemini_chat(http: httpx2.Client, api_key: str, model: str, system: str, messages: list[tuple[str, str]]) -> str:
+    """Gemini `generateContent`로 대화를 보내고 답의 글을 돌려준다. `messages`는 (역할, 글)이다.
+
+    @doc: docs/design/AiChat.md#4-gemini-호출
+    """
+    body = {
+        "systemInstruction": {"parts": [{"text": system}]},
+        "contents": [{"role": role, "parts": [{"text": text}]} for role, text in messages],
+    }
+    try:
+        response = http.post(
+            f"{GEMINI_URL}/models/{model}:generateContent",
+            json=body,
+            headers={"x-goog-api-key": api_key},
+            timeout=120,
+        )
+    except httpx2.HTTPError as error:
+        raise GeminiError("Gemini에 연결하지 못했습니다.") from error
+    if response.status_code != 200:
+        raise _gemini_error(response)
+    data = response.json()
+    candidates = data.get("candidates") or []
+    first = candidates[0] if candidates else {}
+    parts = (first.get("content") or {}).get("parts") or []
+    text = "".join(str(part.get("text", "")) for part in parts if not part.get("thought")).strip()
+    if not text:
+        reason = (data.get("promptFeedback") or {}).get("blockReason") or first.get("finishReason")
+        raise GeminiError(f"Gemini가 답하지 않았습니다({reason or '이유 없음'}).")
+    return text
 
 
 def default_model(models: list[ModelOut]) -> str | None:
@@ -303,3 +342,61 @@ def choose_model(data: ModelIn, request: Request, session: Annotated[Session, De
     session.commit()
     request.app.state.drive.schedule_push()
     return key_status(session, _data_dir(request))
+
+
+class ChatMessage(BaseModel):
+    """대화의 말 하나. `user`는 사용자, `model`은 Gemini다.
+
+    @doc: docs/design/AiChat.md#5-api
+    """
+
+    role: Literal["user", "model"]
+    text: str = Field(min_length=1, max_length=20000)
+
+
+class ChatIn(BaseModel):
+    """대화 요청: 논문, 고른 글과 쪽, 지금까지 주고받은 말(마지막은 사용자).
+
+    @doc: docs/design/AiChat.md#5-api
+    """
+
+    paper_id: int
+    page: int | None = None
+    context: str = Field(min_length=1, max_length=20000)
+    messages: list[ChatMessage] = Field(min_length=1, max_length=60)
+
+
+class ChatOut(BaseModel):
+    """Gemini의 답과 쓴 모델.
+
+    @doc: docs/design/AiChat.md#5-api
+    """
+
+    text: str
+    model: str
+
+
+@router.post("/chat")
+def chat(data: ChatIn, request: Request, session: Annotated[Session, Depends(_session)]) -> ChatOut:
+    """`POST /api/ai/chat`을 처리한다. 고른 글을 시스템 지시에 넣어 Gemini에 묻는다.
+
+    @doc: docs/design/AiChat.md#5-api
+    """
+    paper = session.get(Paper, data.paper_id)
+    if paper is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "논문을 찾지 못했습니다.")
+    if data.messages[-1].role != "user":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "마지막 말은 사용자의 것이어야 합니다.")
+    api_key = stored_api_key(session, master_cipher(_data_dir(request)))
+    model = _setting(session, MODEL_SETTING)
+    if not model:
+        raise HTTPException(status.HTTP_409_CONFLICT, "프로필에서 Gemini 모델을 고르세요.")
+    page = f"{data.page}쪽에서 " if data.page else ""
+    system = SYSTEM_PROMPT.format(title=paper.title, page=page, context=data.context)
+    try:
+        text = gemini_chat(
+            request.app.state.http_client, api_key, model, system, [(m.role, m.text) for m in data.messages]
+        )
+    except GeminiError as error:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(error)) from error
+    return ChatOut(text=text, model=model)

@@ -17,6 +17,8 @@ import InputNumber from 'primevue/inputnumber'
 import Message from 'primevue/message'
 import Textarea from 'primevue/textarea'
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef } from 'vue'
+import AiChatPanel from './AiChatPanel.vue'
+import { createAiChatState } from './aiChatState'
 import PdfVersionSelect from './PdfVersionSelect.vue'
 import {
   createAnnotation,
@@ -68,9 +70,11 @@ import {
 
 GlobalWorkerOptions.workerSrc = workerUrl
 
-const props = defineProps<{ paperId: number; title: string }>()
+// aiKeyVersion: 프로필에서 AI 키나 모델을 바꿀 때마다 늘어나는 수
+const props = defineProps<{ paperId: number; title: string; aiKeyVersion?: number }>()
 // switch: 다른 판을 골랐다. 앱이 리더를 그 판으로 다시 연다.
-const emit = defineEmits<{ close: []; added: []; switch: [] }>()
+const emit = defineEmits<{ close: []; added: []; switch: []; profile: [] }>()
+const aiChat = createAiChatState(props.paperId)
 
 const scroller = ref<HTMLElement | null>(null)
 const pageElements = ref<HTMLElement[]>([])
@@ -464,6 +468,15 @@ async function addHighlight(color: string) {
   }
 }
 
+// 고른 글이나 하이라이트로 AI 대화를 시작한다.
+function startAiChat(text: string | null | undefined, page: number) {
+  if (!text?.trim()) return
+  aiChat.start({ text, page })
+  pending.value = null
+  editing.value = null
+  window.getSelection()?.removeAllRanges()
+}
+
 async function changeColor(color: string) {
   const target = editing.value
   if (!target) return
@@ -804,6 +817,16 @@ onUnmounted(() => {
           :title="`${color.label} 하이라이트`"
           @click="addHighlight(color.name)"
         />
+        <span class="mx-0.5 w-px self-stretch bg-surface-200 dark:bg-surface-700" />
+        <button
+          type="button"
+          class="flex h-6 items-center gap-1 rounded-full px-2 text-xs font-medium text-primary hover:bg-surface-100 dark:hover:bg-surface-700"
+          aria-label="AI 대화"
+          title="고른 글로 AI와 대화"
+          @click="startAiChat(pending.text, pending.page)"
+        >
+          <i class="pi pi-sparkles text-xs" />AI 대화
+        </button>
       </div>
 
       <div
@@ -823,6 +846,15 @@ onUnmounted(() => {
             :style="{ background: color.fill }"
             :aria-label="`${color.label}으로 바꾸기`"
             @click="changeColor(color.name)"
+          />
+          <span class="flex-1" />
+          <Button
+            v-if="editing.annotation.text"
+            label="AI 대화"
+            icon="pi pi-sparkles"
+            size="small"
+            text
+            @click="startAiChat(editing.annotation.text, editing.annotation.page)"
           />
         </div>
         <!-- 메모가 길면 이 칸 안에서 스크롤한다. 버튼은 늘 상자 아래에 보인다. -->
@@ -881,6 +913,7 @@ onUnmounted(() => {
         </span>
       </button>
     </aside>
+    <AiChatPanel :chat="aiChat" :key-version="aiKeyVersion ?? 0" @profile="emit('profile')" />
     </div>
   </section>
 </template>
