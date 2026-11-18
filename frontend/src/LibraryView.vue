@@ -141,7 +141,8 @@ const selection = computed({
       size="small"
       striped-rows
       table-class="table-fixed"
-      class="min-h-0 flex-1"
+      table-style="min-width: 48rem"
+      class="library-table min-h-0 flex-1"
     >
       <template #empty>
         <div class="py-8 text-center text-surface-500">
@@ -170,22 +171,22 @@ const selection = computed({
           <span class="line-clamp-2 font-medium" :title="data.title">{{ data.title }}</span>
         </template>
       </Column>
-      <Column field="authors" header="저자" sortable header-style="width: 8.5rem">
+      <Column field="authors" header="저자" sortable header-style="width: 7rem" header-class="meta" body-class="meta">
         <template #body="{ data }">
-          <span class="block truncate text-sm" :title="data.authors.join(', ')">
+          <span class="block truncate" :title="data.authors.join(', ')">
             {{ data.authors.slice(0, 3).join(', ') }}{{ data.authors.length > 3 ? ' 외' : '' }}
           </span>
         </template>
       </Column>
-      <Column field="year" header="연도" sortable header-style="width: 4.75rem" body-class="text-sm" />
-      <Column field="read_status" header="상태" sortable header-style="width: 6rem">
+      <Column field="year" header="연도" sortable header-style="width: 4rem" header-class="meta" body-class="meta" />
+      <Column field="read_status" header="상태" sortable header-style="width: 5rem" header-class="meta" body-class="meta">
         <template #body="{ data }">
           <Tag :value="readStatusInfo(data.read_status).label" :severity="readStatusInfo(data.read_status).severity" />
         </template>
       </Column>
-      <Column field="item_type" header="종류" sortable header-style="width: 6rem">
+      <Column field="item_type" header="종류" sortable header-style="width: 5rem" header-class="meta" body-class="meta">
         <template #body="{ data }">
-          <span class="text-sm">{{ ITEM_TYPE_LABELS[data.item_type] ?? data.item_type }}</span>
+          <span class="block truncate" :title="ITEM_TYPE_LABELS[data.item_type] ?? data.item_type">{{ ITEM_TYPE_LABELS[data.item_type] ?? data.item_type }}</span>
         </template>
       </Column>
       <Column
@@ -193,10 +194,12 @@ const selection = computed({
         :sort-field="SORT_BY_ADDED"
         header="담은 날"
         sortable
-        header-style="width: 6rem"
+        header-style="width: 5rem"
+        header-class="meta"
+        body-class="meta"
       >
         <template #body="{ data }">
-          <span class="text-sm tabular-nums" :title="formatDateTime(data.created_at)">{{ formatShortDate(data.created_at) }}</span>
+          <span class="whitespace-nowrap tabular-nums" :title="formatDateTime(data.created_at)">{{ formatShortDate(data.created_at) }}</span>
         </template>
       </Column>
       <Column
@@ -204,13 +207,27 @@ const selection = computed({
         :sort-field="SORT_BY_READ"
         header="읽은 날"
         sortable
-        header-style="width: 6rem"
+        header-style="width: 5rem"
+        header-class="meta"
+        body-class="meta"
       >
         <template #body="{ data }">
-          <span class="text-sm tabular-nums" :title="formatDateTime(data.last_read_at)">{{ formatShortDate(data.last_read_at) }}</span>
+          <span class="whitespace-nowrap tabular-nums" :title="formatDateTime(data.last_read_at)">{{ formatShortDate(data.last_read_at) }}</span>
         </template>
       </Column>
 
     </DataTable>
   </div>
 </template>
+
+<style scoped>
+/* 제목 칸 너비를 지키려고 제목 밖의 열은 글자를 1px 줄이고 폭을 좁힌다. docs/design/LibraryView.md 3절 참조 */
+.library-table :deep(.meta) {
+  font-size: 13px;
+}
+
+.library-table :deep(.meta .p-tag) {
+  font-size: 13px;
+  padding: 0.125rem 0.375rem;
+}
+</style>
