@@ -2,6 +2,54 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md), [M3 인용 기반 연결·추천](Done-M3.md), [M6 리더 인용 미리보기](Done-M6.md), [M7 태그](Done-M7.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## I29 서재 목록에 Jjabtero 리더에서 마지막으로 읽은 날 칸을 더해 최근에 연 순으로 정렬하기
+
+- 시작일: 2026-11-18
+- 완료일: 2026-11-18
+- 근거 문서: [서재 화면 설계](design/LibraryView.md#3-화면), [PDF 리더 설계](design/Reader.md#4-데이터)
+- 참고 자료: 없음
+
+### 계획
+- 읽던 위치의 저장 시각을 마지막으로 읽은 시각으로 쓰고, 리더를 열 때도 위치를 저장해 시각을 바꾼다.
+- 논문 응답에 `last_read_at`을 더하고, 서재 표에 "읽은 날" 열과 상세에 마지막으로 읽은 시각을 보인다.
+- 리더를 닫으면 서재 목록을 다시 불러온다.
+
+### 진행 기록
+- 2026-11-18: 사용자가 Jjabtero 안에서 마지막으로 읽은 날을 보여 최근에 열어 본 논문을 찾게 해 달라고 했다. 앞의 PR이 모두 병합되어 `main`에서 작업 브랜치를 만들었다.
+- 2026-11-18: 처음에는 연 적이 없으면 비워 두려 했으나, 사용자가 연 적이 없으면 담은 날을 읽은 날로 보라고 했다. 논문 응답의 `last_read_at`은 읽던 위치의 저장 시각, 없으면 담은 시각이다.
+- 2026-11-18: 리더를 열면 서재 표가 내려갔다가 닫을 때 다시 만들어져 고른 정렬이 풀리는 것을 브라우저 확인에서 찾았다. 정렬 열과 방향을 서재 상태에 두어 지키게 했다. 열이 늘어 제목 칸이 좁아져, 두 날짜 열을 두 자리 연도로 보이고 다른 열 너비를 줄였다.
+- 2026-11-18: 로컬 서재 사본(드라이브 없이, 포트 8010)에서 "읽은 날" 최근 순으로 정렬한 뒤 DGM 논문을 리더로 열고 닫았다. 목록이 다시 불러와지고 정렬이 유지되며 그 논문의 읽은 시각이 바뀌는 것을 확인했다. 연 적 없는 논문(Gödel Machines)은 담은 시각(04:48)이 보였다. 브라우저 콘솔 오류는 없었다.
+
+### 결정 사항
+- 새 열을 더하지 않고 읽던 위치의 `updated_at`을 마지막으로 읽은 시각으로 쓴다. 이미 읽던 논문의 시각을 그대로 쓸 수 있고, 드라이브 합치기도 그 표의 시각을 따른다.
+- 연 적이 없으면 담은 시각으로 본다(사용자 결정).
+
+### 변경 파일
+- `docs/Issue.md`
+- `docs/Done.md`
+- `docs/design/LibraryView.md`
+- `docs/design/Reader.md`
+- `src/jjabtero/papers_api.py`
+- `tests/test_reading.py`
+- `frontend/src/api.ts`
+- `frontend/src/App.vue`
+- `frontend/src/ReaderView.vue`
+- `frontend/src/LibraryView.vue`
+- `frontend/src/PaperDetail.vue`
+- `frontend/src/labels.ts`
+- `frontend/src/labels.test.ts`
+- `frontend/src/libraryState.ts`
+- `frontend/src/libraryState.test.ts`
+- `frontend/src/libraryFilter.test.ts`
+
+### 결과
+- 서재 목록의 "읽은 날" 열로 최근에 연 논문 순으로 정렬하고, 상세에서 읽은 시각을 본다. 리더를 다녀와도 표의 정렬이 유지된다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+- `npx vue-tsc --noEmit -p tsconfig.app.json`, `npm run build`: 통과.
+- 로컬 서재 사본으로 브라우저에서 확인했다.
+
 ## I28 서재 목록에 서재에 담은 시각 칸을 더해 담은 순으로 정렬하기
 
 - 시작일: 2026-11-18

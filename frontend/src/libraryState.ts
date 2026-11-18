@@ -15,7 +15,17 @@ import {
   updateReading,
   type Paper,
 } from './api'
+import { timeKey } from './labels'
 import { emptyFilter, filterPapers, tagCounts } from './libraryFilter'
+
+// 서재 표의 시각 열 정렬 키. 표가 다시 만들어져도 같은 함수여야 고른 정렬 열이 표시되므로 모듈에 둔다.
+// @doc: docs/design/LibraryView.md#2-화면-상태
+export const SORT_BY_ADDED = (paper: Paper): string => timeKey(paper.created_at)
+// @doc: docs/design/LibraryView.md#2-화면-상태
+export const SORT_BY_READ = (paper: Paper): string => timeKey(paper.last_read_at)
+
+// @doc: docs/design/LibraryView.md#2-화면-상태
+export type SortField = string | ((paper: Paper) => string) | undefined
 
 // @doc: docs/design/LibraryView.md#2-화면-상태
 // @doc: docs/design/LibraryFilter.md#3-화면-상태
@@ -35,6 +45,9 @@ export function createLibraryState(
     // 여러 편에 태그를 붙이려고 고른 논문 ID
     checked: [] as number[],
     tagError: '',
+    // 표의 정렬. 리더를 열고 닫으면 표가 다시 만들어지므로 여기에 두어 지킨다. 순서 1은 오름차순, -1은 내림차순이다
+    sortField: undefined as SortField,
+    sortOrder: undefined as number | undefined,
   })
 
   const visible = computed(() => filterPapers(state.papers, state.filter))

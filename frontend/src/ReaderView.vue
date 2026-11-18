@@ -86,6 +86,12 @@ const saver = createPositionSaver((position: { page: number; offset: number; zoo
 )
 let restored = false
 
+async function close() {
+  // 남은 위치를 저장한 뒤 닫아, 다시 불러오는 서재 목록에 방금 읽은 시각이 보이게 한다.
+  await saver.flush()
+  emit('close')
+}
+
 const annotations = ref<Annotation[]>([])
 const annotationError = ref('')
 const pending = ref<{ page: number; rects: Rect[]; text: string; left: number; top: number } | null>(null)
@@ -619,6 +625,8 @@ onMounted(async () => {
       scroller.value.scrollTop = scrollTopFor(saved.page, saved.offset, tops.value, heights.value) - PAGE_GAP
     restored = true
     update()
+    // 연 것만으로도 위치를 저장해, 위치의 저장 시각이 마지막으로 읽은 시각이 되게 한다.
+    void saver.flush()
     annotations.value = await listAnnotations(props.paperId).catch((error) => {
       showError(error)
       return []
@@ -644,7 +652,7 @@ onUnmounted(() => {
     <header
       class="flex flex-wrap items-center gap-2 border-b border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-700 dark:bg-surface-900"
     >
-      <Button icon="pi pi-arrow-left" text rounded aria-label="리더 닫기" @click="emit('close')" />
+      <Button icon="pi pi-arrow-left" text rounded aria-label="리더 닫기" @click="close" />
       <h2 class="min-w-0 flex-1 truncate font-medium" :title="title">{{ title }}</h2>
       <div class="flex items-center gap-1">
         <Button icon="pi pi-chevron-up" text rounded aria-label="이전 쪽" :disabled="current <= 1" @click="goTo(current - 1)" />

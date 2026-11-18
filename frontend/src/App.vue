@@ -56,6 +56,11 @@ function openInLibrary(paperId: number) {
   library.state.selectedId = paperId
   view.value = 'library'
 }
+// 리더를 닫으면 서재 목록을 다시 불러와 마지막으로 읽은 시각을 보인다.
+function closeReader() {
+  reading.value = null
+  library.load()
+}
 const health = ref<Health | null>(null)
 const healthFailed = ref(false)
 
@@ -112,7 +117,7 @@ onMounted(async () => {
           :key="reading.id"
           :paper-id="reading.id"
           :title="reading.title"
-          @close="reading = null"
+          @close="closeReader"
           @added="library.load()"
         />
       </SplitterPanel>
