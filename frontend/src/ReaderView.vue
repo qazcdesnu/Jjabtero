@@ -17,11 +17,13 @@ import InputNumber from 'primevue/inputnumber'
 import Message from 'primevue/message'
 import Textarea from 'primevue/textarea'
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef } from 'vue'
+import PdfVersionSelect from './PdfVersionSelect.vue'
 import {
   createAnnotation,
   deleteAnnotation,
   fetchPosition,
   listAnnotations,
+  listPdfVersions,
   pdfUrl,
   savePosition,
   updateAnnotation,
@@ -67,7 +69,8 @@ import {
 GlobalWorkerOptions.workerSrc = workerUrl
 
 const props = defineProps<{ paperId: number; title: string }>()
-const emit = defineEmits<{ close: []; added: [] }>()
+// switch: 다른 판을 골랐다. 앱이 리더를 그 판으로 다시 연다.
+const emit = defineEmits<{ close: []; added: []; switch: [] }>()
 
 const scroller = ref<HTMLElement | null>(null)
 const pageElements = ref<HTMLElement[]>([])
@@ -82,9 +85,17 @@ const rendered = new Map<number, number>()
 const tasks = new Map<number, RenderTask>()
 const textLayers = new Map<number, TextLayer>()
 const saver = createPositionSaver((position: { page: number; offset: number; zoom: number }) =>
-  savePosition(props.paperId, position),
+  savePosition(props.paperId, position, version),
 )
+// 이 리더가 연 판(SHA-256). 열 때 지금 판으로 정하고, 읽던 위치와 주석도 이 판으로 청한다.
+let version: string | undefined
 let restored = false
+
+async function switchVersion() {
+  // 지금 판의 남은 위치를 저장한 뒤 새 판으로 다시 연다.
+  await saver.flush()
+  emit('switch')
+}
 
 async function close() {
   // 남은 위치를 저장한 뒤 닫아, 다시 불러오는 서재 목록에 방금 읽은 시각이 보이게 한다.
@@ -333,7 +344,7 @@ async function saveDraft() {
       rects: [draft.rect],
       color: 'yellow',
       note: draft.note,
-    })
+    }, version)
     annotations.value = [...annotations.value, created]
     drafting.value = null
     noteMode.value = false
@@ -443,7 +454,7 @@ async function addHighlight(color: string) {
       rects: target.rects,
       text: target.text,
       color,
-    })
+    }, version)
     annotations.value = [...annotations.value, created]
     window.getSelection()?.removeAllRanges()
     pending.value = null
@@ -606,7 +617,9 @@ onMounted(async () => {
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('resize', measureViewport)
   try {
-    loadingTask = getDocument({ url: pdfUrl(props.paperId), withCredentials: true })
+    const versions = await listPdfVersions(props.paperId).catch(() => [])
+    version = versions.find((item) => item.selected)?.sha256
+    loadingTask = getDocument({ url: pdfUrl(props.paperId, version), withCredentials: true })
     const pdf = await loadingTask.promise
     const found: PageSize[] = []
     for (let page = 1; page <= pdf.numPages; page += 1) {
@@ -617,7 +630,7 @@ onMounted(async () => {
     sizes.value = found
     loading.value = false
     await nextTick()
-    const saved = await fetchPosition(props.paperId).catch(() => null)
+    const saved = await fetchPosition(props.paperId, version).catch(() => null)
     if (saved) scale.value = saved.zoom
     else if (scroller.value) scale.value = Math.min(fitWidthScale(found, scroller.value.clientWidth), 1.5)
     await nextTick()
@@ -627,7 +640,7 @@ onMounted(async () => {
     update()
     // 연 것만으로도 위치를 저장해, 위치의 저장 시각이 마지막으로 읽은 시각이 되게 한다.
     void saver.flush()
-    annotations.value = await listAnnotations(props.paperId).catch((error) => {
+    annotations.value = await listAnnotations(props.paperId, version).catch((error) => {
       showError(error)
       return []
     })
@@ -654,6 +667,7 @@ onUnmounted(() => {
     >
       <Button icon="pi pi-arrow-left" text rounded aria-label="리더 닫기" @click="close" />
       <h2 class="min-w-0 flex-1 truncate font-medium" :title="title">{{ title }}</h2>
+      <PdfVersionSelect :paper-id="paperId" class="w-56" @changed="switchVersion" />
       <div class="flex items-center gap-1">
         <Button icon="pi pi-chevron-up" text rounded aria-label="이전 쪽" :disabled="current <= 1" @click="goTo(current - 1)" />
         <InputNumber

@@ -105,3 +105,45 @@ def test_upgrade_0002_keeps_papers_and_sets_defaults(tmp_path: Path) -> None:
         row = connection.execute(text("SELECT title, read_status, note FROM papers")).one()
     assert tuple(row) == ("Old", "to-read", None)
 
+
+
+def test_upgrade_0008_links_positions_and_annotations_to_pdf_versions(tmp_path: Path) -> None:
+    """0007 상태의 PDF는 지금 판이 되고, 위치와 주석은 그 판과 이어진다. PDF 없는 논문의 위치는 지운다. 되돌리면 지금 판만 남는다.
+
+    @doc: docs/design/PdfVersions.md#7-테스트
+    """
+    engine = create_db_engine(tmp_path / "library.db")
+    with engine.begin() as connection:
+        command.upgrade(_alembic_config(connection), "0007")
+        for statement in (
+            "INSERT INTO papers (id, title, item_type, created_at, updated_at) VALUES (1, 'A', 'other', '2026-01-01', '2026-01-01')",
+            "INSERT INTO papers (id, title, item_type, created_at, updated_at) VALUES (2, 'B', 'other', '2026-01-01', '2026-01-01')",
+            "INSERT INTO paper_pdfs (paper_id, sha256, size, source, added_at) VALUES (1, 'aaa', 1, 'upload', '2026-01-02')",
+            'INSERT INTO reading_positions (paper_id, page, "offset", zoom, updated_at) VALUES (1, 3, 0.5, 1, \'2026-01-03\')',
+            'INSERT INTO reading_positions (paper_id, page, "offset", zoom, updated_at) VALUES (2, 4, 0.5, 1, \'2026-01-03\')',
+            "INSERT INTO annotations (paper_id, kind, page, rects, color, created_at, updated_at) "
+            "VALUES (1, 'note', 1, '[]', 'yellow', '2026-01-03', '2026-01-03')",
+        ):
+            connection.execute(text(statement))
+    upgrade_database(engine)
+    with engine.begin() as connection:
+        assert connection.execute(text("SELECT sha256, selected_at FROM paper_pdfs")).all() == [("aaa", "2026-01-02")]
+        assert connection.execute(text("SELECT paper_id, pdf_sha256, page FROM reading_positions")).all() == [(1, "aaa", 3)]
+        assert connection.execute(text("SELECT pdf_sha256 FROM annotations")).all() == [("aaa",)]
+        connection.execute(
+            text(
+                "INSERT INTO paper_pdfs (paper_id, sha256, size, source, added_at, selected_at) "
+                "VALUES (1, 'bbb', 1, 'upload', '2026-01-04', '2026-01-04')"
+            )
+        )
+        connection.execute(
+            text(
+                'INSERT INTO reading_positions (paper_id, pdf_sha256, page, "offset", zoom, updated_at) '
+                "VALUES (1, 'bbb', 9, 0.5, 1, '2026-01-04')"
+            )
+        )
+        command.downgrade(_alembic_config(connection), "0007")
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT paper_id, sha256 FROM paper_pdfs")).all() == [(1, "bbb")]
+        assert connection.execute(text("SELECT paper_id, page FROM reading_positions")).all() == [(1, 9)]
+        assert connection.execute(text("SELECT count(*) FROM annotations")).scalar() == 0

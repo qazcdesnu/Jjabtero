@@ -172,7 +172,13 @@ def test_reading_position_and_annotations_from_both_sides(tmp_path: Path) -> Non
     """
     copies = Copies(tmp_path, library(tmp_path, PaperData(title="A")))
     for engine, page, at in ((copies.local, 3, "2026-11-15 10:00"), (copies.remote, 7, "2026-11-15 09:00")):
-        sql(engine, "INSERT INTO reading_positions VALUES (1, :page, 0.1, 1.0, :at)", page=page, at=at)
+        sql(
+            engine,
+            'INSERT INTO reading_positions (paper_id, pdf_sha256, page, "offset", zoom, updated_at) '
+            "VALUES (1, 'a', :page, 0.1, 1.0, :at)",
+            page=page,
+            at=at,
+        )
         sql(
             engine,
             "INSERT INTO annotations (paper_id, kind, page, rects, color, note, created_at, updated_at) "
@@ -184,6 +190,33 @@ def test_reading_position_and_annotations_from_both_sides(tmp_path: Path) -> Non
     merged = copies.merge()
     assert sql(merged, "SELECT page FROM reading_positions") == [(3,)]
     assert sorted(note for (note,) in sql(merged, "SELECT note FROM annotations")) == ["p3", "p7"]
+
+
+def test_pdf_versions_and_their_positions_merge_per_version(tmp_path: Path) -> None:
+    """양쪽이 같은 논문에 다른 판을 받으면 둘 다 남고, 지금 판은 늦게 고른 판이다. 판마다의 위치도 따로 남는다.
+
+    @doc: docs/design/PdfVersions.md#7-테스트
+    """
+    copies = Copies(tmp_path, library(tmp_path, PaperData(title="A")))
+    for engine, sha, at in ((copies.local, "a", "2026-11-18 10:00"), (copies.remote, "b", "2026-11-18 09:00")):
+        sql(
+            engine,
+            "INSERT INTO paper_pdfs (paper_id, sha256, size, source, added_at, selected_at) "
+            "VALUES (1, :sha, 1, 'upload', :at, :at)",
+            sha=sha,
+            at=at,
+        )
+        sql(
+            engine,
+            'INSERT INTO reading_positions (paper_id, pdf_sha256, page, "offset", zoom, updated_at) '
+            "VALUES (1, :sha, 2, 0.1, 1.0, :at)",
+            sha=sha,
+            at=at,
+        )
+    merged = copies.merge()
+    rows = sql(merged, "SELECT sha256 FROM paper_pdfs ORDER BY selected_at DESC")
+    assert rows == [("a",), ("b",)]
+    assert sorted(sql(merged, "SELECT pdf_sha256 FROM reading_positions")) == [("a",), ("b",)]
 
 
 def test_same_setting_changed_differently_is_conflict(tmp_path: Path) -> None:

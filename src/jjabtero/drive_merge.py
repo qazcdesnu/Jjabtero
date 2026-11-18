@@ -51,8 +51,8 @@ TABLES = (
     TableSpec("paper_authors", ("paper_id", "position"), refs={"paper_id": "papers", "author_id": "authors"}),
     TableSpec("paper_tags", ("paper_id", "tag_id"), refs={"paper_id": "papers", "tag_id": "tags"}),
     TableSpec("settings", ("key",)),
-    TableSpec("paper_pdfs", ("paper_id",), refs={"paper_id": "papers"}, clock="added_at"),
-    TableSpec("reading_positions", ("paper_id",), refs={"paper_id": "papers"}, clock="updated_at"),
+    TableSpec("paper_pdfs", ("paper_id", "sha256"), refs={"paper_id": "papers"}, clock="selected_at"),
+    TableSpec("reading_positions", ("paper_id", "pdf_sha256"), refs={"paper_id": "papers"}, clock="updated_at"),
     TableSpec("annotations", ("id",), renumber=True, refs={"paper_id": "papers"}, clock="updated_at"),
 )
 _SKIP = {"alembic_version", "sqlite_sequence"}

@@ -8,11 +8,12 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from jjabtero.models import Annotation, Paper, ReadingPosition
+from jjabtero.models import Annotation, Paper, PaperPdf, ReadingPosition
+from jjabtero.pdfs import VERSION_PATTERN
 
 # @doc: docs/design/Reader.md#5-api
 router = APIRouter(prefix="/api/papers")
@@ -50,13 +51,35 @@ def _paper(session: Session, paper_id: int) -> Paper:
     return paper
 
 
+# 판 질의. 없으면 지금 판이다.
+Version = Annotated[str | None, Query(pattern=VERSION_PATTERN)]
+
+
+def _version(paper: Paper, version: str | None) -> PaperPdf:
+    pdf = paper.pdf_version(version)
+    if pdf is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "PDF가 없습니다." if version is None else "받아 두지 않은 판입니다.")
+    return pdf
+
+
+def _position(paper: Paper, sha256: str) -> ReadingPosition | None:
+    return next((position for position in paper.positions if position.pdf_sha256 == sha256), None)
+
+
 @router.get("/{paper_id}/position", response_model=None)
-def read_position(paper_id: int, session: Annotated[Session, Depends(_session)]) -> PositionOut | Response:
-    """`GET /api/papers/{paper_id}/position`을 처리한다. 저장한 위치가 없으면 204다.
+def read_position(
+    paper_id: int, session: Annotated[Session, Depends(_session)], version: Version = None
+) -> PositionOut | Response:
+    """`GET /api/papers/{paper_id}/position`을 처리한다. 그 판(`version`, 없으면 지금 판)에 저장한 위치가 없으면 204다.
 
     @doc: docs/design/Reader.md#5-api
+    @doc: docs/design/PdfVersions.md#5-api
     """
-    position = _paper(session, paper_id).position
+    paper = _paper(session, paper_id)
+    pdf = paper.pdf_version(version)
+    if pdf is None and version is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "받아 두지 않은 판입니다.")
+    position = _position(paper, pdf.sha256) if pdf is not None else None
     if position is None:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     return PositionOut(page=position.page, offset=position.offset, zoom=position.zoom, updated_at=position.updated_at)
@@ -64,21 +87,30 @@ def read_position(paper_id: int, session: Annotated[Session, Depends(_session)])
 
 @router.put("/{paper_id}/position")
 def save_position(
-    paper_id: int, data: PositionIn, request: Request, session: Annotated[Session, Depends(_session)]
+    paper_id: int,
+    data: PositionIn,
+    request: Request,
+    session: Annotated[Session, Depends(_session)],
+    version: Version = None,
 ) -> PositionOut:
-    """`PUT /api/papers/{paper_id}/position`을 처리한다. 저장하면 드라이브 자동 올리기를 예약한다.
+    """`PUT /api/papers/{paper_id}/position`을 처리한다. 그 판의 위치로 저장하고 드라이브 자동 올리기를 예약한다.
 
     @doc: docs/design/Reader.md#5-api
+    @doc: docs/design/PdfVersions.md#5-api
     """
     paper = _paper(session, paper_id)
+    pdf = _version(paper, version)
     now = datetime.now(UTC)
-    if paper.position is None:
-        paper.position = ReadingPosition(page=data.page, offset=data.offset, zoom=data.zoom, updated_at=now)
+    position = _position(paper, pdf.sha256)
+    if position is None:
+        paper.positions.append(
+            ReadingPosition(pdf_sha256=pdf.sha256, page=data.page, offset=data.offset, zoom=data.zoom, updated_at=now)
+        )
     else:
-        paper.position.page = data.page
-        paper.position.offset = data.offset
-        paper.position.zoom = data.zoom
-        paper.position.updated_at = now
+        position.page = data.page
+        position.offset = data.offset
+        position.zoom = data.zoom
+        position.updated_at = now
     session.commit()
     request.app.state.drive.schedule_push()
     return PositionOut(page=data.page, offset=data.offset, zoom=data.zoom, updated_at=now)
@@ -168,27 +200,47 @@ def _clean(value: str | None) -> str | None:
 
 
 @router.get("/{paper_id}/annotations")
-def list_annotations(paper_id: int, session: Annotated[Session, Depends(_session)]) -> list[AnnotationOut]:
-    """`GET /api/papers/{paper_id}/annotations`를 처리한다. 쪽 순서, 쪽 안에서는 위에서부터다.
+def list_annotations(
+    paper_id: int, session: Annotated[Session, Depends(_session)], version: Version = None
+) -> list[AnnotationOut]:
+    """`GET /api/papers/{paper_id}/annotations`를 처리한다. 그 판(`version`, 없으면 지금 판)의 주석을 쪽 순서,
+    쪽 안에서는 위에서부터 준다. PDF가 없으면 비어 있다.
 
     @doc: docs/design/Reader.md#5-api
+    @doc: docs/design/PdfVersions.md#5-api
     """
     paper = _paper(session, paper_id)
-    items = [AnnotationOut.from_annotation(annotation) for annotation in paper.annotations]
+    pdf = paper.pdf_version(version)
+    if pdf is None:
+        if version is not None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "받아 두지 않은 판입니다.")
+        return []
+    items = [
+        AnnotationOut.from_annotation(annotation)
+        for annotation in paper.annotations
+        if annotation.pdf_sha256 == pdf.sha256
+    ]
     return sorted(items, key=lambda item: (item.page, item.rects[0].y, item.rects[0].x, item.id))
 
 
 @router.post("/{paper_id}/annotations", status_code=status.HTTP_201_CREATED)
 def create_annotation(
-    paper_id: int, data: AnnotationIn, request: Request, session: Annotated[Session, Depends(_session)]
+    paper_id: int,
+    data: AnnotationIn,
+    request: Request,
+    session: Annotated[Session, Depends(_session)],
+    version: Version = None,
 ) -> AnnotationOut:
-    """`POST /api/papers/{paper_id}/annotations`를 처리한다.
+    """`POST /api/papers/{paper_id}/annotations`를 처리한다. 그 판(`version`, 없으면 지금 판)의 주석이 된다.
 
     @doc: docs/design/Reader.md#5-api
+    @doc: docs/design/PdfVersions.md#5-api
     """
     paper = _paper(session, paper_id)
+    pdf = _version(paper, version)
     now = datetime.now(UTC)
     annotation = Annotation(
+        pdf_sha256=pdf.sha256,
         kind=data.kind,
         page=data.page,
         rects=json.dumps([rect.model_dump() for rect in data.rects]),

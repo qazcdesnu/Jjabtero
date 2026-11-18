@@ -175,6 +175,8 @@ def test_write_request_fetches_remote_change_first(tmp_path: Path) -> None:
     computer, _ = make_app(tmp_path / "computer", drive, connected=True)
     computer.app.state.drive.schedule_push = lambda: None
     paper_id = computer.post("/api/papers", json={"title": "First"}).json()["id"]
+    # 읽던 위치는 PDF 판마다 저장하므로 PDF를 먼저 둔다.
+    assert computer.put(f"/api/papers/{paper_id}/pdf", content=b"%PDF-1.4 first").status_code == 200
     assert computer.app.state.drive.sync().state == "idle"
     server, _ = make_app(tmp_path / "server", drive, connected=True)
     server.app.state.drive.schedule_push = lambda: None
@@ -217,6 +219,8 @@ def test_simultaneous_writes_on_two_apps_are_merged(tmp_path: Path) -> None:
     computer, _ = make_app(tmp_path / "computer", drive, connected=True)
     computer.app.state.drive.schedule_push = lambda: None
     paper_id = computer.post("/api/papers", json={"title": "First"}).json()["id"]
+    # 읽던 위치는 PDF 판마다 저장하므로 PDF를 먼저 둔다.
+    assert computer.put(f"/api/papers/{paper_id}/pdf", content=b"%PDF-1.4 first").status_code == 200
     computer.app.state.drive.sync()
     server, _ = make_app(tmp_path / "server", drive, connected=True)
     server.app.state.drive.schedule_push = lambda: None

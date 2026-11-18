@@ -25,13 +25,19 @@ def client(tmp_path: Path) -> tuple[TestClient, list[str]]:
     return TestClient(app), pushes
 
 
+def _paper_with_pdf(test_client: TestClient, content: bytes = b"%PDF-1.4 one") -> int:
+    paper_id = test_client.post("/api/papers", json={"title": "T"}).json()["id"]
+    assert test_client.put(f"/api/papers/{paper_id}/pdf", content=content).status_code == 200
+    return paper_id
+
+
 def test_position_is_empty_then_saved_and_replaced(client: tuple[TestClient, list[str]]) -> None:
     """저장한 위치가 없으면 204이고, 저장하면 읽히며, 다시 저장하면 바뀐다. 저장마다 올리기를 예약한다.
 
     @doc: docs/design/Reader.md#8-테스트
     """
     test_client, pushes = client
-    paper_id = test_client.post("/api/papers", json={"title": "T"}).json()["id"]
+    paper_id = _paper_with_pdf(test_client)
     pushes.clear()
     assert test_client.get(f"/api/papers/{paper_id}/position").status_code == 204
     saved = test_client.put(f"/api/papers/{paper_id}/position", json={"page": 3, "offset": 0.25, "zoom": 1.5})
@@ -49,7 +55,7 @@ def test_paper_last_read_at_follows_position(client: tuple[TestClient, list[str]
     @doc: docs/design/Reader.md#8-테스트
     """
     test_client, _ = client
-    paper_id = test_client.post("/api/papers", json={"title": "T"}).json()["id"]
+    paper_id = _paper_with_pdf(test_client)
     added = test_client.get("/api/papers").json()[0]
     assert added["last_read_at"] == added["created_at"]
     first = test_client.put(f"/api/papers/{paper_id}/position", json={"page": 1, "offset": 0, "zoom": 1}).json()
@@ -70,7 +76,7 @@ def test_position_rejects_out_of_range(client: tuple[TestClient, list[str]], bod
     @doc: docs/design/Reader.md#8-테스트
     """
     test_client, _ = client
-    paper_id = test_client.post("/api/papers", json={"title": "T"}).json()["id"]
+    paper_id = _paper_with_pdf(test_client)
     assert test_client.put(f"/api/papers/{paper_id}/position", json=body).status_code == 422
 
 
@@ -81,7 +87,7 @@ def test_position_unknown_paper_and_delete(client: tuple[TestClient, list[str]])
     """
     test_client, _ = client
     assert test_client.get("/api/papers/9/position").status_code == 404
-    paper_id = test_client.post("/api/papers", json={"title": "T"}).json()["id"]
+    paper_id = _paper_with_pdf(test_client)
     test_client.put(f"/api/papers/{paper_id}/position", json={"page": 2, "offset": 0, "zoom": 1})
     test_client.delete(f"/api/papers/{paper_id}")
     with test_client.app.state.engine.connect() as connection:
@@ -103,7 +109,7 @@ def test_annotations_create_list_update_delete(client: tuple[TestClient, list[st
     @doc: docs/design/Reader.md#8-테스트
     """
     test_client, pushes = client
-    paper_id = test_client.post("/api/papers", json={"title": "T"}).json()["id"]
+    paper_id = _paper_with_pdf(test_client)
     pushes.clear()
     created = test_client.post(f"/api/papers/{paper_id}/annotations", json=HIGHLIGHT)
     assert created.status_code == 201
@@ -141,7 +147,7 @@ def test_annotation_rejects_invalid(client: tuple[TestClient, list[str]], change
     @doc: docs/design/Reader.md#8-테스트
     """
     test_client, _ = client
-    paper_id = test_client.post("/api/papers", json={"title": "T"}).json()["id"]
+    paper_id = _paper_with_pdf(test_client)
     assert test_client.post(f"/api/papers/{paper_id}/annotations", json={**HIGHLIGHT, **change}).status_code == 422
 
 
@@ -154,7 +160,7 @@ def test_annotations_unknown_and_cascade(client: tuple[TestClient, list[str]]) -
     assert test_client.get("/api/papers/9/annotations").status_code == 404
     assert test_client.patch("/api/annotations/9", json={"color": "blue"}).status_code == 404
     assert test_client.delete("/api/annotations/9").status_code == 404
-    paper_id = test_client.post("/api/papers", json={"title": "T"}).json()["id"]
+    paper_id = _paper_with_pdf(test_client)
     test_client.post(f"/api/papers/{paper_id}/annotations", json=HIGHLIGHT)
     test_client.delete(f"/api/papers/{paper_id}")
     with test_client.app.state.engine.connect() as connection:
