@@ -13,6 +13,7 @@ import SelectButton from 'primevue/selectbutton'
 import ToggleSwitch from 'primevue/toggleswitch'
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { graphCitedCounts, graphOption, yearLayout, type GraphLayout, type GraphPalette, type SizeBy } from './graphOption'
+import GraphAddDialog from './GraphAddDialog.vue'
 import { createGraphState } from './graphState'
 
 use([GraphChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer])
@@ -207,10 +208,17 @@ onUnmounted(() => {
           size="small"
           text
           :loading="graph.state.adding"
-          @click="graph.add(graph.selected.value)"
+          @click="graph.requestAdd(graph.selected.value)"
         />
         <Button icon="pi pi-times" size="small" text severity="secondary" aria-label="닫기" @click="graph.select(null)" />
       </div>
     </div>
+    <GraphAddDialog
+      v-model:chosen="graph.state.chosenTags"
+      :title="graph.state.confirming?.title ?? null"
+      :tags="tags"
+      @confirm="graph.confirmAdd()"
+      @cancel="graph.cancelAdd()"
+    />
   </section>
 </template>
