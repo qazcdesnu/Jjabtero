@@ -100,6 +100,22 @@ def _gemini_error(response: httpx2.Response) -> GeminiError:
     return GeminiError(f"Gemini가 요청을 거절했습니다: {message}", rejected=response.status_code in (400, 401, 403))
 
 
+# 대화(글을 받아 글로 답하기)에 쓰지 않는 모델의 이름 조각. 이름을 `-`로 나눈 조각과 맞춰 본다.
+# @doc: docs/design/AiChat.md#4-gemini-호출
+NON_CHAT_PARTS = frozenset(
+    {"tts", "embedding", "live", "audio", "transcribe", "translate", "image", "robotics", "decision", "aqa"}
+)
+
+
+def is_chat_model(name: str) -> bool:
+    """대화에 쓰는 Gemini 언어 모델인지. 음성 합성·임베딩·실시간·음성·이미지·로봇·판정 모델은 뺀다.
+
+    @doc: docs/design/AiChat.md#4-gemini-호출
+    """
+    parts = name.lower().split("-")
+    return parts[0] == "gemini" and not NON_CHAT_PARTS.intersection(parts)
+
+
 def gemini_models(http: httpx2.Client, api_key: str) -> list[ModelOut]:
     """그 키로 `generateContent`를 쓸 수 있는 Gemini 모델 목록. 키는 머리글로만 보낸다.
 
@@ -116,7 +132,7 @@ def gemini_models(http: httpx2.Client, api_key: str) -> list[ModelOut]:
     models = []
     for item in response.json().get("models", []):
         name = str(item.get("name", "")).removeprefix("models/")
-        if not name.startswith("gemini") or "generateContent" not in item.get("supportedGenerationMethods", []):
+        if not is_chat_model(name) or "generateContent" not in item.get("supportedGenerationMethods", []):
             continue
         models.append(
             ModelOut(name=name, label=item.get("displayName") or name, description=item.get("description") or "")
