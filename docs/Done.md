@@ -2,6 +2,38 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md), [M3 인용 기반 연결·추천](Done-M3.md), [M6 리더 인용 미리보기](Done-M6.md), [M7 태그](Done-M7.md), [M8 AI 대화](Done-M8.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## I36 프로필의 Gemini 모델 목록에 모델마다 가격 보이기
+
+- 시작일: 2026-11-19
+- 완료일: 2026-11-19
+- 근거 문서: [AI 대화 설계](design/AiChat.md#4-gemini-호출)
+- 참고 자료: [Gemini API 가격표](https://ai.google.dev/gemini-api/docs/pricing)
+
+### 계획
+- 무료 목록을 읽는 가격표에서 유료 등급 입력·출력 가격도 읽어, 프로필의 모델 드롭다운과 고른 모델 아래에 보인다.
+
+### 진행 기록
+- 2026-11-19: 사용자가 모델을 고를 때 가격도 보고 고르게 해 달라고 했다. 병합되지 않은 가장 최근 브랜치 `i35-chat-models-only`에서 작업 브랜치를 만들었다.
+- 2026-11-19: 가격표의 가격 칸이 여러 줄(입력 종류별, 기간별, 프롬프트 길이별)인 것을 확인하고, 이어지는 줄을 앞 칸에 붙여 읽게 했다. 오늘 가격표에서 대화용 무료 모델 9개의 가격을 모두 읽었다(예: gemini-2.5-flash 입력 $0.30 (text / image / video); $1.00 (audio), 출력 $2.50).
+- 2026-11-19: 로컬 서재 사본(포트 8010)에서 모델 목록을 브라우저에서 가짜로 주어, 드롭다운의 모델마다 가격 줄과 고른 모델의 가격 상자가 보이는 것을 확인했다. 콘솔 오류는 없었다.
+
+### 결정 사항
+- 가격은 가격표의 글을 그대로 보인다. 기간별·길이별 조건을 숫자 하나로 줄이면 뜻이 달라지기 때문이다.
+- 무료 등급은 한도 안에서 무료라는 것과, 가격은 결제를 켠 키에 청구되는 값이라는 것을 함께 적는다.
+
+### 변경 파일
+- `src/jjabtero/ai_models.py`, `src/jjabtero/ai.py`, `tests/test_ai_models.py`, `tests/test_ai.py`
+- `frontend/src/api.ts`, `frontend/src/ProfileDialog.vue`
+- `docs/design/AiChat.md`, `docs/Issue.md`, `docs/Done.md`
+
+### 결과
+- 프로필의 모델 드롭다운에 모델마다 유료 등급 100만 토큰당 입력·출력 가격이 보인다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+- `npx vue-tsc --noEmit -p tsconfig.app.json`, `npm run build`: 통과.
+- 로컬 서재 사본으로 브라우저에서 확인했다.
+
 ## I35 Gemini 모델 목록에서 대화가 안 되는 모델(음성 합성, 임베딩, 실시간, 음성, 이미지, 로봇, 판정) 빼기
 
 - 시작일: 2026-11-19

@@ -28,13 +28,36 @@ _STANDARD_TAB = re.compile(r'\{%\s*tab title="Standard"\s*%\}(.*?)\{%\s*/tab\s*%
 _TABLE = re.compile(r"\{%\s*table\s*%\}(.*?)\{%\s*/table\s*%\}", re.S)
 
 
-def parse_free_models(page: str) -> set[str]:
-    """가격표 페이지에서 표준 요금의 입력 가격 무료 등급이 "Free of charge"인 모델 ID를 모은다.
+@dataclass(frozen=True)
+class ModelPrice:
+    """유료 등급의 100만 토큰당 가격(가격표 글 그대로). 무료 등급은 한도 안에서 무료다.
+
+    @doc: docs/design/AiChat.md#4-gemini-호출
+    """
+
+    input: str
+    output: str
+
+
+def _cells(row: str) -> list[str]:
+    """표 행 하나의 칸들. `* `로 시작하지 않는 줄은 앞 칸에 이어 붙인다(여러 줄 가격)."""
+    cells: list[str] = []
+    for line in row.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("* "):
+            cells.append(stripped[2:].strip())
+        elif stripped and cells:
+            cells[-1] = f"{cells[-1]}; {stripped}"
+    return [re.sub(r"\s+", " ", cell).replace(".;", ";").rstrip(".").strip() for cell in cells]
+
+
+def parse_free_prices(page: str) -> dict[str, ModelPrice]:
+    """가격표 페이지에서 표준 요금의 입력 가격 무료 등급이 "Free of charge"인 모델과 그 유료 등급 가격을 모은다.
 
     @doc: docs/design/AiChat.md#4-gemini-호출
     """
     text = html.unescape(page)
-    free: set[str] = set()
+    free: dict[str, ModelPrice] = {}
     for section in _SECTION.split(text)[1:]:
         head, _, rest = section.partition("{% hr /%}")
         ids = _MODEL_ID.findall(head)
@@ -44,14 +67,24 @@ def parse_free_models(page: str) -> set[str]:
         table = _TABLE.search(tab.group(1) if tab else rest)
         if table is None:
             continue
-        rows = [row for row in table.group(1).split("---")[1:]]
-        for row in rows:
-            cells = [line.strip()[2:].strip() for line in row.splitlines() if line.strip().startswith("* ")]
-            if len(cells) >= 2 and cells[0].lower().startswith("input price"):
-                if cells[1].lower().startswith("free of charge"):
-                    free.update(ids)
-                break
+        rows = [_cells(row) for row in table.group(1).split("---")[1:]]
+        prices = {cells[0].lower(): cells for cells in rows if len(cells) >= 3}
+        input_row = next((cells for key, cells in prices.items() if key.startswith("input price")), None)
+        if input_row is None or not input_row[1].lower().startswith("free of charge"):
+            continue
+        output_row = next((cells for key, cells in prices.items() if key.startswith("output price")), None)
+        price = ModelPrice(input=input_row[2], output=output_row[2] if output_row else "")
+        for model_id in ids:
+            free[model_id] = price
     return free
+
+
+def parse_free_models(page: str) -> set[str]:
+    """가격표 페이지에서 무료 등급 모델 ID를 모은다.
+
+    @doc: docs/design/AiChat.md#4-gemini-호출
+    """
+    return set(parse_free_prices(page))
 
 
 @dataclass(frozen=True)
@@ -61,9 +94,17 @@ class FreeModels:
     @doc: docs/design/AiChat.md#4-gemini-호출
     """
 
-    names: frozenset[str]
+    prices: dict[str, ModelPrice]
     checked_at: datetime
     stale: bool = False
+
+    @property
+    def names(self) -> frozenset[str]:
+        """무료 등급 모델 ID.
+
+        @doc: docs/design/AiChat.md#4-gemini-호출
+        """
+        return frozenset(self.prices)
 
 
 class FreeModelsError(Exception):
@@ -99,12 +140,15 @@ class FreeModelCatalog:
     def _load(self) -> FreeModels | None:
         try:
             data = json.loads(self.cache_path.read_text())
-            return FreeModels(frozenset(data["models"]), datetime.fromisoformat(data["checked_at"]))
+            # 가격이 없는 예전 파일은 버리고 다시 읽는다.
+            prices = {name: ModelPrice(**price) for name, price in data["prices"].items()}
+            return FreeModels(prices, datetime.fromisoformat(data["checked_at"]))
         except (OSError, ValueError, KeyError, TypeError):
             return None
 
     def _save(self, models: FreeModels) -> None:
-        data = {"checked_at": models.checked_at.isoformat(), "models": sorted(models.names)}
+        prices = {name: {"input": price.input, "output": price.output} for name, price in sorted(models.prices.items())}
+        data = {"checked_at": models.checked_at.isoformat(), "prices": prices}
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
         self.cache_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
@@ -122,15 +166,15 @@ class FreeModelCatalog:
             try:
                 response = self.http.get(PRICING_URL, follow_redirects=True, timeout=20)
                 response.raise_for_status()
-                names = parse_free_models(response.text)
-                if not names:
+                prices = parse_free_prices(response.text)
+                if not prices:
                     raise ValueError("가격표에서 무료 모델을 찾지 못했습니다.")
             except (httpx2.HTTPError, ValueError) as error:
                 if self._current is None:
                     raise FreeModelsError("구글 가격표에서 무료 모델 목록을 가져오지 못했습니다.") from error
-                self._current = FreeModels(self._current.names, self._current.checked_at, stale=True)
+                self._current = FreeModels(self._current.prices, self._current.checked_at, stale=True)
                 return self._current
-            self._current = FreeModels(frozenset(names), self.clock())
+            self._current = FreeModels(prices, self.clock())
             self._save(self._current)
             return self._current
 
