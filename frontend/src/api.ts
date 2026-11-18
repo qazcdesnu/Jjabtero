@@ -97,6 +97,7 @@ export async function searchPapers(query: string, sources: string[], mode: Searc
 }
 
 // @doc: docs/design/PaperSearch.md#4-화면
+// @doc: docs/design/Tags.md#5-태그별-그래프
 export async function addPaper(input: PaperInput): Promise<Paper> {
   const response = await fetch('/api/papers', {
     method: 'POST',

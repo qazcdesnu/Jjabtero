@@ -24,14 +24,14 @@ const outside: GraphNode = {
 const before: CitationGraph = { nodes: [outside], edges: [] }
 const after: CitationGraph = { nodes: [{ ...outside, id: 'p5', paper_id: 5, score: null }], edges: [] }
 
-function setup(overrides = {}) {
+function setup(overrides = {}, tags: string[] = []) {
   const onAdded = vi.fn()
   const deps = {
     fetchCitationGraph: vi.fn().mockResolvedValueOnce(before).mockResolvedValue(after),
     addPaper: vi.fn().mockResolvedValue({ id: 5 }),
     ...overrides,
   }
-  return { graph: createGraphState(onAdded, deps), deps, onAdded }
+  return { graph: createGraphState(onAdded, deps, () => tags), deps, onAdded }
 }
 
 describe('createGraphState', () => {
@@ -82,5 +82,36 @@ describe('createGraphState', () => {
     tags.push('core')
     await graph.load()
     expect(deps.fetchCitationGraph).toHaveBeenLastCalledWith(0, ['nlp', 'core'])
+  })
+
+  it('태그를 고르지 않았으면 묻지 않고 태그 없이 바로 담는다', async () => {
+    const { graph, deps } = setup()
+    await graph.load()
+    await graph.requestAdd(outside)
+    expect(graph.state.confirming).toBeNull()
+    expect(deps.addPaper).toHaveBeenCalledWith(expect.objectContaining({ openalex_id: 'W9', tags: [] }))
+  })
+
+  it('태그를 골랐으면 모두 체크한 확인 창을 띄우고, 체크한 태그만 붙여 담는다', async () => {
+    const { graph, deps } = setup({}, ['RSI', 'agents'])
+    await graph.load()
+    await graph.requestAdd(outside)
+    expect(deps.addPaper).not.toHaveBeenCalled()
+    expect(graph.state.confirming?.id).toBe('W9')
+    expect(graph.state.chosenTags).toEqual(['RSI', 'agents'])
+    graph.state.chosenTags = ['agents']
+    await graph.confirmAdd()
+    expect(graph.state.confirming).toBeNull()
+    expect(deps.addPaper).toHaveBeenCalledWith(expect.objectContaining({ openalex_id: 'W9', tags: ['agents'] }))
+  })
+
+  it('담기 취소는 담지 않고 창을 닫는다', async () => {
+    const { graph, deps } = setup({}, ['RSI'])
+    await graph.load()
+    await graph.requestAdd(outside)
+    graph.cancelAdd()
+    expect(graph.state.confirming).toBeNull()
+    await graph.confirmAdd()
+    expect(deps.addPaper).not.toHaveBeenCalled()
   })
 })

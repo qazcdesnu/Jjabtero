@@ -37,12 +37,18 @@
 - API: `GET /api/citations/graph?tags=<이름>&tags=<이름>`([citation_graph](../../src/jjabtero/citation_graph.py#citation_graph), [인용 그래프 설계](CitationGraph.md#3-api)). 서재 밖 추천에서 빼는 것은 태그와 관계없이 서재 전체다. 고른 태그가 없는 서재 논문을 추천하지 않기 위해서다. 화면은 [fetchCitationGraph](../../frontend/src/api.ts#fetchCitationGraph)에 태그를 넘긴다([createGraphState](../../frontend/src/graphState.ts#createGraphState)의 `tags`).
 - 그래프 화면([GraphView](../../frontend/src/GraphView.vue))의 도구 줄에 태그 선택 칸(여러 개, 이름 옆에 논문 수, 찾기, 모두 지우기)을 둔다. 처음에는 "태그: 서재 전체"이고, 고르면 그 태그를 모두 가진 논문만 그린다. 왼쪽 목록의 태그 선택과 같은 상태(서재 필터의 태그)라 어느 쪽에서 골라도 서로 맞춰진다. 처음에는 왼쪽 목록의 태그를 누르는 방법만 있어, 그래프 화면에서는 서재 전체만 볼 수 있는 것처럼 보였다([이슈 I24](../Issue.md)).
 - 그래프 화면에 있을 때 왼쪽 태그를 누르면 서재 화면으로 가지 않고 그래프를 다시 그린다. 그래프 위쪽에 고른 태그를 지울 수 있는 칩과 "서재 전체 보기" 단추로 보여 주고, 칩을 지우면 왼쪽 선택에서도 빠진다.
+- 태그를 고른 채 그래프에서 서재 밖 논문을 "서재에 담기"로 담으면, 고른 태그를 이 논문에도 붙일지 묻는 확인 창([GraphAddDialog](../../frontend/src/GraphAddDialog.vue))을 띄운다([이슈 I31](../Issue.md)). 사용자가 2026-11-18에 정했다.
+  - "선택된 태그를 이 논문에도 추가하시겠습니까?"와 논문 제목, 고른 태그마다 체크박스(처음에는 모두 체크)를 보인다. 단추는 "서재에 담기"와 "담기 취소" 두 개다.
+  - "서재에 담기"는 체크한 태그를 붙여 담는다. 하나도 체크하지 않으면 태그 없이 담는다. "담기 취소"나 창 닫기는 담지 않는다.
+  - 태그를 고르지 않았으면 묻지 않고 바로 담는다.
+  - 태그는 담기 요청([addPaper](../../frontend/src/api.ts#addPaper)의 `tags`)에 함께 보낸다. 이미 서재에 있는 논문(같은 DOI)이면 담지 않으므로 태그도 붙이지 않는다.
+  - 상태는 [createGraphState](../../frontend/src/graphState.ts#createGraphState)의 `requestAdd`, `confirmAdd`, `cancelAdd`와 `confirming`, `chosenTags`가 가진다.
 - 시연 서재(9편)에서 `language`(2편)를 고르자 서재 논문 2편, 인용 선 1개로 다시 그렸고, 칩을 지우자 9편으로 돌아왔다(2026-11-16).
 
 ## 6. 테스트
 
 - [test_tags](../../tests/test_tags.py)는 이름 규칙(빈칸, 겹침, 50자), 논문 태그 바꾸기(고친 시각, 쓰지 않는 태그 지우기, 자동 올리기 예약, 404, 422), 여러 편에 붙이기·떼기(바뀐 수, 없는 논문이 섞이면 아무것도 안 바꿈, 빈 목록 422), 이름 바꾸기와 합치기, 지우기(논문은 남김)를 확인한다.
-- [test_citation_graph](../../tests/test_citation_graph.py)는 태그 하나·둘(모두 가진 논문만), 없는 태그(빈 그래프), 태그로 거른 그래프의 추천이 서재의 다른 논문을 빼는 것을 확인한다. [graphState.test](../../frontend/src/graphState.test.ts)는 고른 태그로 그래프를 청하는 것을 확인한다.
+- [test_citation_graph](../../tests/test_citation_graph.py)는 태그 하나·둘(모두 가진 논문만), 없는 태그(빈 그래프), 태그로 거른 그래프의 추천이 서재의 다른 논문을 빼는 것을 확인한다. [graphState.test](../../frontend/src/graphState.test.ts)는 고른 태그로 그래프를 청하는 것과, 태그를 고른 채 담을 때의 확인(체크한 태그로 담기, 취소, 태그를 고르지 않으면 바로 담기)을 확인한다.
 - [libraryState.test](../../frontend/src/libraryState.test.ts)는 한 편 태그 바꾸기와 오류, 여러 편 고르기·모두 고르기·붙이기·떼기, 이름 바꾸기·지우기 뒤의 필터, 다시 읽을 때 고르기 정리를 확인한다.
 
 ## 7. 미결정 사항

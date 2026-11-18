@@ -23,6 +23,9 @@ export function createGraphState(
     selectedId: null as string | null,
     adding: false,
     addError: '',
+    // 태그를 고른 채 담을 때 확인 창에 띄운 논문과, 붙이려고 체크한 태그
+    confirming: null as GraphNode | null,
+    chosenTags: [] as string[],
   })
   const selected = computed<GraphNode | null>(
     () => state.data?.nodes.find((node) => node.id === state.selectedId) ?? null,
@@ -45,15 +48,16 @@ export function createGraphState(
     state.addError = ''
   }
 
-  // 서재 밖 논문을 담고 그래프를 다시 읽어, 같은 논문의 서재 점을 고른다.
-  async function add(node: GraphNode): Promise<void> {
+  // 서재 밖 논문을 담고(붙일 태그와 함께) 그래프를 다시 읽어, 같은 논문의 서재 점을 고른다.
+  async function add(node: GraphNode, tagNames: string[] = []): Promise<void> {
     if (!node.openalex_id) return
     state.adding = true
     state.addError = ''
     try {
-      await deps.addPaper(
-        citedWorkInput({ ...node, openalex_id: node.openalex_id, shared_refs: null, library_paper_id: null }),
-      )
+      await deps.addPaper({
+        ...citedWorkInput({ ...node, openalex_id: node.openalex_id, shared_refs: null, library_paper_id: null }),
+        tags: [...tagNames],
+      })
       await onAdded()
     } catch (error) {
       if (!(error instanceof DuplicatePaperError)) {
@@ -68,5 +72,23 @@ export function createGraphState(
     state.selectedId = added ? added.id : null
   }
 
-  return { state, selected, load, select, add }
+  // 태그를 골라 두었으면 그 태그를 붙일지 확인 창으로 묻고(처음에는 모두 체크), 아니면 바로 담는다.
+  function requestAdd(node: GraphNode): Promise<void> {
+    if (tags().length === 0) return add(node)
+    state.confirming = node
+    state.chosenTags = [...tags()]
+    return Promise.resolve()
+  }
+
+  function confirmAdd(): Promise<void> {
+    const node = state.confirming
+    state.confirming = null
+    return node ? add(node, state.chosenTags) : Promise.resolve()
+  }
+
+  function cancelAdd(): void {
+    state.confirming = null
+  }
+
+  return { state, selected, load, select, add, requestAdd, confirmAdd, cancelAdd }
 }
