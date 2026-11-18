@@ -51,6 +51,7 @@
 | [태그 설계](design/Tags.md) | 태그 이름 규칙, 붙이기·떼기·이름 바꾸기·지우기 API, 논문 상세·서재 목록·왼쪽 목록 화면, 태그별 그래프 | M7-T1 |
 | [사용자 설정 설계](design/Settings.md) | 앱 안에서 바꾸는 설정 항목, 저장, API와 설정 창 | M3-T2 |
 | [PDF 리더 설계](design/Reader.md) | pdf.js 뷰어, PDF 가져오기(공개 PDF, 올리기)와 드라이브 보관, 읽던 위치·하이라이트·영역 메모 데이터, API, 화면 | M4-T1 |
+| [AI 대화 설계](design/AiChat.md) | 프로필 창의 Google AI API 키(암호화 저장, 마스터 키)와 Gemini 모델, 리더에서 고른 글로 Gemini와 대화하는 API와 화면 | M8-T1 |
 | [PDF 판 설계](design/PdfVersions.md) | 논문마다 여러 PDF 판(arXiv 개정판, 출판판, 올린 파일), 판 찾기, 판마다의 주석·읽던 위치, 판 선택 API와 드롭다운 | I30 |
 | [리더 인용 미리보기 설계](design/ReaderCitations.md) | 리더의 인용 표시 찾기, 참고문헌 항목 읽기, 항목 글로 논문 찾기 API, 미리보기 상자와 서재에 담기·새 탭에서 읽기 | M6-T1 |
 | [공개 페이지 설계](design/PublicPages.md) | 로그인 없이 여는 앱 소개·개인정보처리방침 페이지, 검색 노출 막기 | M2-T5 |
