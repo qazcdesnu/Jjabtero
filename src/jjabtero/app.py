@@ -47,6 +47,7 @@ from jjabtero.drive_sync import (
 )
 from jjabtero.papers_api import router as papers_router
 from jjabtero.pdfs import PdfStore
+from jjabtero.pdf_versions import router as pdf_versions_router
 from jjabtero.pdfs import router as pdfs_router
 from jjabtero.public_pages import router as public_pages_router
 from jjabtero.reading import annotations_router
@@ -197,6 +198,7 @@ def create_app(
     app.include_router(citation_graph_router)
     app.include_router(paper_citations_router)
     app.include_router(pdfs_router)
+    app.include_router(pdf_versions_router)
     app.include_router(reading_router)
     app.include_router(annotations_router)
     app.include_router(references_router)

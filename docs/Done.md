@@ -2,6 +2,46 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md), [M3 인용 기반 연결·추천](Done-M3.md), [M6 리더 인용 미리보기](Done-M6.md), [M7 태그](Done-M7.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## I30 논문마다 PDF 판(arXiv 개정판, 출판판)을 골라 받고 읽는 드롭다운, 판마다 따로인 주석과 읽던 위치
+
+- 시작일: 2026-11-18
+- 완료일: 2026-11-18
+- 근거 문서: [PDF 판 설계](design/PdfVersions.md)
+- 참고 자료: 없음
+
+### 계획
+- 판 찾기(arXiv OAI-PMH, OpenAlex 위치), 마이그레이션 0008, 판 API, 판마다의 위치·주석을 만든다.
+- 상세와 리더에 판 선택 드롭다운을 둔다.
+- 로컬 서재 사본에서 판을 바꿔 가며 확인한다.
+
+### 진행 기록
+- 2026-11-18: 사용자가 OpenAlex나 arXiv에 여러 판이 있으면 판을 골라 받고 읽는 드롭다운을 물었다. 서재 논문을 조사해 arXiv 개정판(DGM v1~v3, Attention v1~v7)과 OpenAlex 위치의 출판판(ACL, s-rsa.com)을 확인했다. 판마다 주석을 어떻게 할지 묻자 사용자가 판마다 따로 보관하기로 정했다. 앞의 PR이 모두 병합되어 `main`에서 작업 브랜치를 만들었다.
+- 2026-11-18: arXiv 검색 API는 마지막 판의 번호와 첫·마지막 날짜만 주었다. 공식 메타데이터 API(OAI-PMH `arXivRaw`)는 판마다 날짜를 주어 이것을 쓰기로 했다(DGM v1 2025-05-29, v2 2025-09-26, v3 2026-03-12 확인).
+- 2026-11-18: 마이그레이션 0008로 `paper_pdfs`의 키를 (논문, SHA-256)으로, 읽던 위치의 키를 (논문, 판)으로 바꾸고 주석에 판을 더했다. 지금 판은 판 행의 고른 시각으로 정해, 드라이브 합치기에서 판 행마다 따로 합쳐도 하나로 정해지게 했다. 서재 통계 설계의 다 읽은 시각 마이그레이션 번호를 0009로 고쳤다.
+- 2026-11-18: 판을 받을 때 사용자가 준 주소를 서버가 그대로 받지 않도록, 판 이름(`arxiv:v3`, `url:<주소>`)만 받고 서버가 판 목록을 다시 찾아 그 주소를 쓰게 했다.
+- 2026-11-18: 판을 주지 않은 PDF 주소는 판을 고르면 내용이 바뀌므로 브라우저가 한 시간 담아 두지 않게(`no-cache`) 했다.
+- 2026-11-18: 로컬 서재 사본(드라이브 없이, 포트 8010, 마이그레이션 0008을 실제 데이터에 적용)에서 DGM 논문의 드롭다운을 열어 받은 판(학술지 출판판)과 받을 수 있는 판(arXiv v3·v2·v1)을 확인하고 arXiv v1을 받았다. 리더가 v1을 주석 0개로 열고, 리더의 드롭다운으로 학술지판을 고르면 9쪽·259%·주석 7개로 돌아왔다. 브라우저 콘솔 오류는 없었다. 확인 중 받아 둔 판의 이름이 호스트 이름(s-rsa.com)으로만 보여, 받을 수 있는 판 목록에 같은 판이 있으면 그 이름(출처와 판 종류)을 쓰게 했다.
+
+### 결정 사항
+- 받은 판은 모두 남기고 주석·읽던 위치를 판마다 둔다(사용자 결정).
+- 받을 수 있는 판은 드롭다운을 열 때만 찾는다. 논문을 고를 때마다 OpenAlex·arXiv에 묻지 않기 위해서다.
+- 판 지우기와 주석을 다른 판으로 옮기기는 미결정으로 남긴다.
+
+### 변경 파일
+- `docs/Issue.md`, `docs/Done.md`, `docs/Roadmap.md`, `docs/index.md`
+- `docs/design/PdfVersions.md`(새 문서), `docs/design/Reader.md`, `docs/design/Library.md`, `docs/design/DriveSync.md`, `docs/design/LibraryStats.md`
+- `src/jjabtero/migrations/versions/0008_pdf_versions.py`, `src/jjabtero/models.py`, `src/jjabtero/pdf_versions.py`(새 모듈), `src/jjabtero/pdfs.py`, `src/jjabtero/reading.py`, `src/jjabtero/papers_api.py`, `src/jjabtero/drive_merge.py`, `src/jjabtero/app.py`
+- `tests/test_pdf_versions.py`(새 테스트), `tests/test_db.py`, `tests/test_drive_merge.py`, `tests/test_drive_api.py`, `tests/test_reading.py`
+- `frontend/src/api.ts`, `frontend/src/api.test.ts`, `frontend/src/pdfVersionState.ts`, `frontend/src/pdfVersionState.test.ts`, `frontend/src/PdfVersionSelect.vue`, `frontend/src/PdfPanel.vue`, `frontend/src/ReaderView.vue`, `frontend/src/App.vue`
+
+### 결과
+- 논문 상세와 리더의 드롭다운으로 PDF 판(arXiv 개정판, 출판판, 올린 파일)을 골라 받고 읽는다. 하이라이트·영역 메모·읽던 위치는 판마다 따로다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+- `npx vue-tsc --noEmit -p tsconfig.app.json`, `npm run build`: 통과.
+- 로컬 서재 사본으로 브라우저에서 확인했다.
+
 ## I29 서재 목록에 Jjabtero 리더에서 마지막으로 읽은 날 칸을 더해 최근에 연 순으로 정렬하기
 
 - 시작일: 2026-11-18

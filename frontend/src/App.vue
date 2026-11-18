@@ -42,7 +42,8 @@ const library = createLibraryState()
 const drive = createDriveState(() => library.load())
 const auth = createAuthState()
 const ready = ref(false)
-const reading = ref<{ id: number; title: string } | null>(null)
+// opened: 리더를 연 횟수. 판을 바꾸면 늘려 리더를 그 판으로 새로 만든다.
+const reading = ref<{ id: number; title: string; opened?: number } | null>(null)
 
 watchUnauthorized(() => auth.refresh())
 
@@ -59,6 +60,11 @@ function openInLibrary(paperId: number) {
 // 리더를 닫으면 서재 목록을 다시 불러와 마지막으로 읽은 시각을 보인다.
 function closeReader() {
   reading.value = null
+  library.load()
+}
+// 리더에서 다른 판을 고르면 그 판으로 리더를 다시 열고, 서재 목록의 PDF 출처를 새로 읽는다.
+function switchReaderVersion() {
+  if (reading.value) reading.value = { ...reading.value, opened: (reading.value.opened ?? 0) + 1 }
   library.load()
 }
 const health = ref<Health | null>(null)
@@ -114,10 +120,11 @@ onMounted(async () => {
       </SplitterPanel>
       <SplitterPanel :size="85" :min-size="50" class="overflow-hidden">
         <ReaderView
-          :key="reading.id"
+          :key="`${reading.id}:${reading.opened ?? 0}`"
           :paper-id="reading.id"
           :title="reading.title"
           @close="closeReader"
+          @switch="switchReaderVersion"
           @added="library.load()"
         />
       </SplitterPanel>

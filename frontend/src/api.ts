@@ -335,9 +335,82 @@ async function pdfResponse(response: Response): Promise<PaperPdf> {
   return (await response.json()) as PaperPdf
 }
 
+function versionQuery(version?: string): string {
+  // 판(SHA-256) 질의. 없으면 서버가 지금 판을 쓴다.
+  return version ? `?version=${encodeURIComponent(version)}` : ''
+}
+
 // @doc: docs/design/Reader.md#5-api
-export function pdfUrl(paperId: number): string {
-  return `/api/papers/${paperId}/pdf`
+// @doc: docs/design/PdfVersions.md#5-api
+export function pdfUrl(paperId: number, version?: string): string {
+  return `/api/papers/${paperId}/pdf${versionQuery(version)}`
+}
+
+// @doc: docs/design/PdfVersions.md#5-api
+export interface SavedPdfVersion {
+  sha256: string
+  label: string
+  source: string
+  source_url: string | null
+  added_at: string
+  selected: boolean
+}
+
+// @doc: docs/design/PdfVersions.md#5-api
+export interface AvailablePdfVersion {
+  key: string
+  label: string
+  url: string
+  date: string | null
+  latest: boolean
+  saved_sha256: string | null
+}
+
+async function versionsResponse<T>(response: Response, action: string): Promise<T> {
+  if (!response.ok) {
+    let detail = ''
+    try {
+      const body = await response.json()
+      detail = typeof body.detail === 'string' ? body.detail : ''
+    } catch {
+      detail = ''
+    }
+    throw new Error(detail || `${action} 실패: ${response.status}`)
+  }
+  return (await response.json()) as T
+}
+
+// @doc: docs/design/PdfVersions.md#5-api
+export async function listPdfVersions(paperId: number): Promise<SavedPdfVersion[]> {
+  return versionsResponse(await fetch(`/api/papers/${paperId}/pdf/versions`), '받은 판 불러오기')
+}
+
+// @doc: docs/design/PdfVersions.md#5-api
+export async function listAvailablePdfVersions(paperId: number): Promise<AvailablePdfVersion[]> {
+  return versionsResponse(await fetch(`/api/papers/${paperId}/pdf/versions/available`), '받을 수 있는 판 찾기')
+}
+
+// @doc: docs/design/PdfVersions.md#5-api
+export async function fetchPdfVersion(paperId: number, key: string): Promise<PaperPdf> {
+  return pdfResponse(
+    await fetch(`/api/papers/${paperId}/pdf/fetch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version: key }),
+    }),
+  )
+}
+
+// @doc: docs/design/PdfVersions.md#5-api
+export async function selectPdfVersion(paperId: number, sha256: string): Promise<SavedPdfVersion[]> {
+  return versionsResponse(
+    await fetch(`/api/papers/${paperId}/pdf/selected`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sha256 }),
+    }),
+    '판 고르기',
+  )
 }
 
 // @doc: docs/design/Reader.md#5-api
@@ -375,8 +448,8 @@ export interface ReadingPosition {
 }
 
 // @doc: docs/design/Reader.md#5-api
-export async function fetchPosition(paperId: number): Promise<ReadingPosition | null> {
-  const response = await fetch(`/api/papers/${paperId}/position`)
+export async function fetchPosition(paperId: number, version?: string): Promise<ReadingPosition | null> {
+  const response = await fetch(`/api/papers/${paperId}/position${versionQuery(version)}`)
   if (response.status === 204) return null
   if (!response.ok) {
     throw new Error(`읽던 위치 불러오기 실패: ${response.status}`)
@@ -386,8 +459,8 @@ export async function fetchPosition(paperId: number): Promise<ReadingPosition | 
 }
 
 // @doc: docs/design/Reader.md#5-api
-export async function savePosition(paperId: number, position: ReadingPosition): Promise<void> {
-  const response = await fetch(`/api/papers/${paperId}/position`, {
+export async function savePosition(paperId: number, position: ReadingPosition, version?: string): Promise<void> {
+  const response = await fetch(`/api/papers/${paperId}/position${versionQuery(version)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(position),
@@ -429,14 +502,14 @@ async function annotationResponse<T>(response: Response, what: string): Promise<
 }
 
 // @doc: docs/design/Reader.md#5-api
-export async function listAnnotations(paperId: number): Promise<Annotation[]> {
-  return annotationResponse(await fetch(`/api/papers/${paperId}/annotations`), '주석 불러오기')
+export async function listAnnotations(paperId: number, version?: string): Promise<Annotation[]> {
+  return annotationResponse(await fetch(`/api/papers/${paperId}/annotations${versionQuery(version)}`), '주석 불러오기')
 }
 
 // @doc: docs/design/Reader.md#5-api
-export async function createAnnotation(paperId: number, input: AnnotationInput): Promise<Annotation> {
+export async function createAnnotation(paperId: number, input: AnnotationInput, version?: string): Promise<Annotation> {
   return annotationResponse(
-    await fetch(`/api/papers/${paperId}/annotations`, {
+    await fetch(`/api/papers/${paperId}/annotations${versionQuery(version)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),

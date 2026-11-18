@@ -6,6 +6,7 @@
 // @doc: docs/design/Settings.md#5-테스트
 // @doc: docs/design/Citations.md#7-테스트
 // @doc: docs/design/Reader.md#8-테스트
+// @doc: docs/design/PdfVersions.md#7-테스트
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -37,6 +38,11 @@ import {
   createAnnotation,
   updateAnnotation,
   deleteAnnotation,
+  pdfUrl,
+  listPdfVersions,
+  listAvailablePdfVersions,
+  fetchPdfVersion,
+  selectPdfVersion,
   type SearchResult,
 } from './api'
 
@@ -390,3 +396,36 @@ describe('주석 API', () => {
   })
 })
 
+describe('PDF 판 API', () => {
+  it('판 목록, 찾기, 받기, 고르기 요청을 보내고 판 질의를 붙인다', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response('[]'))
+    vi.stubGlobal('fetch', fetchMock)
+    const sha = 'a'.repeat(64)
+    await listPdfVersions(3)
+    await listAvailablePdfVersions(3)
+    await fetchPdfVersion(3, 'arxiv:v2')
+    await selectPdfVersion(3, sha)
+    await fetchPosition(3, sha)
+    await savePosition(3, { page: 1, offset: 0, zoom: 1 }, sha)
+    await listAnnotations(3, sha)
+    await createAnnotation(3, { kind: 'note', page: 1, rects: [{ x: 0, y: 0, w: 0.1, h: 0.1 }] }, sha)
+    expect(fetchMock.mock.calls.map((call) => [call[0], call[1]?.method, call[1]?.body])).toEqual([
+      ['/api/papers/3/pdf/versions', undefined, undefined],
+      ['/api/papers/3/pdf/versions/available', undefined, undefined],
+      ['/api/papers/3/pdf/fetch', 'POST', JSON.stringify({ version: 'arxiv:v2' })],
+      ['/api/papers/3/pdf/selected', 'PUT', JSON.stringify({ sha256: sha })],
+      [`/api/papers/3/position?version=${sha}`, undefined, undefined],
+      [`/api/papers/3/position?version=${sha}`, 'PUT', JSON.stringify({ page: 1, offset: 0, zoom: 1 })],
+      [`/api/papers/3/annotations?version=${sha}`, undefined, undefined],
+      [`/api/papers/3/annotations?version=${sha}`, 'POST', expect.any(String)],
+    ])
+    expect([pdfUrl(3), pdfUrl(3, sha)]).toEqual(['/api/papers/3/pdf', `/api/papers/3/pdf?version=${sha}`])
+  })
+
+  it('실패하면 서버의 까닭을 오류로 낸다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: '받아 두지 않은 판입니다.' }), { status: 404 })))
+    await expect(selectPdfVersion(3, 'b'.repeat(64))).rejects.toThrow('받아 두지 않은 판입니다.')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 502 })))
+    await expect(listAvailablePdfVersions(3)).rejects.toThrow('502')
+  })
+})

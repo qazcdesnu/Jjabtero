@@ -9,17 +9,19 @@ import hashlib
 import os
 import re
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Protocol
 
 import httpx2
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from jjabtero.citations import OPENALEX_WORKS_URL
 from jjabtero.models import Paper, PaperPdf
+from jjabtero.pdf_versions import available_versions
 from jjabtero.titles import normalize
 
 # @doc: docs/design/Reader.md#2-pdf-가져오기
@@ -243,9 +245,12 @@ class PdfStore:
     def save(
         self, session: Session, paper: Paper, data: bytes, source: str, source_url: str | None
     ) -> PaperPdf:
-        """PDF를 로컬과 드라이브에 두고 논문과 잇는다. 옛 연결은 바꾼다.
+        """PDF를 로컬과 드라이브에 두고 논문의 판으로 더해 지금 판으로 고른다.
+
+        같은 내용의 판이 이미 있으면 새로 더하지 않고 출처와 고른 시각만 바꾼다.
 
         @doc: docs/design/Reader.md#3-보관
+        @doc: docs/design/PdfVersions.md#4-저장
         """
         check_pdf(data)
         sha256 = hashlib.sha256(data).hexdigest()
@@ -256,15 +261,27 @@ class PdfStore:
             temporary.write_bytes(data)
             temporary.replace(path)
         drive_file_id = self.drive.put_file(PDF_FOLDER, f"{sha256}.pdf", data)
-        if paper.pdf is not None:
-            session.delete(paper.pdf)
-            session.flush()
-        paper.pdf = PaperPdf(
-            sha256=sha256, size=len(data), source=source, source_url=source_url, drive_file_id=drive_file_id
-        )
+        now = datetime.now(UTC)
+        pdf = paper.pdf_version(sha256)
+        if pdf is None:
+            pdf = PaperPdf(
+                sha256=sha256,
+                size=len(data),
+                source=source,
+                source_url=source_url,
+                drive_file_id=drive_file_id,
+                added_at=now,
+                selected_at=now,
+            )
+            paper.pdfs.append(pdf)
+        else:
+            pdf.source = source
+            pdf.source_url = source_url
+            pdf.drive_file_id = drive_file_id or pdf.drive_file_id
+            pdf.selected_at = now
         session.commit()
         self.drive.schedule_push()
-        return paper.pdf
+        return pdf
 
     def read(self, pdf: PaperPdf) -> bytes | None:
         """PDF 내용을 돌려준다. 로컬 사본이 없으면 드라이브에서 받아 둔다.
@@ -329,26 +346,42 @@ def _paper(session: Session, paper_id: int) -> Paper:
     return paper
 
 
+# @doc: docs/design/PdfVersions.md#5-api
+# @doc: docs/design/Reader.md#5-api
+VERSION_PATTERN = r"^[0-9a-f]{64}$"
+
+
 @router.get("/{paper_id}/pdf")
-def read_pdf(paper_id: int, request: Request, session: Annotated[Session, Depends(_session)]) -> Response:
-    """`GET /api/papers/{paper_id}/pdf`를 처리한다.
+def read_pdf(
+    paper_id: int,
+    request: Request,
+    session: Annotated[Session, Depends(_session)],
+    version: Annotated[str | None, Query(pattern=VERSION_PATTERN)] = None,
+) -> Response:
+    """`GET /api/papers/{paper_id}/pdf`를 처리한다. `version`(SHA-256)을 주면 그 판, 없으면 지금 판이다.
 
     @doc: docs/design/Reader.md#5-api
+    @doc: docs/design/PdfVersions.md#5-api
     """
-    paper = _paper(session, paper_id)
-    data = request.app.state.pdfs.read(paper.pdf) if paper.pdf is not None else None
+    pdf = _paper(session, paper_id).pdf_version(version)
+    data = request.app.state.pdfs.read(pdf) if pdf is not None else None
     if data is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "PDF가 없습니다.")
-    return Response(data, media_type="application/pdf", headers={"Cache-Control": "private, max-age=3600"})
+    # 판을 준 주소는 내용이 바뀌지 않지만, 지금 판 주소는 판을 고르면 내용이 바뀌므로 매번 확인하게 한다.
+    cache = "private, max-age=3600" if version else "private, no-cache"
+    return Response(data, media_type="application/pdf", headers={"Cache-Control": cache})
 
 
 class FetchIn(BaseModel):
-    """공개 PDF 받기의 선택 입력. `openalex_id`를 주면 그 공개판의 PDF를 받는다.
+    """공개 PDF 받기의 선택 입력. `openalex_id`를 주면 그 공개판의 PDF를, `version`을 주면 받을 수 있는 판 가운데
+    그 이름(`arxiv:v3`, `url:<주소>`)의 판을 받는다.
 
     @doc: docs/design/Reader.md#5-api
+    @doc: docs/design/PdfVersions.md#5-api
     """
 
     openalex_id: str | None = Field(default=None, pattern=r"^W\d+$")
+    version: str | None = Field(default=None, max_length=2000)
 
 
 @router.get("/{paper_id}/pdf/alternatives")
@@ -379,7 +412,17 @@ def fetch_pdf(
     """
     paper = _paper(session, paper_id)
     http = request.app.state.http_client
-    if body is not None and body.openalex_id:
+    if body is not None and body.version:
+        # 서버가 판 목록을 다시 찾아 그 이름의 주소만 받는다. 사용자가 준 주소를 그대로 받지 않기 위해서다.
+        try:
+            versions = available_versions(http, paper)
+        except httpx2.HTTPError as error:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"받을 수 있는 판을 찾지 못했습니다: {error}") from error
+        chosen = next((item for item in versions if item.key == body.version), None)
+        if chosen is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "그 판을 찾지 못했습니다.")
+        found = (chosen.url, "arxiv" if chosen.key.startswith("arxiv:") else "openalex")
+    elif body is not None and body.openalex_id:
         alternate = open_access_pdf_url(http, body.openalex_id, None)
         found = (alternate[0], "alternate") if alternate else None
     else:

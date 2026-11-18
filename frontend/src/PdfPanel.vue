@@ -5,11 +5,17 @@ import Message from 'primevue/message'
 import { ref, watch } from 'vue'
 import { pdfUrl, type Paper } from './api'
 import OpenVersionChoice from './OpenVersionChoice.vue'
+import PdfVersionSelect from './PdfVersionSelect.vue'
 import { createPdfState } from './pdfState'
 
 const props = defineProps<{ paper: Paper }>()
 const emit = defineEmits<{ changed: []; read: [paper: Paper] }>()
-const pdf = createPdfState(() => emit('changed'))
+// versions: 받거나 올려 판이 늘면 판 드롭다운을 새로 만들어 받은 판을 다시 읽게 한다.
+const versions = ref(0)
+const pdf = createPdfState(() => {
+  versions.value += 1
+  emit('changed')
+})
 const fileInput = ref<HTMLInputElement | null>(null)
 
 watch(
@@ -42,7 +48,7 @@ async function onFile(event: Event) {
         @click="pdf.fetchOpen(paper.id)"
       />
       <Button
-        :label="paper.has_pdf ? 'PDF 바꾸기' : 'PDF 올리기'"
+        :label="paper.has_pdf ? '다른 PDF 올리기' : 'PDF 올리기'"
         icon="pi pi-upload"
         size="small"
         severity="secondary"
@@ -52,6 +58,7 @@ async function onFile(event: Event) {
       />
       <input ref="fileInput" type="file" accept="application/pdf,.pdf" class="hidden" @change="onFile" />
     </div>
+    <PdfVersionSelect :key="`${paper.id}:${versions}`" :paper-id="paper.id" @changed="emit('changed')" />
     <p v-if="paper.has_pdf && paper.pdf_source === 'alternate'" class="text-xs text-surface-500">
       비슷한 공개판에서 받은 PDF입니다. 판이 달라 쪽 번호나 내용이 다를 수 있습니다.
       <a v-if="paper.pdf_source_url" :href="paper.pdf_source_url" target="_blank" rel="noopener" class="text-primary hover:underline">출처</a>

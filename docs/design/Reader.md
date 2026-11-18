@@ -14,7 +14,7 @@
 
 ## 2. PDF 가져오기
 
-논문마다 PDF는 하나다. 새로 넣으면 옛 것을 바꾼다.
+논문마다 PDF 판을 여러 개 둘 수 있다. 새로 넣으면 판으로 더하고 지금 판으로 고른다. 처음에는 논문마다 하나였고 새로 넣으면 옛 것을 바꿨다. 판과 판마다의 주석·읽던 위치는 [PDF 판 설계](PdfVersions.md)에 있다([이슈 I30](../Issue.md)).
 
 가져오기와 보관은 [pdfs 모듈](../../src/jjabtero/pdfs.py)에 있다.
 
@@ -59,9 +59,9 @@
 
 | 표 | 열 | 내용 |
 | --- | --- | --- |
-| `paper_pdfs`([PaperPdf](../../src/jjabtero/models.py#PaperPdf), 마이그레이션 0005) | `paper_id`(기본 키, 논문 지우면 함께 지움), `sha256`, `size`, `source`(`openalex`, `arxiv`, `alternate`, `upload`), `source_url`, `drive_file_id`, `page_count`, `added_at` | 논문의 PDF |
-| `reading_positions`([ReadingPosition](../../src/jjabtero/models.py#ReadingPosition), 마이그레이션 0006) | `paper_id`(기본 키, 논문 지우면 함께 지움), `page`(1부터), `offset`(그 쪽 안의 세로 위치 0~1), `zoom`, `updated_at` | 읽던 위치 |
-| `annotations`([Annotation](../../src/jjabtero/models.py#Annotation), 마이그레이션 0007) | `id`, `paper_id`(논문 지우면 함께 지움), `kind`([ANNOTATION_KINDS](../../src/jjabtero/reading.py#ANNOTATION_KINDS): `highlight`, `note`), `page`, `rects`(JSON), `text`, `color`, `note`, `created_at`, `updated_at` | 하이라이트와 영역 메모 |
+| `paper_pdfs`([PaperPdf](../../src/jjabtero/models.py#PaperPdf), 마이그레이션 0005) | `paper_id`·`sha256`(함께 기본 키, 0008부터, 논문 지우면 함께 지움), `size`, `source`(`openalex`, `arxiv`, `alternate`, `upload`), `source_url`, `drive_file_id`, `page_count`, `added_at`, `selected_at`(0008부터) | 논문의 PDF 판([PDF 판 설계](PdfVersions.md#3-데이터)) |
+| `reading_positions`([ReadingPosition](../../src/jjabtero/models.py#ReadingPosition), 마이그레이션 0006) | `paper_id`·`pdf_sha256`(함께 기본 키, 0008부터, 논문 지우면 함께 지움), `page`(1부터), `offset`(그 쪽 안의 세로 위치 0~1), `zoom`, `updated_at` | 읽던 위치 |
+| `annotations`([Annotation](../../src/jjabtero/models.py#Annotation), 마이그레이션 0007) | `id`, `paper_id`(논문 지우면 함께 지움), `pdf_sha256`(속한 판, 0008부터), `kind`([ANNOTATION_KINDS](../../src/jjabtero/reading.py#ANNOTATION_KINDS): `highlight`, `note`), `page`, `rects`(JSON), `text`, `color`, `note`, `created_at`, `updated_at` | 하이라이트와 영역 메모 |
 
 - 좌표는 쪽 크기에 대한 비율(0~1)로 저장한다. 확대·축소와 화면 크기에 상관없이 같은 자리에 그리기 위해서다. `rects`는 `[{"x":…, "y":…, "w":…, "h":…}]` 목록이다. 하이라이트는 여러 줄에 걸치므로 사각형이 여럿이고, 영역 메모는 하나다.
 - 하이라이트는 고른 글(`text`)과 색(`color`, [ANNOTATION_COLORS](../../src/jjabtero/reading.py#ANNOTATION_COLORS): `yellow`, `green`, `blue`, `pink`, `purple`)을, 영역 메모는 메모(`note`)를 가진다. 사각형은 [Rect](../../src/jjabtero/reading.py#Rect)(x, y는 0~1, w, h는 0 초과 1 이하, 화면 쪽 타입은 [Rect](../../frontend/src/annotations.ts#Rect))이고 주석마다 1~200개다. 하이라이트에도 메모를 달 수 있다.
@@ -75,7 +75,7 @@ PDF API는 [pdfs 모듈](../../src/jjabtero/pdfs.py)의 [router](../../src/jjabt
 | 메서드와 경로 | 내용 |
 | --- | --- |
 | `GET /api/papers/{id}/pdf`([read_pdf](../../src/jjabtero/pdfs.py#read_pdf)) | PDF 내용(`application/pdf`). 로컬 사본이 없으면 드라이브에서 받아 둔다. 없으면 404 |
-| `POST /api/papers/{id}/pdf/fetch`([fetch_pdf](../../src/jjabtero/pdfs.py#fetch_pdf)) | 공개 PDF를 받아 보관하고 `paper_pdfs` 정보를 돌려준다. 본문 `{"openalex_id": …}`([FetchIn](../../src/jjabtero/pdfs.py#FetchIn))를 주면 그 공개판의 PDF를 받는다(2절). 공개 PDF가 없으면 404, PDF가 아니거나 받지 못하면 502 |
+| `POST /api/papers/{id}/pdf/fetch`([fetch_pdf](../../src/jjabtero/pdfs.py#fetch_pdf)) | 공개 PDF를 받아 보관하고 `paper_pdfs` 정보를 돌려준다. 본문 `{"openalex_id": …}`([FetchIn](../../src/jjabtero/pdfs.py#FetchIn))를 주면 그 공개판의 PDF를 받는다(2절). `{"version": …}`을 주면 받을 수 있는 판 하나를 받는다([PDF 판 설계](PdfVersions.md#5-api)). 받은 PDF는 판으로 더하고 지금 판으로 고른다. 공개 PDF가 없으면 404, PDF가 아니거나 받지 못하면 502 |
 | `GET /api/papers/{id}/pdf/alternatives`([pdf_alternatives](../../src/jjabtero/pdfs.py#pdf_alternatives)) | 비슷한 공개판 후보(2절, [OpenVersion](../../src/jjabtero/pdfs.py#OpenVersion): OpenAlex ID, 제목, 저자 앞 3명, 연도, 게재처, PDF 주소, 비슷함). 없으면 빈 목록, OpenAlex를 쓰지 못하면 502 |
 | `PUT /api/papers/{id}/pdf`([upload_pdf](../../src/jjabtero/pdfs.py#upload_pdf)) | 올린 PDF(본문이 PDF 내용)를 보관하고 정보를 돌려준다. PDF가 아니면 415, 너무 크면 413 |
 | `GET`, `PUT /api/papers/{id}/position`([read_position](../../src/jjabtero/reading.py#read_position), [save_position](../../src/jjabtero/reading.py#save_position)) | 읽던 위치를 읽고 쓴다. 저장한 위치가 없으면 204다. 입력은 [PositionIn](../../src/jjabtero/reading.py#PositionIn)(쪽 1 이상, 쪽 안 위치 0~1, 확대 0.25~5, 벗어나면 422), 응답은 [PositionOut](../../src/jjabtero/reading.py#PositionOut)이다. 저장하면 드라이브 자동 올리기를 예약한다. [reading 모듈](../../src/jjabtero/reading.py)의 [router](../../src/jjabtero/reading.py#router)가 처리한다 |
@@ -84,10 +84,11 @@ PDF API는 [pdfs 모듈](../../src/jjabtero/pdfs.py)의 [router](../../src/jjabt
 
 - 모두 로그인이 켜져 있으면 로그인해야 쓴다. PDF도 `/api` 아래라 공개되지 않는다.
 - 논문 목록 응답에 PDF가 있는지(`has_pdf`, 화면 타입 [Paper.has_pdf](../../frontend/src/api.ts#Paper.has_pdf))를 더해, 목록과 상세에서 표시한다. PDF의 출처와 출처 주소(`pdf_source`, `pdf_source_url`)도 더한다. 공개판에서 받은 PDF를 알리기 위해서다([이슈 I27](../Issue.md)). 마지막으로 읽은 시각(`last_read_at`, 읽던 위치의 `updated_at`, 연 적이 없으면 담은 시각, 화면 타입 [Paper.last_read_at](../../frontend/src/api.ts#Paper.last_read_at))도 더한다. 서재 목록에서 최근에 연 논문을 찾기 위해서다([이슈 I29](../Issue.md)). 화면의 API 호출은 [listAnnotations](../../frontend/src/api.ts#listAnnotations), [createAnnotation](../../frontend/src/api.ts#createAnnotation), [updateAnnotation](../../frontend/src/api.ts#updateAnnotation), [deleteAnnotation](../../frontend/src/api.ts#deleteAnnotation)(타입 [Annotation](../../frontend/src/api.ts#Annotation), [AnnotationInput](../../frontend/src/api.ts#AnnotationInput)), [fetchPosition](../../frontend/src/api.ts#fetchPosition), [savePosition](../../frontend/src/api.ts#savePosition)(타입 [ReadingPosition](../../frontend/src/api.ts#ReadingPosition)), [fetchOpenPdf](../../frontend/src/api.ts#fetchOpenPdf), [uploadPdf](../../frontend/src/api.ts#uploadPdf), [pdfUrl](../../frontend/src/api.ts#pdfUrl)이고 응답 타입은 [PaperPdf](../../frontend/src/api.ts#PaperPdf)다.
+- PDF 내용, 읽던 위치, 주석 목록과 만들기는 `version=<SHA-256>` 질의([VERSION_PATTERN](../../src/jjabtero/pdfs.py#VERSION_PATTERN))로 판을 고른다. 없으면 지금 판이다. 판을 주지 않은 PDF 내용은 판을 고르면 바뀌므로 매번 확인하게 하고(`no-cache`), 판을 준 것만 한 시간 담아 둔다([PDF 판 설계](PdfVersions.md#5-api)).
 
 ## 6. 화면
 
-- 논문 상세에 PDF 칸([PdfPanel](../../frontend/src/PdfPanel.vue))을 둔다. PDF가 있으면 "읽기"와 "PDF 바꾸기"를, 없으면 "PDF 받기"와 "PDF 올리기"를 보여 준다. 받기·올리기 상태는 [createPdfState](../../frontend/src/pdfState.ts#createPdfState)가 가진다.
+- 논문 상세에 PDF 칸([PdfPanel](../../frontend/src/PdfPanel.vue))을 둔다. PDF가 있으면 "읽기"와 "다른 PDF 올리기"(처음에는 "PDF 바꾸기", 올린 파일은 새 판이 된다)를, 없으면 "PDF 받기"와 "PDF 올리기"를 보여 준다. 받기·올리기 상태는 [createPdfState](../../frontend/src/pdfState.ts#createPdfState)가 가진다.
   - "PDF 받기"가 공개 PDF를 찾지 못하면(404, [NoOpenPdfError](../../frontend/src/api.ts#NoOpenPdfError)) 비슷한 공개판을 찾는다([fetchPdfAlternatives](../../frontend/src/api.ts#fetchPdfAlternatives), 타입 [OpenVersion](../../frontend/src/api.ts#OpenVersion)). 있으면 "공개된 PDF가 없습니다. 비슷한 공개판이 있습니다. 이 PDF를 받을까요?"와 함께 후보마다 제목(PDF 링크), 저자·연도·게재처, "이 PDF 받기"를 보이고, 맨 아래에 "받지 않기"를 둔다. 고르면 그 공개판으로 받는다([fetchOpenPdf](../../frontend/src/api.ts#fetchOpenPdf)의 두 번째 인자). 없으면 지금처럼 오류를 보인다.
   - 공개판에서 받은 PDF는 "비슷한 공개판에서 받은 PDF입니다"와 출처 주소를 보인다. 판이 달라 쪽 번호나 내용이 다를 수 있음을 알리기 위해서다. 화면 타입에 [Paper.pdf_source](../../frontend/src/api.ts#Paper.pdf_source)를 더한다. "새 탭에서 열기"로 브라우저의 PDF 뷰어로도 열 수 있다.
 - "읽기"를 누르면 리더 화면([ReaderView](../../frontend/src/ReaderView.vue))이 열린다. 리더는 왼쪽 목록을 남기고 가운데와 오른쪽 칸을 합친 넓은 칸을 쓴다. 위에 닫기, 제목, 쪽 이동(이전·다음, 쪽 번호 입력), 확대·축소(50~300%, [ZOOM_STEPS](../../frontend/src/readerState.ts#ZOOM_STEPS)), 너비 맞춤을 둔다. 처음에는 너비에 맞추되 150%를 넘지 않는다. 왼쪽 목록에서 다른 화면을 고르면 리더가 닫힌다.
