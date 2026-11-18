@@ -761,6 +761,14 @@ export interface AiModel {
   description: string
 }
 
+// 고를 수 있는 모델(오늘 무료 등급)과 무료 목록을 읽은 시각. stale이면 지난 목록이다
+// @doc: docs/design/AiChat.md#5-api
+export interface AiModelList {
+  models: AiModel[]
+  checked_at: string
+  stale: boolean
+}
+
 // @doc: docs/design/AiChat.md#5-api
 async function aiRequest<T>(url: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json' } })
@@ -793,8 +801,8 @@ export function deleteAiKey(): Promise<AiKeyStatus> {
 }
 
 // @doc: docs/design/AiChat.md#6-화면
-export function fetchAiModels(): Promise<AiModel[]> {
-  return aiRequest<AiModel[]>('/api/ai/models')
+export function fetchAiModels(): Promise<AiModelList> {
+  return aiRequest<AiModelList>('/api/ai/models')
 }
 
 // @doc: docs/design/AiChat.md#6-화면

@@ -15,6 +15,9 @@ export function createProfileState(deps = DEPS) {
   const state = reactive({
     status: null as AiKeyStatus | null,
     models: [] as AiModel[],
+    // 무료 목록을 읽은 시각과, 오늘 읽지 못해 지난 목록인지
+    modelsCheckedAt: null as string | null,
+    modelsStale: false,
     keyInput: '',
     editing: false,
     busy: false,
@@ -30,9 +33,14 @@ export function createProfileState(deps = DEPS) {
 
   async function loadModels(): Promise<void> {
     state.models = []
+    state.modelsCheckedAt = null
+    state.modelsStale = false
     if (!state.status?.usable) return
     try {
-      state.models = await deps.fetchAiModels()
+      const list = await deps.fetchAiModels()
+      state.models = list.models
+      state.modelsCheckedAt = list.checked_at
+      state.modelsStale = list.stale
     } catch (error) {
       state.error = message(error)
     }

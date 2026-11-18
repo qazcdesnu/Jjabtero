@@ -6,6 +6,7 @@ import Message from 'primevue/message'
 import Password from 'primevue/password'
 import Select from 'primevue/select'
 import { computed, ref, watch } from 'vue'
+import { formatDateTime } from './labels'
 import { createProfileState } from './profileState'
 
 // email: 로그인한 계정. 로그인이 꺼진 내 컴퓨터에서는 null이다.
@@ -14,6 +15,11 @@ const visible = defineModel<boolean>('visible', { required: true })
 const emit = defineEmits<{ changed: [] }>()
 const profile = createProfileState()
 const confirmingDelete = ref(false)
+// 고른 모델이 오늘 무료 목록에 없는지. 목록을 받은 뒤에만 따진다.
+const chosenNotFree = computed(() => {
+  const chosen = profile.state.status?.model
+  return Boolean(chosen && profile.state.modelsCheckedAt && !profile.state.models.some((model) => model.name === chosen))
+})
 // 목록을 못 받았어도 고른 모델 이름은 보이게 한다.
 const modelOptions = computed(() => {
   const chosen = profile.state.status?.model
@@ -120,6 +126,14 @@ async function chooseModel(model: string) {
               </div>
             </template>
           </Select>
+          <span class="text-xs text-surface-500">
+            구글 가격표에서 오늘 무료 등급인 모델만 보입니다. 매일 자정(한국 시각)에 다시 확인합니다.
+            <template v-if="profile.state.modelsCheckedAt">마지막 확인 {{ formatDateTime(profile.state.modelsCheckedAt) }}.</template>
+          </span>
+          <Message v-if="profile.state.modelsStale" severity="warn" size="small">오늘 가격표를 읽지 못해 지난 목록을 보입니다.</Message>
+          <Message v-if="chosenNotFree" severity="warn" size="small">
+            고른 모델이 오늘 무료 목록에 없습니다. 무료로 쓰려면 다른 모델을 고르세요.
+          </Message>
         </div>
 
         <Message v-if="profile.state.message" severity="success" size="small" variant="simple">{{ profile.state.message }}</Message>

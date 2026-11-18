@@ -37,6 +37,43 @@ MODELS = {
 }
 
 
+PRICING = """
+## Gemini 2.5 Pro {% id=&quot;gemini-2.5-pro&quot; %}
+*[`gemini-2.5-pro`](/docs/models/gemini-2.5-pro)*
+{% hr /%}
+{% tabs %}
+  {% tab title=&quot;Standard&quot; %}
+  {% table %}
+  * Feature
+  * Free Tier
+  * Paid Tier
+  ---
+  * Input price
+  * Not available
+  * $1.25
+  {% /table %}
+  {% /tab %}
+{% /tabs %}
+
+## Gemini 2.5 Flash {% id=&quot;gemini-2.5-flash&quot; %}
+*[`gemini-2.5-flash`](/docs/models/gemini-2.5-flash)*
+{% hr /%}
+{% tabs %}
+  {% tab title=&quot;Standard&quot; %}
+  {% table %}
+  * Feature
+  * Free Tier
+  * Paid Tier
+  ---
+  * Input price (text, image, video)
+  * Free of charge
+  * $0.30
+  {% /table %}
+  {% /tab %}
+{% /tabs %}
+"""
+
+
 class GeminiWeb:
     """Gemini 모델 목록에 답하는 가짜 웹. 받은 요청을 모은다.
 
@@ -49,6 +86,8 @@ class GeminiWeb:
 
     def __call__(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
+        if request.url.host == "ai.google.dev":
+            return httpx2.Response(200, text=PRICING)
         if request.url.host != "generativelanguage.googleapis.com":
             return httpx2.Response(404)
         if self.status != 200:
@@ -112,7 +151,7 @@ def test_register_encrypts_key_and_never_returns_it(tmp_path: Path) -> None:
         "registered": True, "hint": "1234", "usable": True, "master_key": True, "model": "gemini-2.5-flash",
     }
     assert API_KEY not in response.text
-    request = web.requests[-1]
+    request = next(r for r in web.requests if r.url.host == "generativelanguage.googleapis.com")
     assert request.headers["x-goog-api-key"] == API_KEY
     assert API_KEY not in str(request.url)
     rows = _rows(tmp_path, client)
@@ -141,16 +180,18 @@ def test_change_delete_and_model(tmp_path: Path) -> None:
     """
     client, _ = _client(tmp_path, GeminiWeb())
     client.put("/api/ai/key", json={"api_key": API_KEY})
-    models = client.get("/api/ai/models").json()
-    assert [model["name"] for model in models] == ["gemini-2.5-pro", "gemini-2.5-flash"]
-    assert client.put("/api/ai/model", json={"model": "gemini-2.5-pro"}).json()["model"] == "gemini-2.5-pro"
-    assert client.put("/api/ai/model", json={"model": "text-embedding-004"}).status_code == 422
+    listed = client.get("/api/ai/models").json()
+    # 키로 쓸 수 있는 모델 가운데 가격표에서 무료 등급인 것만 나온다.
+    assert [model["name"] for model in listed["models"]] == ["gemini-2.5-flash"]
+    assert listed["stale"] is False
+    assert client.put("/api/ai/model", json={"model": "gemini-2.5-pro"}).status_code == 422
+    assert client.put("/api/ai/model", json={"model": "gemini-2.5-flash"}).json()["model"] == "gemini-2.5-flash"
     changed = client.put("/api/ai/key", json={"api_key": "AIzaOTHER-9876"}).json()
     assert changed["hint"] == "9876"
-    assert changed["model"] == "gemini-2.5-pro"
+    assert changed["model"] == "gemini-2.5-flash"
     deleted = client.delete("/api/ai/key").json()
     assert deleted["registered"] is False
-    assert deleted["model"] == "gemini-2.5-pro"
+    assert deleted["model"] == "gemini-2.5-flash"
     assert client.get("/api/ai/models").status_code == 409
 
 

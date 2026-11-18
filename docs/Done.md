@@ -2,6 +2,40 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md), [M3 인용 기반 연결·추천](Done-M3.md), [M6 리더 인용 미리보기](Done-M6.md), [M7 태그](Done-M7.md), [M8 AI 대화](Done-M8.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## I34 Gemini 모델 목록을 오늘 무료 등급인 모델로만 거르고 매일 자정(한국 시각)에 갱신
+
+- 시작일: 2026-11-19
+- 완료일: 2026-11-19
+- 근거 문서: [AI 대화 설계](design/AiChat.md#4-gemini-호출)
+- 참고 자료: [Google AI plans](https://aistudio.google.com/docs/google-ai-plans), [Gemini API 가격표](https://ai.google.dev/gemini-api/docs/pricing)
+
+### 계획
+- 프로필의 Gemini 모델 목록을 무료 한도가 있는 모델로만 거르고, 그 목록을 매일 자정에 갱신한다.
+
+### 진행 기록
+- 2026-11-19: 사용자가 모델 목록을 매일 자정에 구글에서 Pro 구독 사용자에게 무료 한도를 주는 모델로만 가져와 갱신하라고 요청했다. 병합되지 않은 가장 최근 브랜치 `m8-t3-reader-ai-chat`에서 작업 브랜치를 만들었다.
+- 2026-11-19: 구글 문서를 확인하니 Pro 구독 혜택은 AI Studio 웹 화면 안에서만 쓰이고, API 키 사용은 따로 셈한다. 무료 등급 목록을 주는 API는 없어, 가격표 페이지를 받아 모양을 살폈다. 모델 절마다 모델 ID와 표준 탭의 입력 가격 무료 등급 칸이 있어 읽을 수 있었다. 받은 페이지에서 24개 무료 모델 ID를 읽었고, 구글 문서를 요약해 본 목록과 같았다.
+- 2026-11-19: 무료 목록 모듈(`ai_models`)과 자정 갱신 스레드를 만들고, 모델 API가 무료 모델만 보이고 고르게 했다. 프로필 창에 무료 등급 안내, 마지막 확인 시각, 지난 목록·무료 목록 밖 모델 경고를 더했다.
+
+### 결정 사항
+- Pro 구독은 API 키에 무료 한도를 주지 않으므로, API 키로 무료로 쓸 수 있는 Gemini API 무료 등급(가격표의 표준 요금 입력 가격이 "Free of charge")으로 거른다.
+- 자정은 한국 시각이다. 서버가 자정에 잠들어 있었을 수 있어, 목록을 쓸 때 오늘 것이 아니면 다시 읽는다.
+- 가격표를 못 읽으면 지난 목록을 쓰고 화면에 알린다. 고른 모델이 무료 목록에서 빠져도 바꾸지 않고 알리기만 한다. 사용자의 선택을 몰래 바꾸지 않기 위해서다.
+
+### 변경 파일
+- `src/jjabtero/ai_models.py`, `src/jjabtero/ai.py`, `src/jjabtero/app.py`, `src/jjabtero/cli.py`, `tests/test_ai_models.py`, `tests/test_ai.py`
+- `frontend/src/api.ts`, `frontend/src/profileState.ts`, `frontend/src/profileState.test.ts`, `frontend/src/ProfileDialog.vue`
+- `docs/design/AiChat.md`, `docs/Issue.md`, `docs/Done.md`
+
+### 결과
+- 프로필의 모델 목록에는 그 키로 쓸 수 있고 오늘 무료 등급인 Gemini 모델만 나오며, 목록은 매일 한국 자정에 갱신된다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+- `npx vue-tsc --noEmit -p tsconfig.app.json`, `npm run build`: 통과.
+- 앱과 같은 HTTP 설정으로 실제 가격표를 받아 무료 모델 24개를 읽었다(대화에 쓸 만한 것: gemini-3.8-flash, gemini-3.6-flash, gemini-3.5-flash-lite, gemini-4-hydrogen, gemini-2.5-pro, gemini-2.5-flash 등).
+- 로컬 서재 사본(포트 8010)에서 키 상태와 모델 목록을 브라우저에서 가짜로 주어, 프로필 창의 무료 등급 안내·마지막 확인 시각·무료 목록 밖 모델 경고를 확인했다. 콘솔 오류는 없었다.
+
 ## M5-T1 통계·시각화 항목 결정과 태스크 계획
 
 - 시작일: 2026-11-18
