@@ -65,6 +65,9 @@ export interface Paper extends PaperInput {
   note: string | null
   created_at: string
   updated_at: string
+  // 리더에서 마지막으로 열었거나 읽은 시각. 연 적이 없으면 담은 시각이다
+  // @doc: docs/design/Reader.md#5-api
+  last_read_at: string
 }
 
 // @doc: docs/design/PaperSearch.md#4-화면

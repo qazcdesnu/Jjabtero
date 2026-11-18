@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { PaperNotFoundError, type Paper } from './api'
-import { createLibraryState } from './libraryState'
+import { SORT_BY_ADDED, SORT_BY_READ, createLibraryState } from './libraryState'
 
 function paper(id: number): Paper {
   return {
@@ -21,6 +21,7 @@ function paper(id: number): Paper {
     read_status: 'to-read',
     note: null,
     created_at: '2026-11-01T00:00:00',
+    last_read_at: '2026-11-01T00:00:00',
     updated_at: '2026-11-01T00:00:00',
   }
 }
@@ -40,6 +41,17 @@ function setup(overrides: Partial<Parameters<typeof createLibraryState>[0]> = {}
 }
 
 describe('createLibraryState', () => {
+  it('시각 열은 시각 순서로 정렬하고, 다시 불러와도 고른 정렬을 지킨다', async () => {
+    const read = { ...paper(1), created_at: '2026-11-17T19:48:12.5', last_read_at: '2026-11-18T01:58:17+00:00' }
+    expect(SORT_BY_ADDED(read)).toBe('2026-11-17T19:48:12.500Z')
+    expect(SORT_BY_READ(read)).toBe('2026-11-18T01:58:17.000Z')
+    const { library } = setup()
+    library.state.sortField = SORT_BY_READ
+    library.state.sortOrder = -1
+    await library.load()
+    expect([library.state.sortField, library.state.sortOrder]).toEqual([SORT_BY_READ, -1])
+  })
+
   it('목록을 불러온다', async () => {
     const { library } = setup()
     await library.load()

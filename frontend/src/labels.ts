@@ -38,6 +38,13 @@ export function formatDate(value: string): string {
 }
 
 // @doc: docs/design/LibraryView.md#2-화면-상태
+export function formatShortDate(value: string): string {
+  // 좁은 표 칸에 쓰는 두 자리 연도 날짜(`26-11-18`)
+  const date = formatDate(value)
+  return /^\d{4}-/.test(date) ? date.slice(2) : date
+}
+
+// @doc: docs/design/LibraryView.md#2-화면-상태
 export function formatDateTime(value: string): string {
   const time = new Date(serverTime(value))
   if (Number.isNaN(time.getTime())) return value

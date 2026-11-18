@@ -2,7 +2,7 @@
 // @doc: docs/design/ReadingStatus.md#4-테스트
 
 import { describe, expect, it, vi } from 'vitest'
-import { ITEM_TYPE_LABELS, READ_STATUSES, formatDate, formatDateTime, readStatusInfo, timeKey } from './labels'
+import { ITEM_TYPE_LABELS, READ_STATUSES, formatDate, formatDateTime, formatShortDate, readStatusInfo, timeKey } from './labels'
 
 describe('labels', () => {
   it('모든 항목 종류에 한국어 이름이 있다', () => {
@@ -29,6 +29,8 @@ describe('labels', () => {
       expect(timeKey('2026-11-17T20:48:12+01:00')).toBe('2026-11-17T19:48:12.000Z')
       expect(timeKey('2026-11-17T19:48:12') < timeKey('2026-11-17T19:48:13.5')).toBe(true)
       expect(formatDate('알 수 없음')).toBe('알 수 없음')
+      expect(formatShortDate('2026-11-17T19:48:12')).toBe('26-11-18')
+      expect(formatShortDate('알 수 없음')).toBe('알 수 없음')
     } finally {
       vi.unstubAllEnvs()
     }

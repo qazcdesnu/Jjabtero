@@ -17,9 +17,9 @@ import MultiSelect from 'primevue/multiselect'
 import Tag from 'primevue/tag'
 import { computed, ref } from 'vue'
 import type { Paper } from './api'
-import { ITEM_TYPE_LABELS, READ_STATUSES, formatDate, formatDateTime, readStatusInfo, timeKey } from './labels'
+import { ITEM_TYPE_LABELS, READ_STATUSES, formatDateTime, formatShortDate, readStatusInfo } from './labels'
 import { isFilterActive } from './libraryFilter'
-import { createLibraryState } from './libraryState'
+import { SORT_BY_ADDED, SORT_BY_READ, createLibraryState } from './libraryState'
 
 const props = defineProps<{ library: ReturnType<typeof createLibraryState> }>()
 const state = props.library.state
@@ -128,6 +128,8 @@ const selection = computed({
 
     <DataTable
       v-model:selection="selection"
+      v-model:sort-field="state.sortField"
+      v-model:sort-order="state.sortOrder"
       :value="library.visible.value"
       data-key="id"
       selection-mode="single"
@@ -168,33 +170,44 @@ const selection = computed({
           <span class="line-clamp-2 font-medium" :title="data.title">{{ data.title }}</span>
         </template>
       </Column>
-      <Column field="authors" header="저자" sortable header-style="width: 10rem">
+      <Column field="authors" header="저자" sortable header-style="width: 8.5rem">
         <template #body="{ data }">
           <span class="block truncate text-sm" :title="data.authors.join(', ')">
             {{ data.authors.slice(0, 3).join(', ') }}{{ data.authors.length > 3 ? ' 외' : '' }}
           </span>
         </template>
       </Column>
-      <Column field="year" header="연도" sortable header-style="width: 5.25rem" body-class="text-sm" />
-      <Column field="read_status" header="상태" sortable header-style="width: 6.5rem">
+      <Column field="year" header="연도" sortable header-style="width: 4.75rem" body-class="text-sm" />
+      <Column field="read_status" header="상태" sortable header-style="width: 6rem">
         <template #body="{ data }">
           <Tag :value="readStatusInfo(data.read_status).label" :severity="readStatusInfo(data.read_status).severity" />
         </template>
       </Column>
-      <Column field="item_type" header="종류" sortable header-style="width: 6.5rem">
+      <Column field="item_type" header="종류" sortable header-style="width: 6rem">
         <template #body="{ data }">
           <span class="text-sm">{{ ITEM_TYPE_LABELS[data.item_type] ?? data.item_type }}</span>
         </template>
       </Column>
       <Column
         field="created_at"
-        :sort-field="(paper: Paper) => timeKey(paper.created_at)"
+        :sort-field="SORT_BY_ADDED"
         header="담은 날"
         sortable
-        header-style="width: 7.5rem"
+        header-style="width: 6rem"
       >
         <template #body="{ data }">
-          <span class="text-sm tabular-nums" :title="formatDateTime(data.created_at)">{{ formatDate(data.created_at) }}</span>
+          <span class="text-sm tabular-nums" :title="formatDateTime(data.created_at)">{{ formatShortDate(data.created_at) }}</span>
+        </template>
+      </Column>
+      <Column
+        field="last_read_at"
+        :sort-field="SORT_BY_READ"
+        header="읽은 날"
+        sortable
+        header-style="width: 6rem"
+      >
+        <template #body="{ data }">
+          <span class="text-sm tabular-nums" :title="formatDateTime(data.last_read_at)">{{ formatShortDate(data.last_read_at) }}</span>
         </template>
       </Column>
 

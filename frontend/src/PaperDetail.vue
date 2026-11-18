@@ -160,6 +160,8 @@ function askRemove(event: Event) {
       </dd>
       <dt class="text-surface-500">추가일</dt>
       <dd class="tabular-nums">{{ formatDateTime(paper.created_at) }}</dd>
+      <dt class="text-surface-500">읽은 날</dt>
+      <dd class="tabular-nums">{{ formatDateTime(paper.last_read_at) }}</dd>
     </dl>
 
     <CiteDialog v-model:visible="citing" :work="paper" />

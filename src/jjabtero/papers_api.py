@@ -63,6 +63,7 @@ class PaperOut(BaseModel):
     pdf_source_url: str | None = None
     created_at: datetime
     updated_at: datetime
+    last_read_at: datetime
 
     @classmethod
     def from_paper(cls, paper: Paper) -> "PaperOut":
@@ -88,6 +89,7 @@ class PaperOut(BaseModel):
             pdf_source_url=paper.pdf.source_url if paper.pdf is not None else None,
             created_at=paper.created_at,
             updated_at=paper.updated_at,
+            last_read_at=paper.position.updated_at if paper.position is not None else paper.created_at,
         )
 
 

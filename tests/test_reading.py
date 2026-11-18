@@ -3,6 +3,7 @@
 @doc: docs/design/Reader.md#8-테스트
 """
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -40,6 +41,24 @@ def test_position_is_empty_then_saved_and_replaced(client: tuple[TestClient, lis
     body = test_client.get(f"/api/papers/{paper_id}/position").json()
     assert (body["page"], body["offset"], body["zoom"]) == (7, 0.5, 1)
     assert pushes == ["push", "push"]
+
+
+def test_paper_last_read_at_follows_position(client: tuple[TestClient, list[str]]) -> None:
+    """논문 응답의 마지막으로 읽은 시각은 연 적이 없으면 담은 시각이고, 위치를 저장할 때마다 그 시각으로 바뀐다.
+
+    @doc: docs/design/Reader.md#8-테스트
+    """
+    test_client, _ = client
+    paper_id = test_client.post("/api/papers", json={"title": "T"}).json()["id"]
+    added = test_client.get("/api/papers").json()[0]
+    assert added["last_read_at"] == added["created_at"]
+    first = test_client.put(f"/api/papers/{paper_id}/position", json={"page": 1, "offset": 0, "zoom": 1}).json()
+    listed = test_client.get("/api/papers").json()[0]["last_read_at"]
+    assert datetime.fromisoformat(listed).replace(tzinfo=UTC) == datetime.fromisoformat(first["updated_at"])
+    second = test_client.put(f"/api/papers/{paper_id}/position", json={"page": 1, "offset": 0, "zoom": 1}).json()
+    assert second["updated_at"] > first["updated_at"]
+    listed = test_client.get("/api/papers").json()[0]["last_read_at"]
+    assert datetime.fromisoformat(listed).replace(tzinfo=UTC) == datetime.fromisoformat(second["updated_at"])
 
 
 @pytest.mark.parametrize(
