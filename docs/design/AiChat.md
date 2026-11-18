@@ -39,9 +39,16 @@
 
 - 주소는 Gemini API([GEMINI_URL](../../src/jjabtero/ai.py#GEMINI_URL))다. 키는 주소에 넣지 않고 `x-goog-api-key` 머리글로 보낸다. 오류 메시지나 기록에 주소가 남아도 키가 드러나지 않게 하기 위해서다.
 - 모델 목록은 [gemini_models](../../src/jjabtero/ai.py#gemini_models)가 `GET /models`로 받아 [ModelOut](../../src/jjabtero/ai.py#ModelOut)으로 돌려주고, `generateContent`를 지원하는 `gemini` 모델만 보인다.
+- 고를 수 있는 모델은 그 키로 쓸 수 있는 모델 가운데 오늘 무료 등급인 것만이다. 사용자가 무료 한도가 있는 모델만 매일 자정에 갱신해 보이라고 요청했다([이슈 I34](../Issue.md)).
+  - 사용자는 Google AI Pro 구독의 무료 한도를 뜻했으나, 구글 문서에 따르면 Pro 구독 혜택은 AI Studio 웹 화면 안에서만 쓰이고 API 키 사용은 따로 셈한다([Google AI plans](https://aistudio.google.com/docs/google-ai-plans)). API 키로 무료로 쓸 수 있는 것은 Gemini API 무료 등급이므로 그것으로 거른다.
+  - 무료 등급 모델은 구글 가격표([PRICING_URL](../../src/jjabtero/ai_models.py#PRICING_URL))를 읽어 정한다. 무료 등급 목록을 주는 API가 없기 때문이다. [parse_free_models](../../src/jjabtero/ai_models.py#parse_free_models)가 모델 절(`## `)마다 모델 ID와, 표준(Standard) 요금 탭의 입력 가격 행의 무료 등급 칸이 "Free of charge"인지 본다.
+  - [FreeModelCatalog](../../src/jjabtero/ai_models.py#FreeModelCatalog)가 목록([FreeModels](../../src/jjabtero/ai_models.py#FreeModels): 모델 ID, 읽은 시각, 지난 목록인지)을 가진다. 스레드가 매일 한국 자정([SEOUL](../../src/jjabtero/ai_models.py#SEOUL), 남은 시간은 [seconds_until_midnight](../../src/jjabtero/ai_models.py#FreeModelCatalog.seconds_until_midnight))에 [refresh](../../src/jjabtero/ai_models.py#FreeModelCatalog.refresh)로 다시 읽는다. 앱([create_app](../../src/jjabtero/app.py#create_app))을 실행 명령으로 띄울 때만(`run_model_refresh`) 스레드를 띄운다([start](../../src/jjabtero/ai_models.py#FreeModelCatalog.start), [stop](../../src/jjabtero/ai_models.py#FreeModelCatalog.stop)).
+  - 서버가 자정에 잠들어 있었을 수 있으므로(Render 무료 플랜의 유휴 정지), 목록을 쓸 때([current](../../src/jjabtero/ai_models.py#FreeModelCatalog.current)) 오늘 읽은 것이 아니면 먼저 다시 읽는다.
+  - 읽은 목록은 서재 폴더의 [FREE_MODELS_FILE](../../src/jjabtero/ai_models.py#FREE_MODELS_FILE)에 둬, 다시 띄워도 같은 날에는 다시 읽지 않는다.
+  - 가격표를 읽지 못하거나 무료 모델을 하나도 찾지 못하면(페이지 모양이 바뀜) 지난 목록을 "지난 목록"으로 쓴다. 지난 목록도 없으면 [FreeModelsError](../../src/jjabtero/ai_models.py#FreeModelsError)로 502다.
 - 대화는 [gemini_chat](../../src/jjabtero/ai.py#gemini_chat)이 `POST /models/<모델>:generateContent`로 보낸다. 답의 글 조각을 이어 붙이되, 생각 과정(`thought`) 조각은 뺀다. 답이 비면(막힘 등) 이유를 담아 실패로 본다. 시스템 지시에 논문 제목, 고른 글, 그 글이 있는 쪽을 넣고, 지금까지 주고받은 말을 차례로 넣는다. 시스템 지시([SYSTEM_PROMPT](../../src/jjabtero/ai.py#SYSTEM_PROMPT))는 "고른 글을 바탕으로 답하고, 따로 말하지 않으면 한국어로 답한다"이다.
 - 키를 등록할 때 모델 목록을 한 번 받아 키가 맞는지 확인한다. 구글이 거절하면(400, 401, 403, [GeminiError](../../src/jjabtero/ai.py#GeminiError)의 `rejected`) 저장하지 않고 "구글이 이 키를 받아들이지 않았습니다"를 보인다.
-- 모델을 고른 적이 없으면 등록할 때 목록에서 기본 모델을 고른다. [default_model](../../src/jjabtero/ai.py#default_model)이 고른다. [DEFAULT_MODEL](../../src/jjabtero/ai.py#DEFAULT_MODEL)(`gemini-2.5-flash`)이 있으면 그것을, 없으면 목록의 첫 모델이다.
+- 모델을 고른 적이 없으면 등록할 때 고를 수 있는 목록(오늘 무료 등급)에서 기본 모델을 고른다. 무료 목록을 읽지 못하면 키만 저장하고 모델은 나중에 고른다. [default_model](../../src/jjabtero/ai.py#default_model)이 고른다. [DEFAULT_MODEL](../../src/jjabtero/ai.py#DEFAULT_MODEL)(`gemini-2.5-flash`)이 있으면 그것을, 없으면 목록의 첫 모델이다.
 
 ## 5. API
 
@@ -52,8 +59,8 @@
 | `GET /api/ai/key` | [read_key_status](../../src/jjabtero/ai.py#read_key_status)가 [key_status](../../src/jjabtero/ai.py#key_status)로 만든 [KeyStatusOut](../../src/jjabtero/ai.py#KeyStatusOut). 키 상태: 등록 여부, 끝 네 글자, 이곳에서 풀 수 있는지, 마스터 키가 있는지, 고른 모델 |
 | `PUT /api/ai/key` | [save_key](../../src/jjabtero/ai.py#save_key). 본문 [KeyIn](../../src/jjabtero/ai.py#KeyIn) `{"api_key": "..."}`. 확인한 뒤 암호화해 저장한다. 등록과 변경이 같다. |
 | `DELETE /api/ai/key` | [delete_key](../../src/jjabtero/ai.py#delete_key). 키를 지운다. |
-| `GET /api/ai/models` | [list_models](../../src/jjabtero/ai.py#list_models). 등록한 키로 쓸 수 있는 Gemini 모델 목록(이름, 표시 이름, 설명) |
-| `PUT /api/ai/model` | [choose_model](../../src/jjabtero/ai.py#choose_model). 본문 [ModelIn](../../src/jjabtero/ai.py#ModelIn) `{"model": "..."}`. 목록에 있는 모델만 받는다. |
+| `GET /api/ai/models` | [list_models](../../src/jjabtero/ai.py#list_models). [ModelsOut](../../src/jjabtero/ai.py#ModelsOut): 등록한 키로 쓸 수 있고 오늘 무료 등급인 Gemini 모델 목록(이름, 표시 이름, 설명), 무료 목록을 읽은 시각, 지난 목록인지 |
+| `PUT /api/ai/model` | [choose_model](../../src/jjabtero/ai.py#choose_model). 본문 [ModelIn](../../src/jjabtero/ai.py#ModelIn) `{"model": "..."}`. 고를 수 있는 목록(오늘 무료 등급)에 있는 모델만 받는다. |
 | `POST /api/ai/chat` | [chat](../../src/jjabtero/ai.py#chat). 본문 [ChatIn](../../src/jjabtero/ai.py#ChatIn) `{"paper_id", "page", "context", "messages": [{"role": "user"\|"model", "text"}]}`([ChatMessage](../../src/jjabtero/ai.py#ChatMessage)). 마지막 말은 사용자의 것이어야 한다. Gemini의 답과 쓴 모델 [ChatOut](../../src/jjabtero/ai.py#ChatOut) `{"text", "model"}`을 돌려준다. 모델을 고르지 않았으면 409다. |
 
 - 키가 없거나 풀 수 없으면 409, 마스터 키가 없으면 503, Gemini가 실패하면 502와 이유를 돌려준다.
@@ -64,7 +71,7 @@
 - **프로필 창:** [ProfileDialog](../../frontend/src/ProfileDialog.vue)이고, 상태는 [createProfileState](../../frontend/src/profileState.ts#createProfileState)가 가진다. API 호출은 [fetchAiKey](../../frontend/src/api.ts#fetchAiKey), [saveAiKey](../../frontend/src/api.ts#saveAiKey), [deleteAiKey](../../frontend/src/api.ts#deleteAiKey), [fetchAiModels](../../frontend/src/api.ts#fetchAiModels), [chooseAiModel](../../frontend/src/api.ts#chooseAiModel)이고 응답 모양은 [AiKeyStatus](../../frontend/src/api.ts#AiKeyStatus), [AiModel](../../frontend/src/api.ts#AiModel)이다. 실패하면 [aiRequest](../../frontend/src/api.ts#aiRequest)가 서버가 준 이유를 오류로 던진다. 계정(이메일 또는 "내 컴퓨터, 로그인 꺼짐")과 "Google AI API 키" 칸이 있다.
   - 키가 없으면 비밀번호 입력 칸과 "등록" 버튼, Google AI Studio에서 키를 만드는 링크를 보인다.
   - 키가 있으면 "등록됨 (…끝 네 글자)"와 "변경", "삭제" 버튼을 보인다. "변경"은 입력 칸을 다시 열고, "삭제"는 한 번 묻고 지운다.
-  - 키가 있으면 "모델" 드롭다운에서 Gemini 모델을 고른다. 고르면 바로 저장한다. 모델 목록을 받지 못해도 고른 모델 이름은 보인다.
+  - 키가 있으면 "모델" 드롭다운에서 Gemini 모델을 고른다. 고르면 바로 저장한다. 모델 목록을 받지 못해도 고른 모델 이름은 보인다. 드롭다운 아래에 "오늘 무료 등급인 모델만 보이고 매일 자정에 다시 확인한다"와 마지막 확인 시각을 보인다. 지난 목록이면 그렇다고 알리고, 고른 모델이 오늘 무료 목록에 없으면 다른 모델을 고르라고 알린다. 응답 모양은 [AiModelList](../../frontend/src/api.ts#AiModelList)다.
 - **리더의 AI 대화:** [리더](../../frontend/src/ReaderView.vue)에서 글을 고르면 뜨는 하이라이트 색 옆에 "AI 대화" 버튼을 둔다. 이미 있는 하이라이트를 눌렀을 때 뜨는 상자에도 같은 버튼을 둔다. 누르면 리더 오른쪽에 대화 칸([AiChatPanel](../../frontend/src/AiChatPanel.vue))이 열린다. 상태는 [createAiChatState](../../frontend/src/aiChatState.ts#createAiChatState)가 고른 글([ChatContext](../../frontend/src/aiChatState.ts#ChatContext))과 주고받은 말을 가지고, [chatAi](../../frontend/src/api.ts#chatAi)로 보낸다([AiChatMessage](../../frontend/src/api.ts#AiChatMessage)).
   - 대화 칸 위에는 고른 글(몇 줄까지)과 쪽, 쓰는 모델이 보인다. "번역", "요약", "쉽게 설명" 버튼([QUICK_PROMPTS](../../frontend/src/aiChatState.ts#QUICK_PROMPTS))은 그 말을 바로 보낸다. 아래 입력 칸에는 직접 질문을 적고 Enter로 보낸다(Shift+Enter는 줄바꿈, 한글 조합 중의 Enter는 보내지 않음). 답은 받은 글 그대로(줄바꿈 유지) 보인다.
   - 보내기에 실패하면 그 질문을 입력 칸에 돌려놓고 이유를 보인다. 새 글로 대화를 시작한 뒤 늦게 온 지난 답은 버린다.
@@ -73,7 +80,8 @@
 
 ## 7. 테스트
 
-- 백엔드 [test_ai](../../tests/test_ai.py)([GeminiWeb](../../tests/test_ai.py#GeminiWeb), [ChatWeb](../../tests/test_ai.py#ChatWeb)): 마스터 키 고르기(환경 변수, 파일, 만들기, 서버에서는 만들지 않음), 암호화한 값만 저장되는지, 등록·변경·삭제·모델 고르기 API, 가짜 Gemini 응답으로 키 확인 실패와 대화 요청 모양, 키가 응답에 나가지 않는지.
+- 백엔드 [test_ai](../../tests/test_ai.py)([GeminiWeb](../../tests/test_ai.py#GeminiWeb), [ChatWeb](../../tests/test_ai.py#ChatWeb)): 오늘 무료 등급 모델만 보이고 고를 수 있는지, 마스터 키 고르기(환경 변수, 파일, 만들기, 서버에서는 만들지 않음), 암호화한 값만 저장되는지, 등록·변경·삭제·모델 고르기 API, 가짜 Gemini 응답으로 키 확인 실패와 대화 요청 모양, 키가 응답에 나가지 않는지.
+- 백엔드 [test_ai_models](../../tests/test_ai_models.py)([Pages](../../tests/test_ai_models.py#Pages), [Clock](../../tests/test_ai_models.py#Clock)): 가격표에서 표준 탭의 입력 가격 무료 등급 읽기, 하루에 한 번 읽기와 파일 캐시, 실패하면 지난 목록, 한국 자정까지 남은 시간.
 - 프론트엔드 [profileState.test](../../frontend/src/profileState.test.ts), [aiChatState.test](../../frontend/src/aiChatState.test.ts): 프로필 상태(등록, 변경, 삭제, 모델 고르기), 대화 상태(빠른 버튼, 주고받기, 실패, 새 대화).
 
 ## 8. 미결정 사항

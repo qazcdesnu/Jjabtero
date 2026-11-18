@@ -5,6 +5,7 @@
 
 import os
 from collections.abc import Iterator
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -14,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from jjabtero.ai_models import FreeModelsError
 from jjabtero.models import Paper, Setting
 
 # @doc: docs/design/AiChat.md#2-키-암호화
@@ -290,7 +292,11 @@ def save_key(data: KeyIn, request: Request, session: Annotated[Session, Depends(
     session.merge(Setting(key=KEY_SETTING, value=cipher.encrypt(api_key.encode()).decode()))
     session.merge(Setting(key=HINT_SETTING, value=api_key[-4:]))
     if _setting(session, MODEL_SETTING) is None:
-        chosen = default_model(models)
+        try:
+            chosen = default_model(_only_free(request, models).models)
+        except HTTPException:
+            # 무료 목록을 못 읽어도 키는 저장한다. 모델은 프로필에서 나중에 고른다.
+            chosen = None
         if chosen:
             session.merge(Setting(key=MODEL_SETTING, value=chosen))
     session.commit()
@@ -313,16 +319,42 @@ def delete_key(request: Request, session: Annotated[Session, Depends(_session)])
     return key_status(session, _data_dir(request))
 
 
-def _models(request: Request, session: Session) -> list[ModelOut]:
+class ModelsOut(BaseModel):
+    """고를 수 있는 모델(그 키로 쓸 수 있고 오늘 무료 등급인 것)과 무료 목록을 읽은 시각.
+
+    `stale`이면 오늘 가격표를 읽지 못해 지난 목록을 쓰는 중이다.
+
+    @doc: docs/design/AiChat.md#5-api
+    """
+
+    models: list[ModelOut]
+    checked_at: datetime
+    stale: bool
+
+
+def _only_free(request: Request, models: list[ModelOut]) -> ModelsOut:
+    try:
+        free = request.app.state.free_models.current()
+    except FreeModelsError as error:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(error)) from error
+    return ModelsOut(
+        models=[model for model in models if model.name in free.names],
+        checked_at=free.checked_at,
+        stale=free.stale,
+    )
+
+
+def _models(request: Request, session: Session) -> ModelsOut:
     api_key = stored_api_key(session, master_cipher(_data_dir(request)))
     try:
-        return gemini_models(request.app.state.http_client, api_key)
+        models = gemini_models(request.app.state.http_client, api_key)
     except GeminiError as error:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(error)) from error
+    return _only_free(request, models)
 
 
 @router.get("/models")
-def list_models(request: Request, session: Annotated[Session, Depends(_session)]) -> list[ModelOut]:
+def list_models(request: Request, session: Annotated[Session, Depends(_session)]) -> ModelsOut:
     """`GET /api/ai/models`를 처리한다.
 
     @doc: docs/design/AiChat.md#5-api
@@ -332,12 +364,12 @@ def list_models(request: Request, session: Annotated[Session, Depends(_session)]
 
 @router.put("/model")
 def choose_model(data: ModelIn, request: Request, session: Annotated[Session, Depends(_session)]) -> KeyStatusOut:
-    """`PUT /api/ai/model`을 처리한다. 목록에 있는 모델만 받는다.
+    """`PUT /api/ai/model`을 처리한다. 고를 수 있는 목록(오늘 무료 등급)에 있는 모델만 받는다.
 
     @doc: docs/design/AiChat.md#5-api
     """
-    if data.model not in {model.name for model in _models(request, session)}:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "고를 수 없는 모델입니다.")
+    if data.model not in {model.name for model in _models(request, session).models}:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "고를 수 없는 모델입니다. 오늘 무료 등급인 모델만 고를 수 있습니다.")
     session.merge(Setting(key=MODEL_SETTING, value=data.model))
     session.commit()
     request.app.state.drive.schedule_push()

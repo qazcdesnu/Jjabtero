@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from jjabtero import __version__
 from jjabtero.ai import router as ai_router
+from jjabtero.ai_models import FREE_MODELS_FILE, FreeModelCatalog
 from jjabtero.auth import (
     SESSION_COOKIE,
     SESSION_MAX_AGE,
@@ -130,6 +131,7 @@ def create_app(
     auth: AuthSettings | None = None,
     wait_initial_sync: bool | None = None,
     run_citations: bool = False,
+    run_model_refresh: bool = False,
 ) -> FastAPI:
     """FastAPI 앱을 만든다.
 
@@ -141,6 +143,7 @@ def create_app(
     @doc: docs/design/PublicPages.md#1-제공-방식
     @doc: docs/design/Citations.md#5-갱신
     @doc: docs/design/Reader.md#3-보관
+    @doc: docs/design/AiChat.md#4-gemini-호출
     """
     settings = auth or auth_settings_from_env()
     settings.validate()
@@ -149,6 +152,7 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
         app.state.citations.stop()
+        app.state.free_models.stop()
         app.state.drive.stop()
         app.state.drive.flush()
 
@@ -188,6 +192,9 @@ def create_app(
     )
     if run_citations:
         app.state.citations.start()
+    app.state.free_models = FreeModelCatalog(app.state.http_client, path.parent / FREE_MODELS_FILE)
+    if run_model_refresh:
+        app.state.free_models.start()
     app.state.pdfs = PdfStore(path.parent / "pdfs", app.state.drive)
     app.include_router(_api)
     app.include_router(ai_router)
