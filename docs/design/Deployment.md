@@ -18,7 +18,7 @@
 ## 3. 데이터와 비밀 값
 
 - Render 무료 플랜은 재시작·재배포·유휴 정지 때 파일 시스템이 지워진다. 서버에서는 구글 드라이브 사본을 서재의 원본으로 삼고, 서버의 SQLite 파일은 그때그때의 작업 사본이다. 서버는 시작할 때 드라이브에서 받기를 끝낸 뒤 요청을 받고, 끝날 때 대기 중인 변경을 올린다([구글 드라이브 동기화 설계의 서버 환경](DriveSync.md#8-서버-환경)).
-- 비밀 값은 저장소에 두지 않는다. OAuth 클라이언트 JSON은 Render 비밀 파일로, 드라이브 갱신 토큰(`JJABTERO_GOOGLE_REFRESH_TOKEN`)과 로그인 값(`JJABTERO_ALLOWED_EMAIL`, `JJABTERO_SESSION_SECRET`)은 환경 변수로 넣는다. 갱신 토큰은 로컬에서 드라이브를 연결한 뒤 `jjabtero --print-drive-token`으로 꺼낸다. 동의 화면은 프로덕션으로 게시되어 있으므로 갱신 토큰이 7일 만에 만료되지 않는다. 다만 6개월 동안 쓰지 않거나, 구글 계정에서 접근 권한을 취소하거나, 같은 클라이언트로 받은 갱신 토큰이 100개를 넘어 오래된 것이 무효가 되면 다시 연결해 새 값을 넣는다(4절).
+- 비밀 값은 저장소에 두지 않는다. OAuth 클라이언트 JSON은 Render 비밀 파일로, 드라이브 갱신 토큰(`JJABTERO_GOOGLE_REFRESH_TOKEN`), API 키 암호화에 쓰는 마스터 키(`JJABTERO_SECRET_KEY`, [AI 대화 설계](AiChat.md#2-키-암호화))와 로그인 값(`JJABTERO_ALLOWED_EMAIL`, `JJABTERO_SESSION_SECRET`)은 환경 변수로 넣는다. 갱신 토큰은 로컬에서 드라이브를 연결한 뒤 `jjabtero --print-drive-token`으로 꺼낸다. 동의 화면은 프로덕션으로 게시되어 있으므로 갱신 토큰이 7일 만에 만료되지 않는다. 다만 6개월 동안 쓰지 않거나, 구글 계정에서 접근 권한을 취소하거나, 같은 클라이언트로 받은 갱신 토큰이 100개를 넘어 오래된 것이 무효가 되면 다시 연결해 새 값을 넣는다(4절).
 - OAuth 클라이언트에는 리디렉션 URI `https://jjabtero.qazcde.kr/api/drive/callback`과 `https://jjabtero.qazcde.kr/api/auth/callback`을 더한다. 로컬용 URI는 그대로 둔다.
 
 ## 4. OAuth 동의 화면 게시
