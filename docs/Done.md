@@ -2,6 +2,39 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md), [M3 인용 기반 연결·추천](Done-M3.md), [M6 리더 인용 미리보기](Done-M6.md), [M7 태그](Done-M7.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## M8-T2 프로필 창과 Google AI API 키 등록·변경·삭제(암호화 저장), Gemini 모델 고르기
+
+- 시작일: 2026-11-19
+- 완료일: 2026-11-19
+- 근거 문서: [AI 대화 설계](design/AiChat.md)
+- 참고 자료: 없음
+
+### 계획
+- 마스터 키와 API 키 암호화 저장, 키·모델 API, `--print-secret-key`를 만든다.
+- 머리줄 계정 표시를 프로필 버튼으로 바꾸고, 프로필 창에서 키를 등록·변경·삭제하고 모델을 고른다.
+
+### 진행 기록
+- 2026-11-19: 병합되지 않은 가장 최근 브랜치 `m8-t1-ai-chat-design`에서 작업 브랜치를 만들었다. `cryptography`를 의존성으로 더하고 `ai` 모듈(마스터 키, 키 상태, 등록·변경·삭제, 모델 목록·고르기)과 실행 명령의 `--print-secret-key`를 만들었다.
+- 2026-11-19: 프론트엔드에 AI API 함수, 프로필 상태, 프로필 창을 만들고 머리줄 계정 표시를 프로필 버튼으로 바꿨다.
+- 2026-11-19: 로컬 서재 사본(포트 8010)에서 프로필 창을 열어, 일부러 틀린 키를 넣으면 구글이 거절해 "구글이 이 키를 받아들이지 않았습니다"가 보이고 저장되지 않음을 확인했다. 마스터 키 파일은 권한 600으로 생겼다. 등록된 상태는 사본 DB에 암호화한 가짜 키를 넣어 "등록됨 (…5678)", 변경, 삭제(한 번 묻기)가 보이고 지우면 입력 칸으로 돌아가는 것을 확인했다. 모델 목록을 못 받을 때 고른 모델 이름이 비어 보여, 고른 모델은 늘 보이게 고쳤다. 실제 키로 등록하고 모델을 고르는 것은 사용자의 키가 있어야 해 테스트의 가짜 Gemini로 확인했다.
+
+### 결정 사항
+- 마스터 키 파일은 키를 처음 등록할 때 만든다. 키를 쓰지 않으면 파일도 생기지 않게 하기 위해서다.
+- 삭제는 확인 창 대신 같은 줄에서 "키를 지울까요?"로 한 번 묻는다.
+
+### 변경 파일
+- `pyproject.toml`, `uv.lock`, `src/jjabtero/ai.py`, `src/jjabtero/app.py`, `src/jjabtero/cli.py`, `tests/test_ai.py`, `tests/conftest.py`
+- `frontend/src/api.ts`, `frontend/src/profileState.ts`, `frontend/src/profileState.test.ts`, `frontend/src/ProfileDialog.vue`, `frontend/src/App.vue`
+- `docs/design/AiChat.md`, `docs/design/Settings.md`, `docs/design/Auth.md`, `docs/Roadmap.md`, `docs/Done.md`
+
+### 결과
+- 머리줄 계정(또는 "프로필")을 누르면 프로필 창이 열리고, Google AI API 키를 암호화해 등록·변경·삭제하며 Gemini 모델을 고른다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+- `npx vue-tsc --noEmit -p tsconfig.app.json`, `npm run build`: 통과.
+- 로컬 서재 사본으로 브라우저에서 확인했다.
+
 ## M8-T1 AI 대화 설계(키 암호화와 마스터 키, 저장, Gemini 호출, API, 프로필 창과 리더 대화 칸)
 
 - 시작일: 2026-11-19

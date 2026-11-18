@@ -3,6 +3,7 @@
 @doc: docs/design/AppSkeleton.md#2-실행-명령
 @doc: docs/design/Auth.md#2-켜고-끄기
 @doc: docs/design/DriveSync.md#8-서버-환경
+@doc: docs/design/AiChat.md#2-키-암호화
 """
 
 import argparse
@@ -13,6 +14,7 @@ from pathlib import Path
 import uvicorn
 from dotenv import load_dotenv
 
+from jjabtero.ai import master_key_text
 from jjabtero.app import create_app
 from jjabtero.auth import AuthConfigError, auth_settings_from_env
 from jjabtero.db import default_db_path
@@ -37,6 +39,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     @doc: docs/design/AppSkeleton.md#2-실행-명령
     @doc: docs/design/Auth.md#2-켜고-끄기
     @doc: docs/design/DriveSync.md#8-서버-환경
+    @doc: docs/design/AiChat.md#2-키-암호화
     """
     load_env_file()
     parser = argparse.ArgumentParser(prog="jjabtero", description="Jjabtero 서버를 띄운다.")
@@ -47,7 +50,18 @@ def main(argv: Sequence[str] | None = None) -> None:
         action="store_true",
         help="로컬 드라이브 연결의 갱신 토큰을 출력하고 끝낸다(서버 환경 변수에 넣을 값).",
     )
+    parser.add_argument(
+        "--print-secret-key",
+        action="store_true",
+        help="API 키 암호화에 쓰는 마스터 키를 출력하고 끝낸다(서버 환경 변수 JJABTERO_SECRET_KEY에 넣을 값).",
+    )
     args = parser.parse_args(argv)
+    if args.print_secret_key:
+        secret = master_key_text(default_db_path().parent)
+        if secret is None:
+            parser.error("마스터 키가 없습니다. 앱의 프로필에서 Google AI API 키를 먼저 등록하세요.")
+        print(secret)
+        return
     if args.print_drive_token:
         token = TokenStore(default_drive_paths(default_db_path()).token).load()
         if token is None:

@@ -744,3 +744,60 @@ export async function renameTag(name: string, newName: string): Promise<number> 
 export async function deleteTag(name: string): Promise<number> {
   return (await tagRequest<{ changed: number }>(`/api/tags/${encodeURIComponent(name)}`, { method: 'DELETE' })).changed
 }
+
+// @doc: docs/design/AiChat.md#5-api
+export interface AiKeyStatus {
+  registered: boolean
+  hint: string | null
+  usable: boolean
+  master_key: boolean
+  model: string | null
+}
+
+// @doc: docs/design/AiChat.md#5-api
+export interface AiModel {
+  name: string
+  label: string
+  description: string
+}
+
+// @doc: docs/design/AiChat.md#5-api
+async function aiRequest<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) {
+    let detail = ''
+    try {
+      const body = await response.json()
+      detail = typeof body.detail === 'string' ? body.detail : ''
+    } catch {
+      detail = ''
+    }
+    throw new Error(detail || `AI 요청 실패: ${response.status}`)
+  }
+  return (await response.json()) as T
+}
+
+// @doc: docs/design/AiChat.md#6-화면
+export function fetchAiKey(): Promise<AiKeyStatus> {
+  return aiRequest<AiKeyStatus>('/api/ai/key')
+}
+
+// @doc: docs/design/AiChat.md#6-화면
+export function saveAiKey(apiKey: string): Promise<AiKeyStatus> {
+  return aiRequest<AiKeyStatus>('/api/ai/key', { method: 'PUT', body: JSON.stringify({ api_key: apiKey }) })
+}
+
+// @doc: docs/design/AiChat.md#6-화면
+export function deleteAiKey(): Promise<AiKeyStatus> {
+  return aiRequest<AiKeyStatus>('/api/ai/key', { method: 'DELETE' })
+}
+
+// @doc: docs/design/AiChat.md#6-화면
+export function fetchAiModels(): Promise<AiModel[]> {
+  return aiRequest<AiModel[]>('/api/ai/models')
+}
+
+// @doc: docs/design/AiChat.md#6-화면
+export function chooseAiModel(model: string): Promise<AiKeyStatus> {
+  return aiRequest<AiKeyStatus>('/api/ai/model', { method: 'PUT', body: JSON.stringify({ model }) })
+}

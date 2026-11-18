@@ -23,6 +23,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel
 
 from jjabtero import __version__
+from jjabtero.ai import router as ai_router
 from jjabtero.auth import (
     SESSION_COOKIE,
     SESSION_MAX_AGE,
@@ -168,6 +169,7 @@ def create_app(
         )
     path = db_path or default_db_path()
     app.state.engine = create_db_engine(path)
+    app.state.data_dir = path.parent
     paths = drive_paths or default_drive_paths(path)
     # 스키마만 올린 것을 이 컴퓨터의 변경으로 세지 않도록 동기화 상태를 이어받는다.
     upgrade_keeping_sync(app.state.engine, paths.state)
@@ -188,6 +190,7 @@ def create_app(
         app.state.citations.start()
     app.state.pdfs = PdfStore(path.parent / "pdfs", app.state.drive)
     app.include_router(_api)
+    app.include_router(ai_router)
     app.include_router(papers_router)
     app.include_router(tags_router)
     app.include_router(drive_router)
