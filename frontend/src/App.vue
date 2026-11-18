@@ -8,6 +8,7 @@
 <!-- @doc: docs/design/Reader.md#6-화면 -->
 <!-- @doc: docs/design/Citations.md#6-api와-화면 -->
 <!-- @doc: docs/design/CitationGraph.md#4-화면 -->
+<!-- @doc: docs/design/AiChat.md#6-화면 -->
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Splitter from 'primevue/splitter'
@@ -24,6 +25,7 @@ import { lazyView } from './lazyView'
 import { createLibraryState } from './libraryState'
 import { DEFAULT_VIEW } from './navigation'
 import PaperDetail from './PaperDetail.vue'
+import ProfileDialog from './ProfileDialog.vue'
 import { createSearchState } from './searchState'
 import SearchResultDetail from './SearchResultDetail.vue'
 import SearchView from './SearchView.vue'
@@ -41,6 +43,8 @@ const search = createSearchState()
 const library = createLibraryState()
 const drive = createDriveState(() => library.load())
 const auth = createAuthState()
+// 머리줄의 계정 버튼으로 여는 프로필 창
+const profileOpen = ref(false)
 const ready = ref(false)
 // opened: 리더를 연 횟수. 판을 바꾸면 늘려 리더를 그 판으로 새로 만든다.
 const reading = ref<{ id: number; title: string; opened?: number } | null>(null)
@@ -107,10 +111,17 @@ onMounted(async () => {
         <Tag v-if="health" severity="secondary" :value="`v${health.version}`" />
         <Tag v-else-if="healthFailed" severity="danger" value="서버에 연결할 수 없음" />
         <Tag v-else severity="secondary" value="서버 확인 중" />
-        <template v-if="auth.state.me?.email">
-          <span class="text-sm text-surface-500">{{ auth.state.me.email }}</span>
-          <Button label="로그아웃" icon="pi pi-sign-out" size="small" text severity="secondary" @click="signOut" />
-        </template>
+        <Button
+          :label="auth.state.me?.email ?? '프로필'"
+          icon="pi pi-user"
+          size="small"
+          text
+          severity="secondary"
+          aria-label="프로필 설정"
+          title="프로필 설정"
+          @click="profileOpen = true"
+        />
+        <Button v-if="auth.state.me?.email" label="로그아웃" icon="pi pi-sign-out" size="small" text severity="secondary" @click="signOut" />
       </div>
     </header>
 
@@ -168,5 +179,6 @@ onMounted(async () => {
         </div>
       </SplitterPanel>
     </Splitter>
+    <ProfileDialog v-model:visible="profileOpen" :email="auth.state.me?.email ?? null" />
   </div>
 </template>

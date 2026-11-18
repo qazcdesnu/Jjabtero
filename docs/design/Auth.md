@@ -55,7 +55,7 @@
 - [createAuthState](../../frontend/src/auth.ts#createAuthState)가 로그인 상태를 가진다. `needsLogin`은 로그인이 켜져 있고 로그인하지 않았을 때 참이다.
 - [watchUnauthorized](../../frontend/src/auth.ts#watchUnauthorized)는 `fetch`를 감싸, `/api/auth/` 밖의 요청이 401을 받으면 콜백을 부른다. 앱은 그때 로그인 상태를 다시 불러온다. 세션이 끝나면 로그인 화면으로 돌아가기 위해서다.
 - 앱(`App.vue`)은 처음에 로그인 상태를 불러오고, 그 전에는 아무것도 그리지 않는다. `needsLogin`이면 앱 대신 `LoginView.vue`(앱 이름과 "Google로 로그인" 단추)를 보여 주고, 서재와 드라이브 상태를 불러오지 않는다.
-- 로그인이 켜져 있으면 머리줄 오른쪽에 로그인한 이메일과 "로그아웃" 단추를 둔다.
+- 로그인이 켜져 있으면 머리줄 오른쪽에 로그인한 이메일과 "로그아웃" 단추를 둔다. 이메일은 누르면 프로필 창이 열리는 버튼이다. 로그인이 꺼져 있으면 "프로필"로 보인다([AI 대화 설계](AiChat.md#6-화면)).
 
 ## 7. 테스트
 

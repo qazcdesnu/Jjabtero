@@ -16,6 +16,7 @@
 ## 2. 저장
 
 - 설정은 서재 파일(`library.db`)의 `settings` 표에 둔다. 모델은 [Setting](../../src/jjabtero/models.py#Setting)(`key` 기본 키, `value` 문자열)이다. 서재와 함께 드라이브로 동기화되어, 로컬과 서버 어디서 바꿔도 같은 값을 쓰기 위해서다. 표는 마이그레이션 0003이 만든다([서재 데이터 설계의 스키마 변경](Library.md#3-스키마-변경)).
+- 같은 표에 AI 대화의 암호화한 API 키와 모델도 둔다(`ai.`로 시작하는 키, [AI 대화 설계](AiChat.md#3-데이터)). 설정 항목이 아니므로 설정 화면과 이 API에는 나오지 않는다.
 - 표에는 사용자가 바꾼 항목만 있다. 없는 키는 기본값을 쓴다. 기본값을 바꿔도 사용자가 고친 적 없는 설정은 새 기본값을 따르게 하기 위해서다.
 - [read_settings](../../src/jjabtero/settings.py#read_settings)는 모든 항목의 현재 값을 돌려준다. 저장된 값이 정수가 아니거나 범위를 벗어나면 기본값을 쓴다.
 - [update_settings](../../src/jjabtero/settings.py#update_settings)는 바꿀 항목만 받아 모두 검사한 뒤 저장한다. 하나라도 모르는 키이거나 범위를 벗어나면 [SettingError](../../src/jjabtero/settings.py#SettingError)를 던지고 아무것도 저장하지 않는다.

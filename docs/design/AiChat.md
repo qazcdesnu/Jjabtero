@@ -16,8 +16,9 @@
 - 암호화 키(마스터 키)는 서재 파일 밖에 둔다. 서재 파일은 드라이브로 동기화되므로, 같은 곳에 두면 암호화하는 뜻이 없기 때문이다.
   - 환경 변수 `JJABTERO_SECRET_KEY`가 있으면 그 값을 쓴다. 서버(Render)는 이것을 쓴다.
   - 없으면 서재 파일과 같은 폴더의 `secret.key`를 쓴다. 파일이 없고 로그인이 꺼져 있으면(내 컴퓨터) 새로 만들어 본인만 읽게(권한 600) 저장한다. 로그인이 켜진 서버에서는 만들지 않는다. Render는 재시작하면 파일이 지워져, 만든 키로 암호화한 API 키를 다시 풀 수 없게 되기 때문이다.
+  - [master_key_text](../../src/jjabtero/ai.py#master_key_text)가 마스터 키 글자를 찾고([SECRET_ENV](../../src/jjabtero/ai.py#SECRET_ENV), [SECRET_FILE](../../src/jjabtero/ai.py#SECRET_FILE)), [master_cipher](../../src/jjabtero/ai.py#master_cipher)가 암호기를 만든다. 서재 폴더는 앱이 `app.state.data_dir`로 가진다.
   - 마스터 키가 없으면 AI 기능은 "암호화 키가 없어 API 키를 저장할 수 없습니다"로 막는다.
-- 로컬과 서버가 같은 API 키를 쓰려면 두 곳의 마스터 키가 같아야 한다. 사용자가 로컬에서 `jjabtero --print-secret-key`로 값을 꺼내 Render 환경 변수 `JJABTERO_SECRET_KEY`에 넣는다([이슈 I33](../Issue.md)). 값은 사용자만 꺼내고 넣는다. 드라이브 갱신 토큰과 같은 방식이다([배포 설계](Deployment.md#3-데이터와-비밀-값)).
+- 로컬과 서버가 같은 API 키를 쓰려면 두 곳의 마스터 키가 같아야 한다. 사용자가 로컬에서 `jjabtero --print-secret-key`([main](../../src/jjabtero/cli.py#main))로 값을 꺼내 Render 환경 변수 `JJABTERO_SECRET_KEY`에 넣는다([이슈 I33](../Issue.md)). 값은 사용자만 꺼내고 넣는다. 드라이브 갱신 토큰과 같은 방식이다([배포 설계](Deployment.md#3-데이터와-비밀-값)).
 - 마스터 키가 달라 풀 수 없으면 키는 "등록됨, 이곳에서 풀 수 없음"으로 보이고, 다시 등록하거나 삭제할 수 있다.
 
 ## 3. 데이터
@@ -26,43 +27,44 @@
 
 | 키 | 값 |
 | --- | --- |
-| `ai.gemini_key` | 암호화한 API 키(Fernet 토큰) |
-| `ai.gemini_key_hint` | API 키의 끝 네 글자. 어떤 키를 등록했는지 알아보는 데 쓴다. |
-| `ai.gemini_model` | 고른 모델 이름(예: `gemini-2.5-flash`) |
+| `ai.gemini_key` ([KEY_SETTING](../../src/jjabtero/ai.py#KEY_SETTING)) | 암호화한 API 키(Fernet 토큰) |
+| `ai.gemini_key_hint` ([HINT_SETTING](../../src/jjabtero/ai.py#HINT_SETTING)) | API 키의 끝 네 글자. 어떤 키를 등록했는지 알아보는 데 쓴다. |
+| `ai.gemini_model` ([MODEL_SETTING](../../src/jjabtero/ai.py#MODEL_SETTING)) | 고른 모델 이름(예: `gemini-2.5-flash`) |
 
+- 저장된 키는 [stored_api_key](../../src/jjabtero/ai.py#stored_api_key)가 풀어 준다. 없거나 풀 수 없으면 409, 마스터 키가 없으면 503이다.
 - 키를 지우면 `ai.gemini_key`와 `ai.gemini_key_hint`를 지운다. 모델은 남긴다. 키를 바꿔도 같은 모델을 계속 쓰게 하기 위해서다.
 - 대화 내용은 저장하지 않는다. 리더를 닫거나 다른 글로 대화를 시작하면 사라진다. 저장할지는 8절에 남긴다.
 
 ## 4. Gemini 호출
 
-- 주소는 Gemini API(`https://generativelanguage.googleapis.com/v1beta`)다. 키는 주소에 넣지 않고 `x-goog-api-key` 머리글로 보낸다. 오류 메시지나 기록에 주소가 남아도 키가 드러나지 않게 하기 위해서다.
-- 모델 목록은 `GET /models`로 받고, `generateContent`를 지원하는 `gemini` 모델만 보인다.
+- 주소는 Gemini API([GEMINI_URL](../../src/jjabtero/ai.py#GEMINI_URL))다. 키는 주소에 넣지 않고 `x-goog-api-key` 머리글로 보낸다. 오류 메시지나 기록에 주소가 남아도 키가 드러나지 않게 하기 위해서다.
+- 모델 목록은 [gemini_models](../../src/jjabtero/ai.py#gemini_models)가 `GET /models`로 받아 [ModelOut](../../src/jjabtero/ai.py#ModelOut)으로 돌려주고, `generateContent`를 지원하는 `gemini` 모델만 보인다.
 - 대화는 `POST /models/<모델>:generateContent`로 보낸다. 시스템 지시에 논문 제목, 고른 글, 그 글이 있는 쪽을 넣고, 지금까지 주고받은 말을 차례로 넣는다. 시스템 지시는 "고른 글을 바탕으로 답하고, 따로 말하지 않으면 한국어로 답한다"이다.
-- 키를 등록할 때 모델 목록을 한 번 받아 키가 맞는지 확인한다. 구글이 거절하면(400, 401, 403) 저장하지 않고 "구글이 이 키를 받아들이지 않았습니다"를 보인다.
-- 모델을 고른 적이 없으면 등록할 때 목록에서 기본 모델을 고른다. `gemini-2.5-flash`가 있으면 그것을, 없으면 목록의 첫 모델이다.
+- 키를 등록할 때 모델 목록을 한 번 받아 키가 맞는지 확인한다. 구글이 거절하면(400, 401, 403, [GeminiError](../../src/jjabtero/ai.py#GeminiError)의 `rejected`) 저장하지 않고 "구글이 이 키를 받아들이지 않았습니다"를 보인다.
+- 모델을 고른 적이 없으면 등록할 때 목록에서 기본 모델을 고른다. [default_model](../../src/jjabtero/ai.py#default_model)이 고른다. [DEFAULT_MODEL](../../src/jjabtero/ai.py#DEFAULT_MODEL)(`gemini-2.5-flash`)이 있으면 그것을, 없으면 목록의 첫 모델이다.
 
 ## 5. API
 
-로그인이 켜져 있으면 로그인해야 쓴다([로그인 설계](Auth.md#4-막는-범위)). 키를 바꾸면 드라이브 자동 올리기를 예약한다.
+[router](../../src/jjabtero/ai.py#router)가 처리한다. 로그인이 켜져 있으면 로그인해야 쓴다([로그인 설계](Auth.md#4-막는-범위)). 키를 바꾸면 드라이브 자동 올리기를 예약한다.
 
 | 요청 | 하는 일 |
 | --- | --- |
-| `GET /api/ai/key` | 키 상태: 등록 여부, 끝 네 글자, 이곳에서 풀 수 있는지, 마스터 키가 있는지, 고른 모델 |
-| `PUT /api/ai/key` | 본문 `{"api_key": "..."}`. 확인한 뒤 암호화해 저장한다. 등록과 변경이 같다. |
-| `DELETE /api/ai/key` | 키를 지운다. |
-| `GET /api/ai/models` | 등록한 키로 쓸 수 있는 Gemini 모델 목록(이름, 표시 이름, 설명) |
-| `PUT /api/ai/model` | 본문 `{"model": "..."}`. 목록에 있는 모델만 받는다. |
+| `GET /api/ai/key` | [read_key_status](../../src/jjabtero/ai.py#read_key_status)가 [key_status](../../src/jjabtero/ai.py#key_status)로 만든 [KeyStatusOut](../../src/jjabtero/ai.py#KeyStatusOut). 키 상태: 등록 여부, 끝 네 글자, 이곳에서 풀 수 있는지, 마스터 키가 있는지, 고른 모델 |
+| `PUT /api/ai/key` | [save_key](../../src/jjabtero/ai.py#save_key). 본문 [KeyIn](../../src/jjabtero/ai.py#KeyIn) `{"api_key": "..."}`. 확인한 뒤 암호화해 저장한다. 등록과 변경이 같다. |
+| `DELETE /api/ai/key` | [delete_key](../../src/jjabtero/ai.py#delete_key). 키를 지운다. |
+| `GET /api/ai/models` | [list_models](../../src/jjabtero/ai.py#list_models). 등록한 키로 쓸 수 있는 Gemini 모델 목록(이름, 표시 이름, 설명) |
+| `PUT /api/ai/model` | [choose_model](../../src/jjabtero/ai.py#choose_model). 본문 [ModelIn](../../src/jjabtero/ai.py#ModelIn) `{"model": "..."}`. 목록에 있는 모델만 받는다. |
 | `POST /api/ai/chat` | 본문 `{"paper_id", "page", "context", "messages": [{"role": "user"|"model", "text"}]}`. Gemini의 답 `{"text"}`를 돌려준다. |
 
 - 키가 없거나 풀 수 없으면 409, 마스터 키가 없으면 503, Gemini가 실패하면 502와 이유를 돌려준다.
 
 ## 6. 화면
 
-- **프로필 버튼:** 머리줄의 계정 이메일을 버튼으로 바꾼다. 로그인이 꺼진 내 컴퓨터에서는 이메일이 없으므로 "프로필"로 보인다. 누르면 프로필 창이 열린다.
-- **프로필 창:** 계정(이메일 또는 "내 컴퓨터, 로그인 꺼짐")과 "Google AI API 키" 칸이 있다.
+- **프로필 버튼:** 머리줄의 계정 이메일을 버튼으로 바꾼다. 로그인이 꺼진 내 컴퓨터에서는 이메일이 없으므로 "프로필"로 보인다. 누르면 프로필 창이 열린다([App](../../frontend/src/App.vue)).
+- **프로필 창:** [ProfileDialog](../../frontend/src/ProfileDialog.vue)이고, 상태는 [createProfileState](../../frontend/src/profileState.ts#createProfileState)가 가진다. API 호출은 [fetchAiKey](../../frontend/src/api.ts#fetchAiKey), [saveAiKey](../../frontend/src/api.ts#saveAiKey), [deleteAiKey](../../frontend/src/api.ts#deleteAiKey), [fetchAiModels](../../frontend/src/api.ts#fetchAiModels), [chooseAiModel](../../frontend/src/api.ts#chooseAiModel)이고 응답 모양은 [AiKeyStatus](../../frontend/src/api.ts#AiKeyStatus), [AiModel](../../frontend/src/api.ts#AiModel)이다. 실패하면 [aiRequest](../../frontend/src/api.ts#aiRequest)가 서버가 준 이유를 오류로 던진다. 계정(이메일 또는 "내 컴퓨터, 로그인 꺼짐")과 "Google AI API 키" 칸이 있다.
   - 키가 없으면 비밀번호 입력 칸과 "등록" 버튼, Google AI Studio에서 키를 만드는 링크를 보인다.
   - 키가 있으면 "등록됨 (…끝 네 글자)"와 "변경", "삭제" 버튼을 보인다. "변경"은 입력 칸을 다시 열고, "삭제"는 한 번 묻고 지운다.
-  - 키가 있으면 "모델" 드롭다운에서 Gemini 모델을 고른다. 고르면 바로 저장한다.
+  - 키가 있으면 "모델" 드롭다운에서 Gemini 모델을 고른다. 고르면 바로 저장한다. 모델 목록을 받지 못해도 고른 모델 이름은 보인다.
 - **리더의 AI 대화:** 글을 고르면 뜨는 하이라이트 색 옆에 "AI 대화" 버튼을 둔다. 이미 있는 하이라이트를 눌렀을 때 뜨는 상자에도 같은 버튼을 둔다. 누르면 리더 오른쪽에 대화 칸이 열린다.
   - 대화 칸 위에는 고른 글(몇 줄까지)과 쪽, 쓰는 모델이 보인다. "번역", "요약", "쉽게 설명" 버튼은 그 말을 바로 보낸다. 아래 입력 칸에는 직접 질문을 적는다.
   - 키가 없으면 대화 칸에 "프로필에서 Google AI API 키를 등록하세요"와 프로필 창을 여는 버튼을 보인다.
@@ -70,8 +72,8 @@
 
 ## 7. 테스트
 
-- 백엔드: 마스터 키 고르기(환경 변수, 파일, 만들기, 서버에서는 만들지 않음), 암호화한 값만 저장되는지, 등록·변경·삭제·모델 고르기 API, 가짜 Gemini 응답으로 키 확인 실패와 대화 요청 모양, 키가 응답에 나가지 않는지.
-- 프론트엔드: 프로필 상태(등록, 변경, 삭제, 모델 고르기), 대화 상태(빠른 버튼, 주고받기, 실패, 새 대화).
+- 백엔드 [test_ai](../../tests/test_ai.py)([GeminiWeb](../../tests/test_ai.py#GeminiWeb)): 마스터 키 고르기(환경 변수, 파일, 만들기, 서버에서는 만들지 않음), 암호화한 값만 저장되는지, 등록·변경·삭제·모델 고르기 API, 가짜 Gemini 응답으로 키 확인 실패와 대화 요청 모양, 키가 응답에 나가지 않는지.
+- 프론트엔드 [profileState.test](../../frontend/src/profileState.test.ts): 프로필 상태(등록, 변경, 삭제, 모델 고르기), 대화 상태(빠른 버튼, 주고받기, 실패, 새 대화).
 
 ## 8. 미결정 사항
 
