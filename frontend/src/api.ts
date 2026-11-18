@@ -801,3 +801,20 @@ export function fetchAiModels(): Promise<AiModel[]> {
 export function chooseAiModel(model: string): Promise<AiKeyStatus> {
   return aiRequest<AiKeyStatus>('/api/ai/model', { method: 'PUT', body: JSON.stringify({ model }) })
 }
+
+// @doc: docs/design/AiChat.md#5-api
+export interface AiChatMessage {
+  role: 'user' | 'model'
+  text: string
+}
+
+// @doc: docs/design/AiChat.md#6-화면
+export function chatAi(
+  paperId: number,
+  page: number | null,
+  context: string,
+  messages: AiChatMessage[],
+): Promise<{ text: string; model: string }> {
+  const body = { paper_id: paperId, page, context, messages }
+  return aiRequest<{ text: string; model: string }>('/api/ai/chat', { method: 'POST', body: JSON.stringify(body) })
+}
