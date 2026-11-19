@@ -759,6 +759,9 @@ export interface AiModel {
   name: string
   label: string
   description: string
+  // 유료 등급의 100만 토큰당 가격(USD, 가격표 글 그대로). 무료 등급은 한도 안에서 무료다
+  input_price?: string | null
+  output_price?: string | null
 }
 
 // 고를 수 있는 모델(오늘 무료 등급)과 무료 목록을 읽은 시각. stale이면 지난 목록이다

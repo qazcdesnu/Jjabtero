@@ -90,6 +90,9 @@ class ModelOut(BaseModel):
     name: str
     label: str
     description: str
+    # 유료 등급의 100만 토큰당 가격(USD, 가격표 글 그대로). 무료 등급은 한도 안에서 무료다.
+    input_price: str | None = None
+    output_price: str | None = None
 
 
 def _gemini_error(response: httpx2.Response) -> GeminiError:
@@ -354,7 +357,13 @@ def _only_free(request: Request, models: list[ModelOut]) -> ModelsOut:
     except FreeModelsError as error:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(error)) from error
     return ModelsOut(
-        models=[model for model in models if model.name in free.names],
+        models=[
+            model.model_copy(
+                update={"input_price": free.prices[model.name].input, "output_price": free.prices[model.name].output}
+            )
+            for model in models
+            if model.name in free.prices
+        ],
         checked_at=free.checked_at,
         stale=free.stale,
     )

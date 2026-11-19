@@ -20,6 +20,8 @@ const chosenNotFree = computed(() => {
   const chosen = profile.state.status?.model
   return Boolean(chosen && profile.state.modelsCheckedAt && !profile.state.models.some((model) => model.name === chosen))
 })
+// 고른 모델의 정보(가격)
+const chosenModel = computed(() => profile.state.models.find((model) => model.name === profile.state.status?.model) ?? null)
 // 목록을 못 받았어도 고른 모델 이름은 보이게 한다.
 const modelOptions = computed(() => {
   const chosen = profile.state.status?.model
@@ -120,13 +122,20 @@ async function chooseModel(model: string) {
             @update:model-value="chooseModel"
           >
             <template #option="{ option }">
-              <div class="flex flex-col">
-                <span class="text-sm">{{ option.label }}</span>
-                <span class="text-xs text-surface-500">{{ option.name }}</span>
+              <div class="flex min-w-0 flex-col">
+                <span class="text-sm">{{ option.label }} <span class="text-xs text-surface-500">{{ option.name }}</span></span>
+                <span v-if="option.input_price" class="whitespace-normal text-xs text-surface-500">
+                  입력 {{ option.input_price }} · 출력 {{ option.output_price || '-' }}
+                </span>
               </div>
             </template>
           </Select>
+          <div v-if="chosenModel?.input_price" class="rounded-md bg-surface-50 px-2 py-1.5 text-xs dark:bg-surface-800">
+            <span class="font-medium">{{ chosenModel.label }}</span> 유료 등급 가격(100만 토큰당, USD):
+            입력 {{ chosenModel.input_price }} · 출력 {{ chosenModel.output_price || '-' }}
+          </div>
           <span class="text-xs text-surface-500">
+            무료 등급은 한도 안에서 무료이고, 가격은 결제를 켠 키(유료 등급)에 청구되는 값입니다.
             구글 가격표에서 오늘 무료 등급인 모델만 보입니다. 매일 자정(한국 시각)에 다시 확인합니다.
             <template v-if="profile.state.modelsCheckedAt">마지막 확인 {{ formatDateTime(profile.state.modelsCheckedAt) }}.</template>
           </span>

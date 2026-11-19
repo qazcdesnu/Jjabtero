@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx2
 import pytest
 
-from jjabtero.ai_models import SEOUL, FreeModelCatalog, FreeModelsError, parse_free_models
+from jjabtero.ai_models import SEOUL, FreeModelCatalog, FreeModelsError, ModelPrice, parse_free_models, parse_free_prices
 from test_ai import PRICING
 
 LIVE_TABS = """
@@ -67,6 +67,9 @@ def test_parse_reads_standard_tab_input_price() -> None:
     assert parse_free_models(PRICING) == {"gemini-2.5-flash"}
     assert parse_free_models(LIVE_TABS) == {"gemini-3.8-flash"}
     assert parse_free_models("<html>바뀐 페이지</html>") == set()
+    assert parse_free_prices(PRICING) == {
+        "gemini-2.5-flash": ModelPrice(input="$0.30 (text / image / video); $1.00 (audio)", output="$2.50")
+    }
 
 
 class Pages:
@@ -120,6 +123,19 @@ def test_current_refreshes_once_per_day_and_caches(tmp_path: Path) -> None:
     assert web.calls == 2
     reopened = _catalog(tmp_path, Pages(500), clock)
     assert reopened.current().names == {"gemini-3.8-flash"}
+    assert reopened.current().prices["gemini-3.8-flash"].input == "$0.2"
+
+
+def test_old_cache_without_prices_is_read_again(tmp_path: Path) -> None:
+    """가격이 없는 예전 캐시 파일은 버리고 가격표를 다시 읽는다.
+
+    @doc: docs/design/AiChat.md#7-테스트
+    """
+    clock = Clock()
+    (tmp_path / "free.json").write_text('{"checked_at": "%s", "models": ["gemini-2.5-pro"]}' % clock.now.isoformat())
+    web = Pages(PRICING)
+    assert _catalog(tmp_path, web, clock).current().names == {"gemini-2.5-flash"}
+    assert web.calls == 1
 
 
 def test_failed_refresh_keeps_last_list_as_stale(tmp_path: Path) -> None:

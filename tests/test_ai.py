@@ -70,7 +70,12 @@ PRICING = """
   ---
   * Input price (text, image, video)
   * Free of charge
-  * $0.30
+  * $0.30 (text / image / video)
+  $1.00 (audio)
+  ---
+  * Output price (including thinking tokens)
+  * Free of charge
+  * $2.50
   {% /table %}
   {% /tab %}
 {% /tabs %}
@@ -214,6 +219,9 @@ def test_change_delete_and_model(tmp_path: Path) -> None:
     listed = client.get("/api/ai/models").json()
     # 키로 쓸 수 있는 모델 가운데 가격표에서 무료 등급인 것만 나온다.
     assert [model["name"] for model in listed["models"]] == ["gemini-2.5-flash"]
+    # 유료 등급 가격도 함께 준다. 여러 줄 가격은 `; `로 잇는다.
+    assert listed["models"][0]["input_price"] == "$0.30 (text / image / video); $1.00 (audio)"
+    assert listed["models"][0]["output_price"] == "$2.50"
     assert listed["stale"] is False
     assert client.put("/api/ai/model", json={"model": "gemini-2.5-pro"}).status_code == 422
     assert client.put("/api/ai/model", json={"model": "gemini-2.5-flash"}).json()["model"] == "gemini-2.5-flash"
