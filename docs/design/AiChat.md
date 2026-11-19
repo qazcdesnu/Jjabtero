@@ -39,6 +39,7 @@
 
 - 주소는 Gemini API([GEMINI_URL](../../src/jjabtero/ai.py#GEMINI_URL))다. 키는 주소에 넣지 않고 `x-goog-api-key` 머리글로 보낸다. 오류 메시지나 기록에 주소가 남아도 키가 드러나지 않게 하기 위해서다.
 - 모델 목록은 [gemini_models](../../src/jjabtero/ai.py#gemini_models)가 `GET /models`로 받아 [ModelOut](../../src/jjabtero/ai.py#ModelOut)으로 돌려주고, `generateContent`를 지원하는 `gemini` 모델만 보인다.
+- 대화에 쓰는 언어 모델만 보인다([is_chat_model](../../src/jjabtero/ai.py#is_chat_model)). 사용자가 대화가 안 되는 모델은 빼라고 했다([이슈 I35](../Issue.md)). 음성 합성(`tts`), 임베딩(`embedding`), 실시간(`live`), 음성(`audio`, `transcribe`, `translate`), 이미지(`image`), 로봇(`robotics`), 판정(`decision`) 모델은 `generateContent`를 지원해도 뺀다. 모델 이름을 `-`로 나눈 조각이 [NON_CHAT_PARTS](../../src/jjabtero/ai.py#NON_CHAT_PARTS)의 낱말과 같으면 뺀다. 조각으로 맞춰 보는 것은 이름 중간에 우연히 같은 글자가 든 모델을 빼지 않기 위해서다.
 - 고를 수 있는 모델은 그 키로 쓸 수 있는 모델 가운데 오늘 무료 등급인 것만이다. 사용자가 무료 한도가 있는 모델만 매일 자정에 갱신해 보이라고 요청했다([이슈 I34](../Issue.md)).
   - 사용자는 Google AI Pro 구독의 무료 한도를 뜻했으나, 구글 문서에 따르면 Pro 구독 혜택은 AI Studio 웹 화면 안에서만 쓰이고 API 키 사용은 따로 셈한다([Google AI plans](https://aistudio.google.com/docs/google-ai-plans)). API 키로 무료로 쓸 수 있는 것은 Gemini API 무료 등급이므로 그것으로 거른다.
   - 무료 등급 모델은 구글 가격표([PRICING_URL](../../src/jjabtero/ai_models.py#PRICING_URL))를 읽어 정한다. 무료 등급 목록을 주는 API가 없기 때문이다. [parse_free_models](../../src/jjabtero/ai_models.py#parse_free_models)가 모델 절(`## `)마다 모델 ID와, 표준(Standard) 요금 탭의 입력 가격 행의 무료 등급 칸이 "Free of charge"인지 본다.
@@ -80,7 +81,7 @@
 
 ## 7. 테스트
 
-- 백엔드 [test_ai](../../tests/test_ai.py)([GeminiWeb](../../tests/test_ai.py#GeminiWeb), [ChatWeb](../../tests/test_ai.py#ChatWeb)): 오늘 무료 등급 모델만 보이고 고를 수 있는지, 마스터 키 고르기(환경 변수, 파일, 만들기, 서버에서는 만들지 않음), 암호화한 값만 저장되는지, 등록·변경·삭제·모델 고르기 API, 가짜 Gemini 응답으로 키 확인 실패와 대화 요청 모양, 키가 응답에 나가지 않는지.
+- 백엔드 [test_ai](../../tests/test_ai.py)([GeminiWeb](../../tests/test_ai.py#GeminiWeb), [ChatWeb](../../tests/test_ai.py#ChatWeb)): 대화에 쓰는 언어 모델만 고르기, 오늘 무료 등급 모델만 보이고 고를 수 있는지, 마스터 키 고르기(환경 변수, 파일, 만들기, 서버에서는 만들지 않음), 암호화한 값만 저장되는지, 등록·변경·삭제·모델 고르기 API, 가짜 Gemini 응답으로 키 확인 실패와 대화 요청 모양, 키가 응답에 나가지 않는지.
 - 백엔드 [test_ai_models](../../tests/test_ai_models.py)([Pages](../../tests/test_ai_models.py#Pages), [Clock](../../tests/test_ai_models.py#Clock)): 가격표에서 표준 탭의 입력 가격 무료 등급 읽기, 하루에 한 번 읽기와 파일 캐시, 실패하면 지난 목록, 한국 자정까지 남은 시간.
 - 프론트엔드 [profileState.test](../../frontend/src/profileState.test.ts), [aiChatState.test](../../frontend/src/aiChatState.test.ts): 프로필 상태(등록, 변경, 삭제, 모델 고르기), 대화 상태(빠른 버튼, 주고받기, 실패, 새 대화).
 

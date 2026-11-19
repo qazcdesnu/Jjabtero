@@ -21,6 +21,7 @@ from jjabtero.ai import (
     SECRET_FILE,
     ModelOut,
     default_model,
+    is_chat_model,
     master_cipher,
 )
 from jjabtero.models import Setting
@@ -33,6 +34,8 @@ MODELS = {
         {"name": "models/gemini-2.5-flash", "displayName": "Gemini 2.5 Flash", "description": "빠름", "supportedGenerationMethods": ["generateContent", "countTokens"]},
         {"name": "models/text-embedding-004", "supportedGenerationMethods": ["embedContent"]},
         {"name": "models/gemini-embedding-001", "supportedGenerationMethods": ["embedContent"]},
+        {"name": "models/gemini-3.8-flash-tts", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-2.5-flash-native-audio-preview-12-2025", "supportedGenerationMethods": ["generateContent"]},
     ]
 }
 
@@ -121,6 +124,34 @@ def test_master_key_prefers_env_then_file(tmp_path: Path, monkeypatch: pytest.Mo
     other = Fernet.generate_key().decode()
     monkeypatch.setenv("JJABTERO_SECRET_KEY", other)
     assert Fernet(other.encode()).decrypt(master_cipher(tmp_path).encrypt(b"y")) == b"y"  # type: ignore[union-attr]
+
+
+@pytest.mark.parametrize(
+    ("name", "chat"),
+    [
+        ("gemini-3.8-flash", True),
+        ("gemini-4-hydrogen", True),
+        ("gemini-3.5-flash-lite", True),
+        ("gemini-3.1-pro-preview-customtools", True),
+        ("gemini-3.8-flash-tts", False),
+        ("gemini-3.8-flash-lite-tts", False),
+        ("gemini-embedding-001", False),
+        ("gemini-3.8-live-extended-thinking", False),
+        ("gemini-2.5-flash-native-audio-preview-12-2025", False),
+        ("gemini-3.5-transcribe", False),
+        ("gemini-3.5-live-translate-preview", False),
+        ("gemini-3.1-flash-image", False),
+        ("gemini-robotics-er-2-preview", False),
+        ("gemini-decision-1", False),
+        ("text-embedding-004", False),
+    ],
+)
+def test_is_chat_model(name: str, chat: bool) -> None:
+    """대화에 쓰는 언어 모델만 고른다.
+
+    @doc: docs/design/AiChat.md#7-테스트
+    """
+    assert is_chat_model(name) is chat
 
 
 def test_default_model_prefers_flash() -> None:

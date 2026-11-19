@@ -2,6 +2,34 @@
 
 이 문서는 끝난 작업의 상세 기록이다. 최신 기록이 맨 위에 온다. 기록 형식은 [작업 관리 규칙](TaskRule.md#5-기록-형식)을 따르며, 할 일 목록은 [로드맵](Roadmap.md)과 [이슈](Issue.md)에 있다. 닫힌 마일스톤의 기록은 [작업 관리 규칙](TaskRule.md#47-완료-기록-보관)에 따라 보관 문서로 옮긴다. 보관 문서: [M0 시작](Done-M0.md), [M1 기본 서재](Done-M1.md), [M2 Render 배포](Done-M2.md), [M4 PDF 리더](Done-M4.md), [M3 인용 기반 연결·추천](Done-M3.md), [M6 리더 인용 미리보기](Done-M6.md), [M7 태그](Done-M7.md), [M8 AI 대화](Done-M8.md). 전체 문서 목록은 [문서 인덱스](index.md)에서 확인한다.
 
+## I35 Gemini 모델 목록에서 대화가 안 되는 모델(음성 합성, 임베딩, 실시간, 음성, 이미지, 로봇, 판정) 빼기
+
+- 시작일: 2026-11-19
+- 완료일: 2026-11-19
+- 근거 문서: [AI 대화 설계](design/AiChat.md#4-gemini-호출)
+- 참고 자료: [Gemini API 가격표](https://ai.google.dev/gemini-api/docs/pricing)
+
+### 계획
+- 무료 모델 가운데 대화에 쓰는 언어 모델만 보이게 이름으로 거른다.
+
+### 진행 기록
+- 2026-11-19: 사용자가 무료 모델 가운데 LLM만 보이고, 임베딩·TTS처럼 대화가 안 되는 모델은 빼라고 했다. 열린 PR이 모두 병합되어 main에서 작업 브랜치를 만들었다.
+- 2026-11-19: 가격표의 설명으로 애매한 모델을 확인했다. Gemini Decision 1은 판정(Decisions API) 모델, Robotics ER 2는 로봇용 모델이라 뺐고, Gemini 4 Hydrogen은 일반 언어 모델이라 남겼다. 이름 조각으로 거르는 `is_chat_model`을 더했다.
+- 2026-11-19: 오늘 가격표의 무료 모델 24개에 적용하니 9개(gemini-4-hydrogen, gemini-3.8-flash, gemini-3.6-flash, gemini-3.5-flash-lite, gemini-3.1-flash-lite, gemini-3-flash-preview, gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite)가 남고 15개(TTS, 임베딩, 실시간, 음성, 번역, 판정, 로봇)가 빠졌다.
+
+### 결정 사항
+- 모델 정보에 "대화용"이라는 표시가 없어 이름으로 거른다. 새 종류의 비대화 모델이 생기면 낱말을 더한다.
+
+### 변경 파일
+- `src/jjabtero/ai.py`, `tests/test_ai.py`
+- `docs/design/AiChat.md`, `docs/Issue.md`, `docs/Done.md`
+
+### 결과
+- 프로필의 모델 목록에 대화에 쓰는 무료 언어 모델만 보인다.
+
+### 검증
+- `uvx --from git+https://github.com/qazcdesnu/ProjInit@v0.2.0 projinit check`: 모든 검사기와 백엔드·프론트엔드 테스트 통과.
+
 ## I34 Gemini 모델 목록을 오늘 무료 등급인 모델로만 거르고 매일 자정(한국 시각)에 갱신
 
 - 시작일: 2026-11-19
